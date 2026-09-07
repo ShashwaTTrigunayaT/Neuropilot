@@ -31,6 +31,19 @@ def health() -> dict:
     return {"status": "ok", "data_source": service.DATA_SOURCE}
 
 
+@router.get("/debug/env", tags=["system"])
+def debug_env() -> dict:
+    """Deploy diagnostics: is DATABASE_URL reaching this process? (no secret values)."""
+    from . import db
+    url = db.get_database_url() or ""
+    return {
+        "database_url_present": bool(url),
+        "database_url_scheme": url.split("://")[0] if url else None,
+        "database_url_is_railway_internal": ".railway.internal" in url,
+        "db_layer_enabled": db.enabled(),
+    }
+
+
 @router.get("/patients", response_model=PatientListResponse, tags=["patients"])
 def list_patients(
     tier: str | None = Query(default=None, description="Filter by risk tier: high, medium, low"),
