@@ -1,4 +1,4 @@
-# Alzheimer's Prioritization System
+# NeuroPilot — Alzheimer's Prioritization System
 
 **AI-Driven Prioritization for Early Alzheimer's Diagnostic Pathways — Precision Care Challenge 2026**
 

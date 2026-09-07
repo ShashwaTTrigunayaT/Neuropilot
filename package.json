@@ -1,8 +1,8 @@
 {
-  "name": "neuroplot",
+  "name": "neuropilot",
   "private": true,
   "version": "0.1.0",
-  "description": "NeuroPlot — AI-Driven Clinical Risk Triage & Decision Support System",
+  "description": "NeuroPilot — AI-Driven Clinical Risk Triage & Decision Support System",
   "type": "module",
   "scripts": {
     "dev": "vite",

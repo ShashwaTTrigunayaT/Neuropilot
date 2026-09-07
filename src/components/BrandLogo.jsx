@@ -1,9 +1,9 @@
 /**
- * NeuroPlot Brand Identity & Premium Medical Vector Icons
+ * NeuroPilot Brand Identity & Premium Medical Vector Icons
  * Ensures 100% visual consistency across Header, Footer, Modals, and Navigation.
  */
 
-export function NeuroPlotIcon({ size = 'md', className = '' }) {
+export function NeuroPilotIcon({ size = 'md', className = '' }) {
   const sizeMap = {
     xs: 'h-6 w-6 rounded-lg',
     sm: 'h-7 w-7 rounded-lg',
@@ -72,17 +72,17 @@ export function NeuroPlotIcon({ size = 'md', className = '' }) {
   );
 }
 
-export function NeuroPlotLogo({ size = 'md', showSubtitle = true, onClick }) {
+export function NeuroPilotLogo({ size = 'md', showSubtitle = true, onClick }) {
   const Comp = onClick ? 'button' : 'div';
   return (
     <Comp
       onClick={onClick}
       className={`flex items-center gap-3 text-left transition ${onClick ? 'hover:opacity-90 active:scale-[0.99]' : ''}`}
     >
-      <NeuroPlotIcon size={size} />
+      <NeuroPilotIcon size={size} />
       <div className="leading-tight">
         <h1 className="text-[16px] font-black tracking-tight text-ink dark:text-darkText">
-          NeuroPlot
+          NeuroPilot
         </h1>
         {showSubtitle && (
           <p className="text-[10.5px] font-medium text-muted dark:text-darkMuted">

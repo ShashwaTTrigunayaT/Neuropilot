@@ -16,7 +16,7 @@ from . import service
 from .api import router
 
 app = FastAPI(
-    title="NeuroPlot API",
+    title="NeuroPilot API",
     description=(
         "Decision-support service for the early Alzheimer's diagnostic pipeline. "
         "Ranks patients by risk (XGBoost + SHAP), tracks the Cognitive → Blood → MRI → PET "

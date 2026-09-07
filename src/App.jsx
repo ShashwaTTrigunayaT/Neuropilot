@@ -9,7 +9,7 @@ import {
   Users,
 } from 'lucide-react';
 import AllPatients from './components/AllPatients.jsx';
-import { NeuroPlotLogo } from './components/BrandLogo.jsx';
+import { NeuroPilotLogo } from './components/BrandLogo.jsx';
 import Footer from './components/Footer.jsx';
 import Overview from './components/Overview.jsx';
 import PatientDetail from './components/PatientDetail.jsx';
@@ -22,7 +22,7 @@ function Header({ theme, onToggleTheme, currentView, onViewChange, patientCount,
     <header className="sticky top-0 z-30 border-b border-line dark:border-darkBorder bg-white/85 dark:bg-darkCard/85 backdrop-blur-xl shadow-soft transition-colors">
       <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-x-6 gap-y-3 px-6 py-3">
         {/* Brand & App Icon */}
-        <NeuroPlotLogo onClick={() => onViewChange('overview')} />
+        <NeuroPilotLogo onClick={() => onViewChange('overview')} />
 
         {/* Shifted Main Navigation Tabs */}
         <nav className="flex items-center gap-1 rounded-2xl border border-line dark:border-darkBorder bg-[#F7F5F1] dark:bg-darkBorderSubtle p-1 shadow-soft">

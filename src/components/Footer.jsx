@@ -17,7 +17,7 @@ import {
   X,
 } from 'lucide-react';
 import { API_BASE } from '../api.js';
-import { NeuroPlotIcon } from './BrandLogo.jsx';
+import { NeuroPilotIcon } from './BrandLogo.jsx';
 import { MONO } from './widgets.jsx';
 
 /* ------------------------------------------------------------------ */
@@ -192,10 +192,10 @@ export default function Footer({
           {/* Top Bar: Brand, Status Beacon & Quick Actions */}
           <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line/70 dark:border-darkBorder/70 pb-8">
             <div className="flex items-center gap-3">
-              <NeuroPlotIcon size="md" />
+              <NeuroPilotIcon size="md" />
               <div>
                 <span className="text-sm font-black tracking-tight text-ink dark:text-darkText">
-                  NeuroPlot
+                  NeuroPilot
                 </span>
                 <p className="text-[11px] text-muted dark:text-darkMuted mt-0.5">
                   Clinical Decision Support & Risk Triage
@@ -406,7 +406,7 @@ export default function Footer({
           {/* Bottom Micro Bar: Copyright & Stack */}
           <div className="flex flex-wrap items-center justify-between gap-4 border-t border-line/70 dark:border-darkBorder/70 pt-6 text-[11px] text-muted dark:text-darkMuted">
             <p>
-              &copy; 2026 <strong className="text-ink dark:text-darkText">NeuroPlot</strong>. For
+              &copy; 2026 <strong className="text-ink dark:text-darkText">NeuroPilot</strong>. For
               clinical decision-support only. Strictly non-diagnostic.
             </p>
             
@@ -421,7 +421,7 @@ export default function Footer({
         <Modal title="Model Architecture & Telemetry Specs" onClose={() => setActiveModal(null)}>
           <div className="space-y-3">
             <p>
-              NeuroPlot serves a supervised <strong>XGBoost Gradient Boosting Classifier</strong>{' '}
+              NeuroPilot serves a supervised <strong>XGBoost Gradient Boosting Classifier</strong>{' '}
               with an automated Scikit-Learn RandomForest fallback pipeline, evaluated on longitudinal
               data.
             </p>
@@ -475,7 +475,7 @@ export default function Footer({
         <Modal title="4-Stage Clinical Escalation Protocol" onClose={() => setActiveModal(null)}>
           <div className="space-y-4">
             <p>
-              NeuroPlot operationalizes a progressive, 4-stage escalation pipeline designed to reduce
+              NeuroPilot operationalizes a progressive, 4-stage escalation pipeline designed to reduce
               unnecessary specialist referrals while fast-tracking at-risk individuals:
             </p>
             <div className="space-y-2.5">
@@ -544,7 +544,7 @@ export default function Footer({
                 Strict Non-Diagnostic Medical Boundary
               </p>
               <p className="mt-1 text-xs leading-relaxed text-ink dark:text-darkText">
-                NeuroPlot is designed strictly as a clinical decision-support system (CDSS). Under no
+                NeuroPilot is designed strictly as a clinical decision-support system (CDSS). Under no
                 circumstances does this software output a diagnosis of Alzheimer&rsquo;s disease or dementia.
               </p>
             </div>
@@ -572,7 +572,7 @@ export default function Footer({
         <Modal title="Biomarker Cutoffs & Normative Ranges" onClose={() => setActiveModal(null)}>
           <div className="space-y-3">
             <p className="text-muted dark:text-darkMuted">
-              Standard clinical cutoffs utilized by NeuroPlot for diagnostic thresholding and escalation logic:
+              Standard clinical cutoffs utilized by NeuroPilot for diagnostic thresholding and escalation logic:
             </p>
             <div className="divide-y divide-line dark:divide-darkBorder">
               <div className="py-2.5 flex justify-between items-center">
@@ -632,7 +632,7 @@ export default function Footer({
 
       {/* 5. Keyboard Shortcuts Modal */}
       {activeModal === 'shortcuts' && (
-        <Modal title="NeuroPlot Keyboard Shortcuts" onClose={() => setActiveModal(null)}>
+        <Modal title="NeuroPilot Keyboard Shortcuts" onClose={() => setActiveModal(null)}>
           <div className="space-y-2">
             {[
               { key: 'Esc', desc: 'Close patient detail drawer or active dialog' },
