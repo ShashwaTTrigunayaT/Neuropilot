@@ -200,6 +200,10 @@ def load_patients() -> tuple[dict[str, dict], str]:
     records, source = _file_records()
     from . import db
     if db.enabled():
+        print("[storage] DATABASE_URL detected — initializing database store...")
+    else:
+        print("[storage] DATABASE_URL not set — using in-memory store (no persistence)")
+    if db.enabled():
         try:
             db.init_db()
             db.seed_if_empty(records)
