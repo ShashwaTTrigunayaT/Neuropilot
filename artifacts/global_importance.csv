@@ -1,0 +1,11 @@
+feature,mean_abs_shap
+mmse,1.0676146
+ptau181,0.30418608
+abeta4240,0.23278408
+age,0.18405955
+hippocampal_volume,0.17502135
+mmse_change,0.08351431
+education_years,0.030988738
+sex,0.009954294
+amyloid_positive,0.007856405
+tau_positive,0.0

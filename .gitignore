@@ -1,0 +1,58 @@
+# ---- Node / frontend ----
+node_modules/
+dist/
+dist-ssr/
+.vite/
+*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ---- Datasets ----
+data/raw/*
+data/processed/*
+!data/processed/risk_scores.json
+!data/processed/.gitkeep
+
+# ---- ML artifacts for deployment ----
+artifacts/*
+!artifacts/pipeline.joblib
+!artifacts/model_meta.json
+!artifacts/global_importance.csv
+!artifacts/eval_report.txt
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+
+# ---- Env & secrets ----
+.env
+.env.*
+!.env.example
+
+# ---- Logs, DB, coverage ----
+*.log
+data/pipeline.log
+*.sqlite3
+*.db
+coverage/
+.nyc_output/
+
+# ---- Editor / OS ----
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# ---- Verification screenshots / scratch notes ----
+_preview_*.png
+commands.md

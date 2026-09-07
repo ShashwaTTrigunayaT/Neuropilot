@@ -1,0 +1,46 @@
+# One-command demo (blueprint section 3, Containerization row):
+#   docker compose up --build
+#   Frontend : http://localhost:8080
+#   API docs : http://localhost:8000/docs
+#
+# Run the ML pipeline first (scripts/run_pipeline.py) so the API serves real
+# OASIS scores and the trained model — data/processed and artifacts are mounted
+# read-only into the API container.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: oasis
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d oasis"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  api:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg2://app:app@db:5432/oasis
+      PROJECT_ROOT: /app
+    volumes:
+      - ./data/processed:/app/data/processed:ro
+      - ./artifacts:/app/artifacts:ro
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:

@@ -1,0 +1,122 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: #FAF8F4;
+  color: #13151A;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  letter-spacing: -0.014em;
+  background-image: radial-gradient(920px 480px at 82% -8%, rgba(13, 130, 130, 0.05), transparent 60%),
+                    radial-gradient(700px 400px at 18% 92%, rgba(13, 130, 130, 0.04), transparent 65%);
+  background-attachment: fixed;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Dark mode console aesthetics */
+.dark body {
+  background-color: #090B0E;
+  color: #E6EDF5;
+  background-image: radial-gradient(900px 500px at 75% -5%, rgba(13, 130, 130, 0.12), transparent 60%),
+                    radial-gradient(800px 500px at 15% 95%, rgba(14, 21, 35, 0.6), transparent 70%);
+}
+
+::selection {
+  background-color: #0D8282;
+  color: #FFFFFF;
+}
+
+/* Focus outline */
+:where(button, a, input, select, [role='button']):focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #FAF8F4, 0 0 0 3px #0D8282;
+  border-radius: inherit;
+}
+.dark :where(button, a, input, select, [role='button']):focus-visible {
+  box-shadow: 0 0 0 2px #090B0E, 0 0 0 3px #0D8282;
+}
+
+/* Thin precision scrollbars */
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: #DEDBD3;
+  border-radius: 99px;
+  border: 1px solid #FAF8F4;
+}
+.dark *::-webkit-scrollbar-thumb {
+  background-color: #232B3B;
+  border-color: #090B0E;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: #C7C4BC;
+}
+.dark *::-webkit-scrollbar-thumb:hover {
+  background-color: #313D53;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Tables scroll inside a container; sticky headers */
+.sticky-th {
+  background-color: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid #E6E2DA;
+}
+.dark .sticky-th {
+  background-color: rgba(17, 21, 28, 0.94);
+  border-bottom: 1px solid #1F2633;
+}
+
+/* Glass panel */
+.glass-panel {
+  background-color: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.dark .glass-panel {
+  background-color: rgba(17, 21, 28, 0.85);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+/* Print styles for clinical consultation export */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    background-image: none !important;
+  }
+  header, footer, nav, .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  .card, .shadow-float, .shadow-lift {
+    box-shadow: none !important;
+    border: 1px solid #cccccc !important;
+    break-inside: avoid;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

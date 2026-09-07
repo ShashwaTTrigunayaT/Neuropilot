@@ -1,0 +1,15 @@
+fastapi>=0.111
+uvicorn[standard]>=0.30
+pydantic>=2.7
+
+# In-process model serving (artifacts/pipeline.joblib)
+joblib>=1.3
+numpy>=1.24
+pandas>=2.0
+scikit-learn>=1.3
+xgboost>=2.0
+shap>=0.44
+
+# Optional PostgreSQL store (used when DATABASE_URL is set)
+sqlalchemy>=2.0
+psycopg2-binary>=2.9

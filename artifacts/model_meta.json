@@ -1,0 +1,30 @@
+{
+  "model_type": "xgb",
+  "data_mode": "synthetic",
+  "data_source": "synthetic ADNI-shaped cohort (all 4 stages)",
+  "features": [
+    "age",
+    "education_years",
+    "sex",
+    "mmse",
+    "mmse_change",
+    "ptau181",
+    "abeta4240",
+    "hippocampal_volume",
+    "amyloid_positive",
+    "tau_positive"
+  ],
+  "trained_at": "2026-09-06T18:49:28",
+  "thresholds": {
+    "high": 0.7,
+    "medium": 0.4
+  },
+  "cv_auc_mean": 0.8423,
+  "cv_auc_std": 0.0315,
+  "test_auc": 0.8708,
+  "test_accuracy": 0.75,
+  "rf_fallback_test_auc": 0.8741,
+  "baseline_accuracy": 0.5813,
+  "n_train": 800,
+  "n_scored": 800
+}

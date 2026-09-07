@@ -1,0 +1,31 @@
+Risk model evaluation -- synthetic ADNI-shaped cohort (all 4 stages)
+model type             : xgb
+subjects scored        : 800
+subjects in training   : 800
+test set               : 160 (20%, stratified)
+features               : age, education_years, sex, mmse, mmse_change, ptau181, abeta4240, hippocampal_volume, amyloid_positive, tau_positive
+5-fold CV AUC (train)  : 0.842 +/- 0.032
+held-out test AUC      : 0.871
+held-out accuracy@0.5  : 0.750
+RF fallback test AUC   : 0.874
+majority-class baseline: accuracy 0.581, AUC 0.500 (chance)
+
+guardrails:
+- CDR excluded from features (clinician rating ~= diagnosis: label leakage)
+- subject-level stratified split (no subject in both train and test)
+- biomarker features are NaN until the corresponding test is ordered;
+  xgboost consumes NaN natively (missingness = informative), RF median-imputes
+- preprocessing bundled into the served pipeline
+- early stopping used the held-out set, so test numbers are slightly optimistic
+confusion matrix (test):
+[[52 15]
+ [25 68]]
+
+              precision    recall  f1-score   support
+
+         Low      0.675     0.776     0.722        67
+        High      0.819     0.731     0.773        93
+
+    accuracy                          0.750       160
+   macro avg      0.747     0.754     0.747       160
+weighted avg      0.759     0.750     0.752       160
