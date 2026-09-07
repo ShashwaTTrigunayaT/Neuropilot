@@ -15,6 +15,8 @@ from sqlalchemy import Column, Float, ForeignKey, Integer, String, Text, create_
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 DATABASE_URL = os.getenv("DATABASE_URL")
+if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 Base = declarative_base()
 
@@ -82,7 +84,10 @@ _Session = None
 def _connect() -> None:
     global _engine, _Session
     if _engine is None and DATABASE_URL:
-        _engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+        if DATABASE_URL.startswith("sqlite"):
+            _engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+        else:
+            _engine = create_engine(DATABASE_URL, pool_pre_ping=True)
         _Session = sessionmaker(bind=_engine)
 
 
