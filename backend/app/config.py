@@ -26,16 +26,30 @@ if _env_file.exists():
 HIGH_THRESHOLD = float(os.getenv("HIGH_RISK_THRESHOLD", "0.7"))
 MEDIUM_THRESHOLD = float(os.getenv("MEDIUM_RISK_THRESHOLD", "0.4"))
 
+def _env_path(name: str, default: Path) -> Path:
+    """Resolve an optional path override from env/.env.
+
+    Relative values (e.g. `artifacts/pipeline.joblib` in .env) are resolved
+    against PROJECT_ROOT -- NOT the process working directory -- so the API
+    behaves identically whether uvicorn is started from the project root or
+    from backend/. Absolute values (Docker) pass through unchanged. An empty
+    value counts as unset.
+    """
+    raw = os.getenv(name)
+    p = Path(raw) if raw else default
+    return p if p.is_absolute() else PROJECT_ROOT / p
+
+
 # Where the ML pipeline (scripts/) drops its artifacts
-RISK_SCORES_PATH = Path(
-    os.getenv("RISK_SCORES_PATH", PROJECT_ROOT / "data" / "processed" / "risk_scores.json")
+RISK_SCORES_PATH = _env_path(
+    "RISK_SCORES_PATH", PROJECT_ROOT / "data" / "processed" / "risk_scores.json"
 )
-GLOBAL_IMPORTANCE_PATH = Path(
-    os.getenv("GLOBAL_IMPORTANCE_PATH", PROJECT_ROOT / "artifacts" / "global_importance.csv")
+GLOBAL_IMPORTANCE_PATH = _env_path(
+    "GLOBAL_IMPORTANCE_PATH", PROJECT_ROOT / "artifacts" / "global_importance.csv"
 )
 # Trained preprocessing + classifier pipeline (scripts/train_model.py)
-MODEL_PATH = Path(os.getenv("MODEL_PATH", PROJECT_ROOT / "artifacts" / "pipeline.joblib"))
-MODEL_META_PATH = Path(os.getenv("MODEL_META_PATH", PROJECT_ROOT / "artifacts" / "model_meta.json"))
+MODEL_PATH = _env_path("MODEL_PATH", PROJECT_ROOT / "artifacts" / "pipeline.joblib")
+MODEL_META_PATH = _env_path("MODEL_META_PATH", PROJECT_ROOT / "artifacts" / "model_meta.json")
 
 
 def risk_tier(score: float) -> str:

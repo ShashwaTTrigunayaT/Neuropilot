@@ -12,6 +12,7 @@ yarn-error.log*
 # ---- Datasets ----
 data/raw/*
 data/processed/*
+!data/raw/README.md
 !data/processed/risk_scores.json
 !data/processed/.gitkeep
 

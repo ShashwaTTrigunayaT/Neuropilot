@@ -59,7 +59,10 @@ def test_health():
     r = client.get("/health")
     assert r.status_code == 200
     assert r.json()["status"] == "ok"
-    assert r.json()["data_source"] in ("mock", "real", "synthetic", "real+postgres", "synthetic+postgres")
+    assert r.json()["data_source"] in (
+        "mock", "real", "synthetic",
+        "real+postgres", "synthetic+postgres", "real+sqlite", "synthetic+sqlite",
+    )
 
 
 # --------------------------------------------------------------------------- #
