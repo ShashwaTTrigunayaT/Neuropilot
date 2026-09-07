@@ -82,7 +82,21 @@ _Session = None
 
 
 def get_database_url() -> Optional[str]:
-    url = os.getenv("DATABASE_URL")
+    url = (
+        os.getenv("DATABASE_URL")
+        or os.getenv("DATABASE_PRIVATE_URL")
+        or os.getenv("DATABASE_PUBLIC_URL")
+        or os.getenv("POSTGRES_URL")
+        or os.getenv("POSTGRESQL_URL")
+    )
+    if not url and os.getenv("PGHOST") and os.getenv("PGDATABASE"):
+        user = os.getenv("PGUSER", "postgres")
+        pw = os.getenv("PGPASSWORD", "")
+        host = os.getenv("PGHOST")
+        port = os.getenv("PGPORT", "5432")
+        db = os.getenv("PGDATABASE")
+        url = f"postgresql://{user}:{pw}@{host}:{port}/{db}"
+
     if url and url.startswith("postgres://"):
         url = url.replace("postgres://", "postgresql://", 1)
     return url
