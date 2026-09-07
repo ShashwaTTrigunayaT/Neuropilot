@@ -11,6 +11,18 @@ from pathlib import Path
 # backend/app/config.py -> project root is three levels up (override inside Docker)
 PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT", Path(__file__).resolve().parents[2]))
 
+# Auto-load .env from PROJECT_ROOT if it exists
+_env_file = PROJECT_ROOT / ".env"
+if _env_file.exists():
+    try:
+        for line in _env_file.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+    except Exception:
+        pass
+
 HIGH_THRESHOLD = float(os.getenv("HIGH_RISK_THRESHOLD", "0.7"))
 MEDIUM_THRESHOLD = float(os.getenv("MEDIUM_RISK_THRESHOLD", "0.4"))
 

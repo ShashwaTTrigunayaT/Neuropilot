@@ -198,30 +198,29 @@ def load_patients() -> tuple[dict[str, dict], str]:
     the store of record (memory stays the read cache). Otherwise in-memory only.
     """
     records, source = _file_records()
-    if os.getenv("DATABASE_URL"):
+    from . import db
+    if db.enabled():
         try:
-            from . import db
-
             db.init_db()
             db.seed_if_empty(records)
             loaded = db.load_all()
             if loaded:
-                return {r["id"]: r for r in loaded}, source + "+postgres"
+                db_name = "sqlite" if (db.get_database_url() or "").startswith("sqlite") else "postgres"
+                return {r["id"]: r for r in loaded}, f"{source}+{db_name}"
         except Exception as exc:  # noqa: BLE001 -- DB down should not crash the API
-            print(f"[storage] Postgres unavailable ({exc}); using in-memory store")
+            print(f"[storage] Database unavailable ({exc}); using in-memory store")
     return {r["id"]: r for r in records}, source
 
 
 def persist(record: dict) -> None:
-    """Mirror a mutation (stage advance) to Postgres. Best-effort; never raises."""
-    if not os.getenv("DATABASE_URL"):
+    """Mirror a mutation (stage advance) to DB. Best-effort; never raises."""
+    from . import db
+    if not db.enabled():
         return
     try:
-        from . import db
-
         db.save_record(record)
     except Exception as exc:  # noqa: BLE001
-        print(f"[storage] could not persist {record['id']} to Postgres ({exc})")
+        print(f"[storage] could not persist {record['id']} to DB ({exc})")
 
 
 def load_global_importance() -> list[dict]:

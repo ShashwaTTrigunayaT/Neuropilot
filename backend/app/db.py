@@ -81,13 +81,21 @@ _engine = None
 _Session = None
 
 
+def get_database_url() -> Optional[str]:
+    url = os.getenv("DATABASE_URL")
+    if url and url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql://", 1)
+    return url
+
+
 def _connect() -> None:
     global _engine, _Session
-    if _engine is None and DATABASE_URL:
-        if DATABASE_URL.startswith("sqlite"):
-            _engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+    url = get_database_url()
+    if _engine is None and url:
+        if url.startswith("sqlite"):
+            _engine = create_engine(url, connect_args={"check_same_thread": False})
         else:
-            _engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+            _engine = create_engine(url, pool_pre_ping=True)
         _Session = sessionmaker(bind=_engine)
 
 
@@ -99,14 +107,14 @@ def _session():
 
 
 def init_db() -> None:
-    if not DATABASE_URL:
+    if not enabled():
         return
     _connect()
     Base.metadata.create_all(_engine)
 
 
 def enabled() -> bool:
-    return bool(DATABASE_URL)
+    return bool(get_database_url())
 
 
 def _insert_record(s, record: dict) -> None:
