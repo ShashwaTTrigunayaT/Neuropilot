@@ -131,7 +131,7 @@ def enabled() -> bool:
     return bool(get_database_url())
 
 
-def _insert_record(s, record: dict) -> None:
+def _insert_patient(s, record: dict) -> None:
     s.add(
         Patient(
             id=record["id"],
@@ -144,6 +144,21 @@ def _insert_record(s, record: dict) -> None:
             updated_at=record["updated_at"],
         )
     )
+
+
+def _insert_record(s, record: dict) -> None:
+    """Insert the parent row (flushed) before its children.
+
+    Postgres enforces FK constraints and SQLAlchemy's unit of work does not
+    order table inserts by raw ForeignKey columns (only via relationship()),
+    so the patients row must be flushed before any child row is emitted.
+    """
+    _insert_patient(s, record)
+    s.flush()
+    _insert_children(s, record)
+
+
+def _insert_children(s, record: dict) -> None:
     cog = record.get("cognitive")
     if cog:
         s.add(
@@ -182,8 +197,14 @@ def seed_if_empty(records: List[dict]) -> None:
     with _session() as s:
         if s.query(Patient).count() > 0:
             return
+        # Parents first, then children, all in ONE transaction: Postgres
+        # rejects child rows whose parent is not yet inserted, and a midway
+        # failure must not leave a half-seeded database behind.
         for r in records:
-            _insert_record(s, r)
+            _insert_patient(s, r)
+        s.flush()
+        for r in records:
+            _insert_children(s, r)
         s.commit()
 
 
@@ -248,5 +269,5 @@ def save_record(record: dict) -> None:
         for model in (CognitiveAssessment, Comorbidity, LabResult, RiskFactor, PipelineHistory):
             s.query(model).filter_by(patient_id=record["id"]).delete()
         s.flush()
-        _insert_record(s, record)
+        _insert_children(s, record)  # parent already exists -- children only
         s.commit()
