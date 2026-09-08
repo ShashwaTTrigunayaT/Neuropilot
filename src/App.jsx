@@ -524,7 +524,7 @@ export default function App() {
               <ProgressionView
                 patient={detail}
                 progression={progression}
-                onBack={handleBackFromProgression}
+                onExit={handleBackFromProgression}
                 onOpenDetail={closeProgression}
               />
             )}

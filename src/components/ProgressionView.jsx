@@ -17,28 +17,13 @@ const DRIVER_LABELS = {
   tau_positive: 'Tau PET',
 };
 
-function LoadingView({ id, onBack }) {
-  return (
-    <div className="space-y-6 animate-fade-up">
-      <div className="h-5 w-40 rounded bg-line dark:bg-darkBorder" />
-      <div className="grid gap-8 lg:grid-cols-5">
-        <div className="h-64 rounded-2xl bg-line dark:bg-darkBorder lg:col-span-3" />
-        <div className="h-64 rounded-2xl bg-line dark:bg-darkBorder lg:col-span-2" />
-      </div>
-      <p style={MONO} className="text-center text-[11px] text-muted dark:text-darkMuted">
-        Computing 12-month projection for {id || 'patient'}…
-      </p>
-    </div>
-  );
-}
-
-export default function ProgressionView({ patient, progression, onBack, onOpenDetail }) {
+export default function ProgressionView({ patient, progression, onOpenDetail, onExit }) {
   if (!patient) {
     return (
       <div className="mx-auto max-w-md py-24 text-center animate-fade-up">
         <p className="text-sm font-semibold text-tierHigh">No patient selected.</p>
         <button
-          onClick={onBack}
+          onClick={onExit}
           className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-muted dark:text-darkMuted hover:text-ink dark:hover:text-darkText transition"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
@@ -58,7 +43,7 @@ export default function ProgressionView({ patient, progression, onBack, onOpenDe
           and restart the backend.
         </p>
         <button
-          onClick={onBack}
+          onClick={onExit}
           className="mt-6 inline-flex items-center gap-1.5 text-xs font-semibold text-muted dark:text-darkMuted hover:text-ink dark:hover:text-darkText transition"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
@@ -90,14 +75,7 @@ export default function ProgressionView({ patient, progression, onBack, onOpenDe
               Progression Probability
             </h1>
             <p className="mt-1.5 text-[13px] text-muted dark:text-darkMuted flex flex-wrap items-center gap-x-2.5 gap-y-1">
-              <button
-                onClick={onOpenDetail}
-                style={MONO}
-                className="font-bold text-accent hover:underline"
-                title="Open the full patient record"
-              >
-                {patient.id}
-              </button>
+              <span style={MONO} className="font-bold text-accent">{patient.id}</span>
               <span className="text-line dark:text-darkBorder font-light">/</span>
               <span>12-month trajectory forecast</span>
               <span className="text-line dark:text-darkBorder font-light">/</span>
@@ -106,17 +84,8 @@ export default function ProgressionView({ patient, progression, onBack, onOpenDe
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <div className="text-right">
-            <p className="text-[10px] uppercase tracking-wide text-muted dark:text-darkMuted">Current risk</p>
-            <div className="mt-1 flex items-center justify-end gap-2">
-              <TierTag tier={current.risk_tier} />
-              <span style={MONO} className="text-xs font-bold text-ink dark:text-darkText">
-                {fmtPercent(current.score)}
-              </span>
-            </div>
-          </div>
           <button
-            onClick={onBack}
+            onClick={onOpenDetail}
             className="inline-flex items-center gap-1.5 rounded-xl border border-line dark:border-darkBorder bg-white dark:bg-darkCard px-3.5 py-2 text-xs font-semibold text-ink dark:text-darkText hover:border-accent transition"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
@@ -177,32 +146,21 @@ export default function ProgressionView({ patient, progression, onBack, onOpenDe
             )}
           </div>
 
-          {/* Projected metrics */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-2xl border border-line/60 dark:border-darkBorder/60 bg-white/60 dark:bg-darkCard/60 p-4">
-              <p className="text-[10px] uppercase tracking-wide text-muted dark:text-darkMuted">Projected MMSE</p>
-              <p style={MONO} className="mt-1.5 text-lg font-bold text-ink dark:text-darkText">
-                {current.mmse} → {projected.mmse}
-              </p>
-              <p
-                style={MONO}
-                className="mt-0.5 text-[11px] font-semibold"
-                style={{ color: projected.mmse_delta < 0 ? TIER_HEX.high : TIER_HEX.low }}
-              >
-                {projected.mmse_delta > 0 ? '+' : ''}
-                {projected.mmse_delta} pts ± {projected.band}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-line/60 dark:border-darkBorder/60 bg-white/60 dark:bg-darkCard/60 p-4">
-              <p className="text-[10px] uppercase tracking-wide text-muted dark:text-darkMuted">Risk score shift</p>
-              <p style={MONO} className="mt-1.5 text-lg font-bold text-ink dark:text-darkText">
-                {current.score?.toFixed(2)} → {projected.score?.toFixed(2)}
-              </p>
-              <p style={MONO} className="mt-0.5 text-[11px] text-muted dark:text-darkMuted">
-                Δ {projected.score - current.score >= 0 ? '+' : ''}
-                {(projected.score - current.score).toFixed(2)}
-              </p>
-            </div>
+          {/* Projected metric — the gauge panel above already carries the
+              current → projected score, so only MMSE gets its own card */}
+          <div className="rounded-2xl border border-line/60 dark:border-darkBorder/60 bg-white/60 dark:bg-darkCard/60 p-4">
+            <p className="text-[10px] uppercase tracking-wide text-muted dark:text-darkMuted">Projected MMSE</p>
+            <p style={MONO} className="mt-1.5 text-lg font-bold text-ink dark:text-darkText">
+              {current.mmse} → {projected.mmse}
+            </p>
+            <p
+              style={MONO}
+              className="mt-0.5 text-[11px] font-semibold"
+              style={{ color: projected.mmse_delta < 0 ? TIER_HEX.high : TIER_HEX.low }}
+            >
+              {projected.mmse_delta > 0 ? '+' : ''}
+              {projected.mmse_delta} pts ± {projected.band}
+            </p>
           </div>
 
           {/* Drivers */}
