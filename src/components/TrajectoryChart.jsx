@@ -10,17 +10,17 @@
 import { ACCENT, TIER_HEX } from './widgets.jsx';
 
 const W = 560;
-const H = 250;
+const H = 270;
 const PAD = { l: 34, r: 14, t: 14 };
-const MAIN_BOTTOM_S = 158; // small: main plot bottom
-const LANE = { top: 190, h: 40 }; // small: score lane
+const MAIN_BOTTOM_S = 170; // small: main plot bottom
+const LANE = { top: 205, h: 44 }; // small: score lane
 
 // Full-page variant: wide canvas, main plot + score lane below
 const W_LG = 1100;
-const H_LG = 480;
+const H_LG = 540;
 const PAD_LG = { l: 40, r: 18, t: 22 };
 const MAIN_BOTTOM_L = 356;
-const LANE_L = { top: 398, h: 52 };
+const LANE_L = { top: 420, h: 84 };
 
 export default function TrajectoryChart({ trajectory = [], scoreCheckpoints = [], projectedScore = null, projectedTier = 'medium', large = false }) {
   const W_ = large ? W_LG : W;
@@ -119,10 +119,9 @@ export default function TrajectoryChart({ trajectory = [], scoreCheckpoints = []
           <>
             {/* lane background + frame */}
             <rect x={PAD_.l} y={lane.top} width={W_ - PAD_.l - PAD_.r} height={lane.h} fill="currentColor" className="text-accent" opacity="0.035" rx="6" />
-            {/* lane gridlines at 0 / 0.5 / 1 */}
-            {[0, 0.5, 1].map((s) => (
+            {/* lane gridlines: none -- only the 0/1 axis labels stay */}
+            {[0, 1].map((s) => (
               <g key={`ls${s}`}>
-                <line x1={PAD_.l} x2={W_ - PAD_.r} y1={yLane(s)} y2={yLane(s)} stroke="currentColor" className="text-line dark:text-darkBorder" strokeWidth="1" strokeDasharray="2 4" opacity="0.5" />
                 <text x={PAD_.l - 7} y={yLane(s) + 3} textAnchor="end" fontSize="8" fill="currentColor" className="text-muted dark:text-darkMuted" style={mono}>
                   {s.toFixed(1)}
                 </text>
@@ -170,20 +169,25 @@ export default function TrajectoryChart({ trajectory = [], scoreCheckpoints = []
             )}
 
             {/* stage tick line: full height -- from the top of the plot,
-                crossing the MMSE graph line, down into the score lane */}
-            {scoreCheckpoints.map((c) => (
-              <line
-                key={`tick-${c.slot}`}
-                x1={x(c.t)}
-                x2={x(c.t)}
-                y1={PAD_.t}
-                y2={yLane(c.score)}
-                stroke={ACCENT}
-                strokeWidth="1.2"
-                strokeDasharray="2 3"
-                opacity="0.45"
-              />
-            ))}
+                crossing the MMSE graph line, down into the score lane.
+                Each stage gets its own color (same outcome palette as the
+                diamonds) so the lines are distinguishable. */}
+            {scoreCheckpoints.map((c) => {
+              const hex = c.outcome === 'abnormal' ? TIER_HEX.high : c.outcome === 'inconclusive' ? TIER_HEX.medium : TIER_HEX.low;
+              return (
+                <line
+                  key={`tick-${c.slot}`}
+                  x1={x(c.t)}
+                  x2={x(c.t)}
+                  y1={PAD_.t}
+                  y2={yLane(c.score)}
+                  stroke={hex}
+                  strokeWidth="1.4"
+                  strokeDasharray="2 3"
+                  opacity="0.55"
+                />
+              );
+            })}
 
             {/* diamonds + score value + stage label */}
             {scoreCheckpoints.map((c) => {
