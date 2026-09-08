@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { ArrowLeft, ChevronLeft, ChevronRight, Printer, TrendingUp, Info } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Printer, TrendingUp, Info, X } from 'lucide-react';
 import { STAGES_SHORT, STAGES_FULL, fmtScore, fmtPercent } from '../lib.js';
 import TierTag from './TierTag.jsx';
 import TrajectoryChart from './TrajectoryChart.jsx';
@@ -40,7 +40,7 @@ function ForecastSection({ progression }) {
         : TIER_HEX.low;
 
   return (
-    <section className="rounded-2xl border border-line/70 dark:border-darkBorder/70 bg-white/60 dark:bg-darkCard/60 p-6">
+    <section>
       <SectionLabel
         size="sm"
         right={
@@ -851,6 +851,18 @@ export default function PatientDetail({
   hasPrev = false,
   hasNext = false,
 }) {
+  const [forecastOpen, setForecastOpen] = useState(false);
+
+  // Esc closes the forecast modal
+  useEffect(() => {
+    if (!forecastOpen) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setForecastOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [forecastOpen]);
+
   if (loading || !patient) {
     return (
       <div className="space-y-6 animate-pulse">
@@ -922,6 +934,21 @@ export default function PatientDetail({
               <ChevronRight className="h-3.5 w-3.5" />
             </button>
           )}
+          {progression?.model_available && (
+            <button
+              onClick={() => setForecastOpen(true)}
+              className="inline-flex items-center gap-2 rounded-xl border border-accent/40 bg-accent/10 px-3.5 py-1.5 text-xs font-semibold text-accent hover:bg-accent/20 shadow-soft transition"
+              title="Open the 12-month progression forecast"
+            >
+              <TrendingUp className="h-3.5 w-3.5" />
+              <span>Progression Probability</span>
+              {typeof progression?.projected?.conversion_probability === 'number' && (
+                <span style={MONO} className="rounded-md bg-accent px-1.5 py-0.5 text-[10px] font-bold text-white">
+                  {Math.round(progression.projected.conversion_probability * 100)}%
+                </span>
+              )}
+            </button>
+          )}
           <button
             onClick={() => window.print()}
             className="inline-flex items-center gap-2 rounded-xl border border-line dark:border-darkBorder bg-white dark:bg-darkCard px-3.5 py-1.5 text-xs font-semibold text-ink dark:text-darkText hover:border-accent shadow-soft transition"
@@ -937,8 +964,6 @@ export default function PatientDetail({
           <HeroPanel tier={patient.risk_tier}>
             <ScoreSection patient={patient} />
           </HeroPanel>
-
-          <ForecastSection progression={progression} />
 
           {/* Unified Clinical Decision Dossier */}
           <div className="rounded-2xl border border-line/70 dark:border-darkBorder/70 bg-white/60 dark:bg-darkCard/60 divide-y divide-line/60 dark:divide-darkBorder/60">
@@ -972,6 +997,41 @@ export default function PatientDetail({
           </div>
         </div>
       </div>
+
+      {/* Progression forecast modal — opened from the header button */}
+      {forecastOpen && progression?.model_available && (
+        <div
+          className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto p-4 sm:p-8 no-print"
+          role="dialog"
+          aria-modal="true"
+          aria-label="12-month progression forecast"
+        >
+          <div
+            className="fixed inset-0 bg-ink/45 dark:bg-black/65 backdrop-blur-sm"
+            onClick={() => setForecastOpen(false)}
+          />
+          <div className="relative z-10 w-full max-w-3xl rounded-2xl border border-line dark:border-darkBorder bg-paper dark:bg-darkBg shadow-float animate-fade-up">
+            <div className="flex items-center justify-between gap-4 border-b border-line dark:border-darkBorder px-6 py-4">
+              <div>
+                <h2 className="text-sm font-bold text-ink dark:text-darkText">12-Month Progression Forecast</h2>
+                <p style={MONO} className="mt-0.5 text-[11px] text-muted dark:text-darkMuted">
+                  {patient.id} · observed trajectory → predicted trajectory
+                </p>
+              </div>
+              <button
+                onClick={() => setForecastOpen(false)}
+                className="rounded-lg border border-line dark:border-darkBorder bg-white dark:bg-darkCard p-1.5 text-muted dark:text-darkMuted hover:text-ink dark:hover:text-darkText transition"
+                title="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="max-h-[75vh] overflow-y-auto p-6">
+              <ForecastSection progression={progression} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
