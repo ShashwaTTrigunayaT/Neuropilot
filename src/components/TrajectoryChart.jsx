@@ -8,8 +8,15 @@
 const W = 560;
 const H = 190;
 const PAD = { l: 34, r: 14, t: 14, b: 26 };
+// Full-page variant: taller canvas, more breathing room
+const W_LG = 760;
+const H_LG = 300;
+const PAD_LG = { l: 40, r: 18, t: 18, b: 32 };
 
-export default function TrajectoryChart({ trajectory = [] }) {
+export default function TrajectoryChart({ trajectory = [], large = false }) {
+  const W = large ? W_LG : 560;
+  const H = large ? H_LG : 190;
+  const PAD = large ? PAD_LG : { l: 34, r: 14, t: 14, b: 26 };
   const obs = trajectory.filter((p) => p.kind === 'observed');
   const pred = trajectory.filter((p) => p.kind === 'predicted');
   const today = obs[obs.length - 1] || { t: 0, mmse: null };
@@ -77,11 +84,11 @@ export default function TrajectoryChart({ trajectory = [] }) {
 
         {/* points */}
         {obs.map((p, i) => (
-          <circle key={`o${i}`} cx={x(p.t)} cy={y(p.mmse)} r={p.t === 0 ? 4.6 : 3.4} fill="currentColor" className="text-ink dark:text-darkText" />
+          <circle key={`o${i}`} cx={x(p.t)} cy={y(p.mmse)} r={p.t === 0 ? (large ? 6 : 4.6) : large ? 4.4 : 3.4} fill="currentColor" className="text-ink dark:text-darkText" />
         ))}
         {future && (
           <>
-            <circle cx={x(future.t)} cy={y(future.mmse)} r="4.6" fill="currentColor" className="text-tierHigh" />
+            <circle cx={x(future.t)} cy={y(future.mmse)} r={large ? 6 : 4.6} fill="currentColor" className="text-tierHigh" />
             {/* band whisker */}
             <line x1={x(future.t)} x2={x(future.t)} y1={y(future.hi)} y2={y(future.lo)} stroke="currentColor" className="text-tierHigh" strokeWidth="1.6" strokeLinecap="round" opacity="0.75" />
           </>

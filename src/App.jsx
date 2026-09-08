@@ -13,6 +13,7 @@ import { NeuroPilotLogo } from './components/BrandLogo.jsx';
 import Footer from './components/Footer.jsx';
 import Overview from './components/Overview.jsx';
 import PatientDetail from './components/PatientDetail.jsx';
+import ProgressionView from './components/ProgressionView.jsx';
 import RiskSimulator from './components/RiskSimulator.jsx';
 import { MONO, Toast } from './components/widgets.jsx';
 import { API_BASE, api } from './api.js';
@@ -173,7 +174,7 @@ export default function App() {
   const [status, setStatus] = useState('loading');
   const [loadError, setLoadError] = useState('');
 
-  const [view, setView] = useState('overview'); // overview | all | simulator
+  const [view, setView] = useState('overview'); // overview | all | simulator | progression
   const [selectedId, setSelectedId] = useState(null);
   const [simulatedPatient, setSimulatedPatient] = useState(null);
   const [detail, setDetail] = useState(null);
@@ -251,6 +252,7 @@ export default function App() {
     setSelectedId(null);
     setDetail(null);
     setPipeline(null);
+    setProgression(null);
     setDetailStatus('idle');
     setAdvanceError('');
   };
@@ -391,7 +393,11 @@ export default function App() {
     const handleKeyDown = (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       if (e.key === 'Escape' && selectedId) {
-        handleBack();
+        if (view === 'progression') {
+          closeProgression(); // Esc: back to the patient record
+        } else {
+          handleBack();
+        }
       }
       if (selectedId) {
         if (e.key === 'ArrowLeft' && hasPrev) handlePrev();
@@ -405,11 +411,20 @@ export default function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedId, hasPrev, hasNext, currentIndex]);
+  }, [selectedId, view, hasPrev, hasNext, currentIndex]);
 
   const handleNavChange = (targetView) => {
-    setSelectedId(null);
+    if (targetView !== 'progression') setSelectedId(null);
     setView(targetView);
+  };
+
+  const openProgression = () => setView('progression');
+  // Return from the progression view to the patient record underneath it
+  const closeProgression = () => setView('overview');
+  // Leave the progression view entirely (back to the cohort list)
+  const handleBackFromProgression = () => {
+    handleBack();
+    setView('overview');
   };
 
   return (
@@ -504,8 +519,18 @@ export default function App() {
               )}
             </div>
 
+            {/* Full-page progression forecast view */}
+            {view === 'progression' && selectedId && (
+              <ProgressionView
+                patient={detail}
+                progression={progression}
+                onBack={handleBackFromProgression}
+                onOpenDetail={closeProgression}
+              />
+            )}
+
             {/* Patient Detail View */}
-            {selectedId && (
+            {selectedId && view !== 'progression' && (
               <PatientDetail
                 patient={detail}
                 pipeline={pipeline}
@@ -517,6 +542,7 @@ export default function App() {
                 advanceError={advanceError}
                 onRecordResult={handleRecordResult}
                 progression={progression}
+                onOpenProgression={openProgression}
                 onPrev={handlePrev}
                 onNext={handleNext}
                 hasPrev={hasPrev}
