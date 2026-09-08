@@ -129,16 +129,7 @@ export default function ProgressionView({ patient, progression, onBack, onOpenDe
         {/* Left: chart + methodology */}
         <div className="space-y-6 lg:col-span-3">
           <div className="rounded-2xl border border-line/70 dark:border-darkBorder/70 bg-white/60 dark:bg-darkCard/60 p-6">
-            <SectionLabel
-              size="sm"
-              right={
-                <span style={MONO} className="text-[10px] font-bold uppercase tracking-wide text-accent">
-                  MMSE over time
-                </span>
-              }
-            >
-              Observed vs Predicted Trajectory
-            </SectionLabel>
+            <SectionLabel size="sm">Observed vs Predicted Trajectory</SectionLabel>
             <div className="mt-4">
               <TrajectoryChart trajectory={progression.trajectory} large />
             </div>

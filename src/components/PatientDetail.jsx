@@ -931,11 +931,6 @@ export default function PatientDetail({
             >
               <TrendingUp className="h-3.5 w-3.5" />
               <span>Progression Probability</span>
-              {typeof progression?.projected?.conversion_probability === 'number' && (
-                <span style={MONO} className="rounded-md bg-accent px-1.5 py-0.5 text-[10px] font-bold text-white">
-                  {Math.round(progression.projected.conversion_probability * 100)}%
-                </span>
-              )}
             </button>
           )}
           <button
