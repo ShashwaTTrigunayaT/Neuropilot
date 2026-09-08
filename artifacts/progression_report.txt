@@ -1,0 +1,26 @@
+Progression forecaster evaluation -- 12-month horizon (synthetic v2 cohort)
+models                : XGBRegressor (mmse_delta_12mo) + XGBClassifier (conversion_12mo)
+subjects              : 800 (133 conversions, 16.6%)
+test set              : 160 (20%, stratified by conversion)
+features              : age, education_years, sex, mmse, mmse_change, ptau181, abeta4240, hippocampal_volume, amyloid_positive, tau_positive
+
+MMSE-delta regressor:
+  test MAE            : 0.611 points (baseline 'predict the mean': 1.043)
+  test RMSE           : 0.741
+  test R^2            : 0.679
+
+Conversion classifier:
+  test ROC AUC        : 0.770
+  test PR AUC         : 0.465 (prevalence 0.169)
+  test Brier score    : 0.143 (lower = better calibrated)
+  accuracy@0.5        : 0.800 (majority baseline 0.831)
+
+guardrails:
+- same 10 baseline features as the risk model; NaN = stage not yet ordered
+- subject-level 20% holdout, stratified by conversion label
+- conversion class imbalance handled via scale_pos_weight (5.04)
+- projected 12-month risk tier = CURRENT risk model re-scored on the
+  projected future feature vector (age+1, forecast MMSE, carried-forward
+  biomarkers) -- one consistent model family end-to-end
+- labels are simulated trajectories shaped by published progression
+  dynamics (synthetic data, not real patient outcomes)

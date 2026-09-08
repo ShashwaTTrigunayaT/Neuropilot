@@ -22,6 +22,10 @@ artifacts/*
 !artifacts/model_meta.json
 !artifacts/global_importance.csv
 !artifacts/eval_report.txt
+!artifacts/progression_delta.joblib
+!artifacts/progression_conversion.joblib
+!artifacts/progression_meta.json
+!artifacts/progression_report.txt
 
 # ---- Python ----
 __pycache__/

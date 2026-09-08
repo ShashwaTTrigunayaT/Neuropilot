@@ -1,0 +1,31 @@
+{
+  "model_type": "xgb_regressor+xgb_classifier",
+  "horizon_months": 12,
+  "features": [
+    "age",
+    "education_years",
+    "sex",
+    "mmse",
+    "mmse_change",
+    "ptau181",
+    "abeta4240",
+    "hippocampal_volume",
+    "amyloid_positive",
+    "tau_positive"
+  ],
+  "trained_at": "2026-09-08T20:15:24",
+  "data_source": "synthetic v2 cohort + biomarker-driven 12-month follow-up simulation",
+  "n_train": 640,
+  "n_test": 160,
+  "conversion_prevalence": 0.1663,
+  "metrics": {
+    "delta_mae": 0.6111,
+    "delta_mae_baseline": 1.0427,
+    "delta_rmse": 0.7413,
+    "delta_r2": 0.6791,
+    "conversion_auc": 0.7698,
+    "conversion_pr_auc": 0.4649,
+    "conversion_brier": 0.1427,
+    "conversion_accuracy": 0.8
+  }
+}
