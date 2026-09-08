@@ -94,22 +94,20 @@ export default function ProgressionView({ patient, progression, onOpenDetail, on
         </div>
       </div>
 
-      <div className="grid items-start gap-8 lg:grid-cols-5">
-        {/* Left: chart + methodology */}
-        <div className="space-y-6 lg:col-span-3">
-          <div className="rounded-2xl border border-line/70 dark:border-darkBorder/70 bg-white/60 dark:bg-darkCard/60 p-6">
-            <SectionLabel size="sm">Observed vs Predicted Trajectory</SectionLabel>
-            <div className="mt-4">
-              <TrajectoryChart
-                trajectory={progression.trajectory}
-                scoreCheckpoints={progression.score_checkpoints || []}
-                large
-              />
-            </div>
-          </div>
+      {/* Full-width trajectory chart */}
+      <div className="rounded-2xl border border-line/70 dark:border-darkBorder/70 bg-white/60 dark:bg-darkCard/60 p-6">
+        <SectionLabel size="sm">Observed vs Predicted Trajectory</SectionLabel>
+        <div className="mt-4">
+          <TrajectoryChart
+            trajectory={progression.trajectory}
+            scoreCheckpoints={progression.score_checkpoints || []}
+            large
+          />
         </div>
+      </div>
 
-        {/* Right: headline numbers */}
+      <div className="grid items-start gap-8 lg:grid-cols-5">
+        {/* Left: projected risk gauge */}
         <div className="space-y-6 lg:col-span-2">
           <HeroPanel tier={projected.risk_tier}>
             <div className="flex flex-col items-center text-center">
@@ -126,7 +124,10 @@ export default function ProgressionView({ patient, progression, onOpenDetail, on
               </p>
             </div>
           </HeroPanel>
+        </div>
 
+        {/* Right: headline numbers */}
+        <div className="space-y-6 lg:col-span-3">
           {/* Conversion probability — the headline number */}
           <div className="rounded-2xl border border-line/70 dark:border-darkBorder/70 bg-white/60 dark:bg-darkCard/60 p-6">
             <SectionLabel size="sm">Probability of clinical progression</SectionLabel>
