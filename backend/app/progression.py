@@ -17,6 +17,7 @@ forecast(record) composes:
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from typing import Optional
 
 import joblib
@@ -25,6 +26,10 @@ import pandas as pd
 import shap
 
 from .config import PROJECT_ROOT
+
+# Stage order -> slot mapping (mirrors escalation.py)
+_SLOT_STAGE = [("blood", 2), ("imaging", 3), ("pet", 4)]
+_SLOT_LABEL = {"blood": "Blood panel", "imaging": "MRI", "pet": "PET"}
 
 DELTA_PATH = PROJECT_ROOT / "artifacts" / "progression_delta.joblib"
 CONV_PATH = PROJECT_ROOT / "artifacts" / "progression_conversion.joblib"
@@ -79,6 +84,86 @@ def _top_drivers(features: dict, top_n: int = 3) -> list[dict]:
         {"feature": names[j], "contribution": round(float(sv_row[j]), 3)}
         for j in order
     ]
+
+
+def _score_checkpoints(record: dict) -> list[dict]:
+    """Risk score at each completed stage test, for chart annotation.
+
+    For every completed slot (blood < imaging < pet) the trained model is
+    re-run on the patient's data AS IT EXISTED at that stage -- later-stage
+    results masked to unmeasured -- so the marker shows the score the model
+    would have produced when that test's result landed. Timestamps come from
+    the audit history ('<Slot> result recorded' events); completed stages
+    without a parseable timestamp get spaced positions in the observed window.
+    """
+    from . import model_service
+
+    completed = [
+        (slot, stage)
+        for slot, stage in _SLOT_STAGE
+        if isinstance(record.get(slot), dict) and record[slot].get("status") == "completed"
+    ]
+    if not completed:
+        return []
+
+    # Latest '<Slot> result recorded' timestamp per slot from the audit trail
+    event_times: dict[str, datetime] = {}
+    now = datetime.now()
+    label_prefixes = {
+        "blood": ("Blood biomarkers result", "Blood panel result"),
+        "imaging": ("MRI volumetrics result", "MRI result"),
+        "pet": ("PET imaging result", "PET result"),
+    }
+    for h in record.get("history", []):
+        text = str(h.get("text", ""))
+        for slot, _stage in _SLOT_STAGE:
+            if any(text.startswith(prefix) for prefix in label_prefixes[slot]):
+                try:
+                    at = datetime.strptime(str(h.get("at", "")), "%Y-%m-%d %H:%M")
+                    prev = event_times.get(slot)
+                    if prev is None or at > prev:
+                        event_times[slot] = at
+                except ValueError:
+                    continue
+
+    checkpoints = []
+    for slot, stage in completed:
+        masked = dict(record)
+        for s2, st2 in _SLOT_STAGE:
+            if st2 > stage:
+                masked[s2] = None
+        try:
+            res = model_service.score_features(model_service.record_to_features(masked), top_n=None)
+        except Exception:  # noqa: BLE001 -- annotation must never break the forecast
+            res = None
+        if not res:
+            continue
+        at_dt = event_times.get(slot)
+        if at_dt is not None:
+            t = round((at_dt - now).total_seconds() / 86400 / 30.44, 2)
+            t = max(t, -5.8)  # keep inside the chart's observed window
+        else:
+            t = round(-0.45 * (5 - stage), 2)  # PET -0.45, MRI -0.9, blood -1.35
+        slot_result = record.get(slot) or {}
+        checkpoints.append(
+            {
+                "t": t,
+                "score": res["score"],
+                "slot": slot,
+                "stage": stage,
+                "label": _SLOT_LABEL[slot],
+                "outcome": slot_result.get("outcome", ""),
+                "at": at_dt.strftime("%Y-%m-%d %H:%M") if at_dt else None,
+            }
+        )
+
+    # Auto-workup can complete stages within the same minute -- nudge markers
+    # apart on the x-axis so they stay readable.
+    checkpoints.sort(key=lambda c: c["stage"])
+    for i in range(1, len(checkpoints)):
+        if checkpoints[i]["t"] - checkpoints[i - 1]["t"] < 0.3:
+            checkpoints[i]["t"] = round(checkpoints[i - 1]["t"] + 0.3, 2)
+    return checkpoints
 
 
 def forecast(record: dict) -> Optional[dict]:
@@ -153,6 +238,8 @@ def forecast(record: dict) -> Optional[dict]:
         },
     ]
 
+    score_checkpoints = _score_checkpoints(record)
+
     payload = {
         "id": record.get("id"),
         "horizon_months": 12,
@@ -174,6 +261,7 @@ def forecast(record: dict) -> Optional[dict]:
             "tier_shift": tier_now != tier_future,
         },
         "trajectory": trajectory,
+        "score_checkpoints": score_checkpoints,
         "drivers": drivers,
         "disclaimer": (
             "Forecasts are model-derived decision support on simulated 12-month "

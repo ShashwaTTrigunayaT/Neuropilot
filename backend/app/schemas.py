@@ -255,5 +255,7 @@ class ProgressionResponse(BaseModel):
     current: dict
     projected: dict
     trajectory: List[TrajectoryPoint]
+    # Risk score at the moment each stage test completed (chart annotations)
+    score_checkpoints: List[dict] = []
     drivers: List[ProgressionDriver]
     disclaimer: str

@@ -100,7 +100,11 @@ export default function ProgressionView({ patient, progression, onOpenDetail, on
           <div className="rounded-2xl border border-line/70 dark:border-darkBorder/70 bg-white/60 dark:bg-darkCard/60 p-6">
             <SectionLabel size="sm">Observed vs Predicted Trajectory</SectionLabel>
             <div className="mt-4">
-              <TrajectoryChart trajectory={progression.trajectory} large />
+              <TrajectoryChart
+                trajectory={progression.trajectory}
+                scoreCheckpoints={progression.score_checkpoints || []}
+                large
+              />
             </div>
           </div>
         </div>
@@ -127,7 +131,8 @@ export default function ProgressionView({ patient, progression, onOpenDetail, on
           <div className="rounded-2xl border border-line/70 dark:border-darkBorder/70 bg-white/60 dark:bg-darkCard/60 p-6">
             <SectionLabel size="sm">Probability of clinical progression</SectionLabel>
             <div className="mt-3 flex items-baseline justify-between">
-              <span style={MONO} className="text-4xl font-black" style={{ color: convColor }}>
+              <span style={MONO} className="text-4xl font-black" style={{ color: convColor }}
+              >
                 {pPct}%
               </span>
               <span className="text-[11px] text-muted dark:text-darkMuted">within 12 months</span>

@@ -1,9 +1,12 @@
 /*
  * 12-month MMSE trajectory: observed history → predicted future with an
  * uncertainty band and the current diagnostic stage annotated at "today".
+ * Optionally overlays the risk score at the moment each stage test completed
+ * (diamond markers on a secondary right-hand axis).
  * Hand-rolled SVG (no chart library) — consistent with the dashboard's
  * custom-widget convention and zero new dependencies.
  */
+import { TIER_HEX } from './widgets.jsx';
 
 const W = 560;
 const H = 190;
@@ -13,10 +16,11 @@ const W_LG = 760;
 const H_LG = 300;
 const PAD_LG = { l: 40, r: 18, t: 18, b: 32 };
 
-export default function TrajectoryChart({ trajectory = [], large = false }) {
+export default function TrajectoryChart({ trajectory = [], scoreCheckpoints = [], large = false }) {
   const W = large ? W_LG : 560;
   const H = large ? H_LG : 190;
   const PAD = large ? PAD_LG : { l: 34, r: 14, t: 14, b: 26 };
+  const PAD_R = scoreCheckpoints.length > 0 ? 44 : PAD.r; // room for the score axis
   const obs = trajectory.filter((p) => p.kind === 'observed');
   const pred = trajectory.filter((p) => p.kind === 'predicted');
   const today = obs[obs.length - 1] || { t: 0, mmse: null };
@@ -29,8 +33,10 @@ export default function TrajectoryChart({ trajectory = [], large = false }) {
   const lo = Math.max(0, Math.min(...values, 26) - 2);
   const hi = Math.min(30, Math.max(...values, 10) + 2);
 
-  const x = (t) => PAD.l + ((t + 6) / 18) * (W - PAD.l - PAD.r);
+  const x = (t) => PAD.l + ((t + 6) / 18) * (W - PAD.l - PAD_R);
   const y = (v) => PAD.t + (1 - (v - lo) / Math.max(1, hi - lo)) * (H - PAD.t - PAD.b);
+  // Secondary axis: risk score 0-1 on the right edge
+  const yScore = (s) => PAD.t + (1 - s) * (H - PAD.t - PAD.b);
 
   const gridLines = [];
   for (let v = Math.ceil(lo); v <= Math.floor(hi); v += 2) gridLines.push(v);
@@ -94,6 +100,80 @@ export default function TrajectoryChart({ trajectory = [], large = false }) {
           </>
         )}
 
+        {/* Stage-completion risk-score annotations (secondary axis) */}
+        {scoreCheckpoints.length > 0 && (
+          <>
+            <line
+              x1={x(scoreCheckpoints[0].t)}
+              x2={x(scoreCheckpoints[scoreCheckpoints.length - 1].t)}
+              y1={yScore(scoreCheckpoints[0].score)}
+              y2={yScore(scoreCheckpoints[scoreCheckpoints.length - 1].score)}
+              stroke="currentColor"
+              className="text-accent"
+              strokeWidth="1.4"
+              strokeDasharray="2 3"
+              opacity="0.55"
+            />
+            {scoreCheckpoints.map((c) => (
+              <g key={c.slot}>
+                <line
+                  x1={x(c.t)}
+                  x2={x(c.t)}
+                  y1={PAD.t}
+                  y2={H - PAD.b}
+                  stroke="currentColor"
+                  className="text-accent"
+                  strokeWidth="1"
+                  strokeDasharray="1.5 3"
+                  opacity="0.3"
+                />
+                <path
+                  d={`M${x(c.t)},${yScore(c.score) - 5} L${x(c.t) + 5},${yScore(c.score)} L${x(c.t)},${yScore(c.score) + 5} L${x(c.t) - 5},${yScore(c.score)} Z`}
+                  fill={c.outcome === 'abnormal' ? TIER_HEX.high : c.outcome === 'inconclusive' ? TIER_HEX.medium : TIER_HEX.low}
+                  stroke="#fff"
+                  strokeWidth="1"
+                />
+                <text
+                  x={x(c.t)}
+                  y={yScore(c.score) - 9}
+                  textAnchor="middle"
+                  fontSize="8.5"
+                  fill="currentColor"
+                  className="text-ink dark:text-darkText"
+                  style={{ fontFamily: 'IBM Plex Mono, monospace', fontWeight: 600 }}
+                >
+                  {c.score.toFixed(2)}
+                </text>
+                <text
+                  x={x(c.t)}
+                  y={H - PAD.b + 11}
+                  textAnchor="middle"
+                  fontSize="7.5"
+                  fill="currentColor"
+                  className="text-accent"
+                  style={{ fontFamily: 'IBM Plex Mono, monospace' }}
+                >
+                  {c.label}
+                </text>
+            </g>
+            ))}
+            {/* score axis ticks (right) */}
+            {[0, 0.25, 0.5, 0.75, 1].map((s) => (
+              <text
+                key={`s${s}`}
+                x={W - PAD_R + 6}
+                y={yScore(s) + 3}
+                fontSize="8"
+                fill="currentColor"
+                className="text-muted dark:text-darkMuted"
+                style={{ fontFamily: 'IBM Plex Mono, monospace' }}
+              >
+                {s.toFixed(2)}
+              </text>
+            ))}
+          </>
+        )}
+
         {/* x-axis month labels */}
         {trajectory.map((p, i) => (
           <text key={`x${i}`} x={x(p.t)} y={H - 8} textAnchor="middle" fontSize="9" fill="currentColor" className="text-muted dark:text-darkMuted" style={{ fontFamily: 'IBM Plex Mono, monospace' }}>
@@ -103,10 +183,20 @@ export default function TrajectoryChart({ trajectory = [], large = false }) {
       </svg>
 
       <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[10px] text-muted dark:text-darkMuted">
-        <span className="flex items-center gap-1.5">
+        <span className="flex flex-wrap items-center gap-1.5">
           <span className="inline-block h-0.5 w-4 rounded bg-ink dark:bg-darkText" /> Observed
           <span className="ml-2 inline-block h-0.5 w-4 rounded bg-tierHigh" style={{ backgroundImage: 'repeating-linear-gradient(90deg, currentColor 0 4px, transparent 4px 7px)' }} /> Predicted
           <span className="ml-2 inline-block h-2.5 w-3 rounded-sm bg-tierHigh opacity-20" /> Uncertainty
+          {scoreCheckpoints.length > 0 && (
+            <>
+              <span className="ml-2 inline-block h-2 w-2 rotate-45 rounded-sm bg-accent" /> Risk score at stage completion
+              <span className="ml-1.5 flex items-center gap-1">
+                <span className="inline-block h-2 w-2 rotate-45 rounded-sm" style={{ backgroundColor: TIER_HEX.high }} />abn
+                <span className="inline-block h-2 w-2 rotate-45 rounded-sm" style={{ backgroundColor: TIER_HEX.medium }} />inc
+                <span className="inline-block h-2 w-2 rotate-45 rounded-sm" style={{ backgroundColor: TIER_HEX.low }} />nrm
+              </span>
+            </>
+          )}
         </span>
         <span style={{ fontFamily: 'IBM Plex Mono, monospace' }} title={stageLabel}>
           {stageLabel}
