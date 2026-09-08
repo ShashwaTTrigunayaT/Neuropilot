@@ -141,33 +141,6 @@ export default function TrajectoryChart({ trajectory = [], scoreCheckpoints = []
               opacity="0.5"
             />
 
-            {/* SOLID polyline through the stage-completion scores */}
-            {scoreCheckpoints.length > 1 && (
-              <polyline
-                points={scoreCheckpoints.map((c) => `${x(c.t)},${yLane(c.score)}`).join(' ')}
-                fill="none"
-                stroke={ACCENT}
-                strokeWidth="2.2"
-                strokeLinejoin="round"
-                strokeLinecap="round"
-                opacity="0.9"
-              />
-            )}
-
-            {/* dashed continuation to the 12-month projected score */}
-            {showProjection && (
-              <line
-                x1={x(scoreCheckpoints[scoreCheckpoints.length - 1].t)}
-                x2={x(12)}
-                y1={yLane(scoreCheckpoints[scoreCheckpoints.length - 1].score)}
-                y2={yLane(projectedScore)}
-                stroke={ACCENT}
-                strokeWidth="1.8"
-                strokeDasharray="5 4"
-                opacity="0.75"
-              />
-            )}
-
             {/* stage tick line: full height -- from the top of the plot,
                 crossing the MMSE graph line, down into the score lane.
                 Each stage gets its own color (same outcome palette as the
