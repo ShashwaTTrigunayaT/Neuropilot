@@ -7,7 +7,7 @@
  * Hand-rolled SVG (no chart library) — consistent with the dashboard's
  * custom-widget convention and zero new dependencies.
  */
-import { TIER_HEX } from './widgets.jsx';
+import { ACCENT, TIER_HEX } from './widgets.jsx';
 
 const W = 560;
 const H = 250;
@@ -22,7 +22,7 @@ const PAD_LG = { l: 40, r: 18, t: 22 };
 const MAIN_BOTTOM_L = 356;
 const LANE_L = { top: 398, h: 52 };
 
-export default function TrajectoryChart({ trajectory = [], scoreCheckpoints = [], large = false }) {
+export default function TrajectoryChart({ trajectory = [], scoreCheckpoints = [], projectedScore = null, projectedTier = 'medium', large = false }) {
   const W_ = large ? W_LG : W;
   const H_ = large ? H_LG : H;
   const PAD_ = large ? PAD_LG : PAD;
@@ -61,6 +61,8 @@ export default function TrajectoryChart({ trajectory = [], scoreCheckpoints = []
   const stageLabel = today.stage_label || 'Current assessment';
   const mono = { fontFamily: 'IBM Plex Mono, monospace' };
   const big = large ? 1 : 0.85; // scale factor for marker text
+  const projectedTierHex = TIER_HEX[projectedTier] || ACCENT;
+  const showProjection = hasLane && typeof projectedScore === 'number';
 
   return (
     <div>
@@ -127,32 +129,59 @@ export default function TrajectoryChart({ trajectory = [], scoreCheckpoints = []
               </g>
             ))}
 
-            {/* connector across checkpoints */}
+            {/* TODAY divider across the lane */}
             <line
-              x1={x(scoreCheckpoints[0].t)}
-              x2={x(scoreCheckpoints[scoreCheckpoints.length - 1].t)}
-              y1={yLane(scoreCheckpoints[0].score)}
-              y2={yLane(scoreCheckpoints[scoreCheckpoints.length - 1].score)}
+              x1={x(0)}
+              x2={x(0)}
+              y1={lane.top - 4}
+              y2={lane.top + lane.h + 4}
               stroke="currentColor"
               className="text-accent"
-              strokeWidth="1.6"
-              strokeDasharray="2 3"
-              opacity="0.65"
+              strokeWidth="1"
+              strokeDasharray="3 3"
+              opacity="0.5"
             />
 
-            {/* stage tick line: from month axis down into the lane */}
+            {/* SOLID polyline through the stage-completion scores */}
+            {scoreCheckpoints.length > 1 && (
+              <polyline
+                points={scoreCheckpoints.map((c) => `${x(c.t)},${yLane(c.score)}`).join(' ')}
+                fill="none"
+                stroke={ACCENT}
+                strokeWidth="2.2"
+                strokeLinejoin="round"
+                strokeLinecap="round"
+                opacity="0.9"
+              />
+            )}
+
+            {/* dashed continuation to the 12-month projected score */}
+            {showProjection && (
+              <line
+                x1={x(scoreCheckpoints[scoreCheckpoints.length - 1].t)}
+                x2={x(12)}
+                y1={yLane(scoreCheckpoints[scoreCheckpoints.length - 1].score)}
+                y2={yLane(projectedScore)}
+                stroke={ACCENT}
+                strokeWidth="1.8"
+                strokeDasharray="5 4"
+                opacity="0.75"
+              />
+            )}
+
+            {/* stage tick line: full height -- from the top of the plot,
+                crossing the MMSE graph line, down into the score lane */}
             {scoreCheckpoints.map((c) => (
               <line
                 key={`tick-${c.slot}`}
                 x1={x(c.t)}
                 x2={x(c.t)}
-                y1={mainBottom + 20}
+                y1={PAD_.t}
                 y2={yLane(c.score)}
-                stroke="currentColor"
-                className="text-accent"
-                strokeWidth="1"
-                strokeDasharray="1.5 3"
-                opacity="0.3"
+                stroke={ACCENT}
+                strokeWidth="1.2"
+                strokeDasharray="2 3"
+                opacity="0.45"
               />
             ))}
 
@@ -192,6 +221,41 @@ export default function TrajectoryChart({ trajectory = [], scoreCheckpoints = []
                 </g>
               );
             })}
+
+            {/* FINAL 12-month projected score point */}
+            {showProjection && (
+              <g>
+              <circle
+                cx={x(12)}
+                cy={yLane(projectedScore)}
+                r={large ? 7 : 5}
+                fill={projectedTierHex}
+                stroke="#fff"
+                strokeWidth="1.6"
+              />
+              <circle cx={x(12)} cy={yLane(projectedScore)} r={large ? 11 : 8} fill="none" stroke={projectedTierHex} strokeWidth="1" opacity="0.4" />
+              <text
+                x={x(12)}
+                y={yLane(projectedScore) - (large ? 12 : 9)}
+                textAnchor="middle"
+                fontSize={9 * big}
+                fill={projectedTierHex}
+                style={{ ...mono, fontWeight: 800 }}
+              >
+                {projectedScore.toFixed(2)}
+              </text>
+              <text
+                x={x(12)}
+                y={lane.top + lane.h + 14}
+                textAnchor="middle"
+                fontSize={8 * big}
+                fill={projectedTierHex}
+                style={{ ...mono, fontWeight: 700 }}
+              >
+                12-mo proj.
+              </text>
+              </g>
+            )}
           </>
         )}
       </svg>
@@ -209,6 +273,15 @@ export default function TrajectoryChart({ trajectory = [], scoreCheckpoints = []
                 <span className="inline-block h-2 w-2 rotate-45 rounded-sm" style={{ backgroundColor: TIER_HEX.medium }} />inc
                 <span className="inline-block h-2 w-2 rotate-45 rounded-sm" style={{ backgroundColor: TIER_HEX.low }} />nrm
               </span>
+              {showProjection && (
+                <span className="ml-2 flex items-center gap-1">
+                  <span
+                    className="inline-block h-2.5 w-2.5 rounded-full border border-white"
+                    style={{ backgroundColor: projectedTierHex }}
+                  />
+                  12-mo projected
+                </span>
+              )}
             </>
           )}
         </span>

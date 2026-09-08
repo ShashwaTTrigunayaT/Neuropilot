@@ -101,6 +101,8 @@ export default function ProgressionView({ patient, progression, onOpenDetail, on
           <TrajectoryChart
             trajectory={progression.trajectory}
             scoreCheckpoints={progression.score_checkpoints || []}
+            projectedScore={progression.projected?.score ?? null}
+            projectedTier={progression.projected?.risk_tier}
             large
           />
         </div>
@@ -154,20 +156,7 @@ export default function ProgressionView({ patient, progression, onOpenDetail, on
 
           {/* Projected metric — the gauge panel above already carries the
               current → projected score, so only MMSE gets its own card */}
-          <div className="rounded-2xl border border-line/60 dark:border-darkBorder/60 bg-white/60 dark:bg-darkCard/60 p-4">
-            <p className="text-[10px] uppercase tracking-wide text-muted dark:text-darkMuted">Projected MMSE</p>
-            <p style={MONO} className="mt-1.5 text-lg font-bold text-ink dark:text-darkText">
-              {current.mmse} → {projected.mmse}
-            </p>
-            <p
-              style={MONO}
-              className="mt-0.5 text-[11px] font-semibold"
-              style={{ color: projected.mmse_delta < 0 ? TIER_HEX.high : TIER_HEX.low }}
-            >
-              {projected.mmse_delta > 0 ? '+' : ''}
-              {projected.mmse_delta} pts ± {projected.band}
-            </p>
-          </div>
+          
 
           {/* Drivers */}
           {drivers?.length > 0 && (
