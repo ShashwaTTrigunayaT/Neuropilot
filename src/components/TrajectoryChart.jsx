@@ -13,8 +13,8 @@ const H = 190;
 const PAD = { l: 34, r: 14, t: 14, b: 26 };
 // Full-page variant: taller canvas, more breathing room
 const W_LG = 760;
-const H_LG = 300;
-const PAD_LG = { l: 40, r: 18, t: 18, b: 32 };
+const H_LG = 400;
+const PAD_LG = { l: 40, r: 18, t: 22, b: 36 };
 
 export default function TrajectoryChart({ trajectory = [], scoreCheckpoints = [], large = false }) {
   const W = large ? W_LG : 560;
