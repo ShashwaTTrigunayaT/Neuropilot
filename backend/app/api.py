@@ -9,6 +9,7 @@ from .schemas import (
     AdvanceResponse,
     AutoWorkupResponse,
     ExplainResponse,
+    ProgressionResponse,
     WorkupNextResponse,
     WorkupRunRequest,
     WorkupRunResponse,
@@ -74,6 +75,17 @@ def explain_patient(patient_id: str) -> dict:
 @router.get("/patients/{patient_id}/pipeline", response_model=PipelineResponse, tags=["patients"])
 def get_pipeline(patient_id: str) -> dict:
     payload = service.pipeline(patient_id)
+    if payload is None:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    return payload
+
+
+@router.get("/patients/{patient_id}/progression", response_model=ProgressionResponse, tags=["model"])
+def get_progression(patient_id: str) -> dict:
+    """12-month progression forecast: MMSE trajectory (observed + predicted with
+    uncertainty band), conversion probability with top drivers, and the projected
+    risk tier from re-scoring the current risk model on the projected vector."""
+    payload = service.progression(patient_id)
     if payload is None:
         raise HTTPException(status_code=404, detail="Patient not found")
     return payload

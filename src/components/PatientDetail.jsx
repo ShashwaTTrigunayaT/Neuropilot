@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { ArrowLeft, ChevronLeft, ChevronRight, Printer } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Printer, TrendingUp, Info } from 'lucide-react';
 import { STAGES_SHORT, STAGES_FULL, fmtScore, fmtPercent } from '../lib.js';
 import TierTag from './TierTag.jsx';
+import TrajectoryChart from './TrajectoryChart.jsx';
 import {
   BiomarkerRangeIndicator,
   HeroPanel,
@@ -11,6 +12,124 @@ import {
   SectionLabel,
   TIER_HEX,
 } from './widgets.jsx';
+
+const DRIVER_LABELS = {
+  mmse: 'MMSE (latest)',
+  mmse_change: 'MMSE decline rate',
+  age: 'Age',
+  sex: 'Sex',
+  education_years: 'Education',
+  ptau181: 'p-tau181 (blood)',
+  abeta4240: 'Aβ42/40 (blood)',
+  hippocampal_volume: 'Hippocampal volume (MRI)',
+  amyloid_positive: 'Amyloid PET',
+  tau_positive: 'Tau PET',
+};
+
+/* 12-month progression forecast: trajectory chart + conversion probability +
+   projected risk tier. Rendered only when the progression model is available. */
+function ForecastSection({ progression }) {
+  if (!progression || !progression.model_available) return null;
+  const { current, projected, drivers } = progression;
+  const pPct = Math.round(projected.conversion_probability * 100);
+  const convColor =
+    projected.conversion_probability >= 0.6
+      ? TIER_HEX.high
+      : projected.conversion_probability >= 0.3
+        ? TIER_HEX.medium
+        : TIER_HEX.low;
+
+  return (
+    <section className="rounded-2xl border border-line/70 dark:border-darkBorder/70 bg-white/60 dark:bg-darkCard/60 p-6">
+      <SectionLabel
+        size="sm"
+        right={
+          <span style={MONO} className="text-[10px] font-bold uppercase tracking-wide text-accent">
+            12-month forecast
+          </span>
+        }
+      >
+        <span className="inline-flex items-center gap-2">
+          <TrendingUp className="h-3.5 w-3.5 text-accent" />
+          Progression Outlook
+        </span>
+      </SectionLabel>
+
+      <div className="mt-4 grid gap-6 lg:grid-cols-2">
+        <div>
+          <TrajectoryChart trajectory={progression.trajectory} />
+        </div>
+        <div className="flex flex-col justify-between gap-4">
+          {/* Conversion probability */}
+          <div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-xs font-medium text-ink dark:text-darkText">Probability of clinical progression</span>
+              <span style={MONO} className="text-lg font-black" style={{ color: convColor }}>
+                {pPct}%
+              </span>
+            </div>
+            <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-line/50 dark:bg-darkBorder/60">
+              <div
+                className="h-full rounded-full transition-all duration-500"
+                style={{ width: `${Math.max(3, pPct)}%`, backgroundColor: convColor }}
+              />
+            </div>
+            {projected.tier_shift && (
+              <p className="mt-2 text-[11px] font-semibold" style={{ color: TIER_HEX.high }}>
+                Projected tier change: {current.risk_tier} → {projected.risk_tier} within 12 months
+              </p>
+            )}
+          </div>
+
+          {/* Projected metrics */}
+          <div className="grid grid-cols-2 gap-2.5">
+            <div className="rounded-xl border border-line/60 dark:border-darkBorder/60 bg-surface/40 dark:bg-darkBg/30 p-3">
+              <p className="text-[10px] uppercase tracking-wide text-muted dark:text-darkMuted">Projected MMSE</p>
+              <p style={MONO} className="mt-1 text-base font-bold text-ink dark:text-darkText">
+                {current.mmse} → {projected.mmse}
+                <span className="ml-1 text-[11px] font-semibold" style={{ color: projected.mmse_delta < 0 ? TIER_HEX.high : TIER_HEX.low }}>
+                  ({projected.mmse_delta > 0 ? '+' : ''}{projected.mmse_delta})
+                </span>
+              </p>
+            </div>
+            <div className="rounded-xl border border-line/60 dark:border-darkBorder/60 bg-surface/40 dark:bg-darkBg/30 p-3">
+              <p className="text-[10px] uppercase tracking-wide text-muted dark:text-darkMuted">Projected risk score</p>
+              <p style={MONO} className="mt-1 text-base font-bold text-ink dark:text-darkText">
+                {current.score?.toFixed(2)} → {projected.score?.toFixed(2)}
+              </p>
+            </div>
+          </div>
+
+          {/* Top drivers */}
+          {drivers?.length > 0 && (
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted dark:text-darkMuted">Forecast drivers</p>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {drivers.map((d) => (
+                  <span
+                    key={d.feature}
+                    style={MONO}
+                    className="rounded-md border border-line/70 dark:border-darkBorder/70 bg-surface/50 dark:bg-darkBg/30 px-1.5 py-0.5 text-[10px] text-ink dark:text-darkText"
+                  >
+                    {DRIVER_LABELS[d.feature] || d.feature}
+                    <span className={d.contribution > 0 ? 'ml-1 font-bold text-tierHigh' : 'ml-1 font-bold text-tierLow'}>
+                      {d.contribution > 0 ? '+' : '−'}{Math.abs(d.contribution).toFixed(2)}
+                    </span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <p className="mt-4 flex items-start gap-1.5 border-t border-line/50 dark:border-darkBorder/50 pt-3 text-[10.5px] leading-relaxed text-muted dark:text-darkMuted">
+        <Info className="mt-0.5 h-3 w-3 shrink-0" />
+        {progression.disclaimer}
+      </p>
+    </section>
+  );
+}
 
 const SLOT_STAGE = { blood: 2, imaging: 3, pet: 4 };
 const SLOT_LABEL = { blood: 'Blood biomarkers', imaging: 'MRI volumetrics', pet: 'PET imaging' };
@@ -719,6 +838,7 @@ function AuditSection({ patient }) {
 export default function PatientDetail({
   patient,
   pipeline,
+  progression,
   loading,
   error,
   onBack,
@@ -817,6 +937,8 @@ export default function PatientDetail({
           <HeroPanel tier={patient.risk_tier}>
             <ScoreSection patient={patient} />
           </HeroPanel>
+
+          <ForecastSection progression={progression} />
 
           {/* Unified Clinical Decision Dossier */}
           <div className="rounded-2xl border border-line/70 dark:border-darkBorder/70 bg-white/60 dark:bg-darkCard/60 divide-y divide-line/60 dark:divide-darkBorder/60">

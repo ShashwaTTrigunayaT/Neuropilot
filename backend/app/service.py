@@ -508,3 +508,14 @@ def model_info() -> dict:
     info = model_service.info()
     info["global_importance"] = GLOBAL_IMPORTANCE
     return info
+
+
+def progression(patient_id: str) -> Optional[dict]:
+    """12-month progression forecast (trajectory, conversion probability,
+    projected risk tier). None when the patient or the forecaster is missing."""
+    record = PATIENTS.get(patient_id)
+    if record is None:
+        return None
+    from . import progression
+
+    return progression.forecast(record)

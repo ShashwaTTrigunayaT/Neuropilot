@@ -178,6 +178,7 @@ export default function App() {
   const [simulatedPatient, setSimulatedPatient] = useState(null);
   const [detail, setDetail] = useState(null);
   const [pipeline, setPipeline] = useState(null);
+  const [progression, setProgression] = useState(null);
   const [detailStatus, setDetailStatus] = useState('idle');
   const [detailError, setDetailError] = useState('');
   const [advanceBusy, setAdvanceBusy] = useState(false);
@@ -229,6 +230,9 @@ export default function App() {
         setDetail(d);
         setPipeline(p);
         setDetailStatus('ready');
+        // 12-month forecast loads alongside (non-blocking failure: the detail
+        // view simply renders without the forecast card if unavailable)
+        api.getProgression(id).then(setProgression).catch(() => setProgression(null));
       } catch (err) {
         setDetailError(err.message);
         setDetailStatus('error');
@@ -512,6 +516,7 @@ export default function App() {
                 advanceBusy={advanceBusy}
                 advanceError={advanceError}
                 onRecordResult={handleRecordResult}
+                progression={progression}
                 onPrev={handlePrev}
                 onNext={handleNext}
                 hasPrev={hasPrev}

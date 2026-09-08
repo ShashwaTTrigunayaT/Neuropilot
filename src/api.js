@@ -45,6 +45,8 @@ export const api = {
   },
   getPatient: (id) => request(`/patients/${encodeURIComponent(id)}`),
   getPipeline: (id) => request(`/patients/${encodeURIComponent(id)}/pipeline`),
+  // 12-month progression forecast (trajectory, conversion probability, projected tier)
+  getProgression: (id) => request(`/patients/${encodeURIComponent(id)}/progression`),
   advanceStage: (id, body = {}) =>
     request(`/patients/${encodeURIComponent(id)}/advance-stage`, {
       method: 'POST',

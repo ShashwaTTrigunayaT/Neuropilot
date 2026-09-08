@@ -8,8 +8,11 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-# backend/app/config.py -> project root is three levels up (override inside Docker)
-PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT", Path(__file__).resolve().parents[2]))
+# backend/app/config.py -> project root is three levels up (override inside Docker).
+# An EMPTY override value (e.g. `PROJECT_ROOT=` in .env) falls back to the
+# computed default instead of silently becoming the process working directory.
+_project_root_env = os.getenv("PROJECT_ROOT", "").strip()
+PROJECT_ROOT = Path(_project_root_env) if _project_root_env else Path(__file__).resolve().parents[2]
 
 # Auto-load .env from PROJECT_ROOT if it exists
 _env_file = PROJECT_ROOT / ".env"
@@ -19,7 +22,10 @@ if _env_file.exists():
             line = line.strip()
             if line and not line.startswith("#") and "=" in line:
                 k, v = line.split("=", 1)
-                os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+                v = v.strip().strip('"').strip("'")
+                if not v:  # empty value = unset, never shadow the code default
+                    continue
+                os.environ.setdefault(k.strip(), v)
     except Exception:
         pass
 

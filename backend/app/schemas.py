@@ -231,3 +231,29 @@ class ModelInfoResponse(BaseModel):
     test_auc: Optional[float] = None
     cv_auc_mean: Optional[float] = None
     global_importance: List[GlobalImportance] = []
+
+
+class TrajectoryPoint(BaseModel):
+    t: int  # months relative to today (negative = observed past)
+    mmse: Optional[float] = None
+    kind: str  # observed | predicted
+    stage: Optional[int] = None
+    stage_label: Optional[str] = None
+    lo: Optional[int] = None  # uncertainty band (predicted points only)
+    hi: Optional[int] = None
+
+
+class ProgressionDriver(BaseModel):
+    feature: str
+    contribution: float
+
+
+class ProgressionResponse(BaseModel):
+    id: str
+    horizon_months: int
+    model_available: bool
+    current: dict
+    projected: dict
+    trajectory: List[TrajectoryPoint]
+    drivers: List[ProgressionDriver]
+    disclaimer: str
