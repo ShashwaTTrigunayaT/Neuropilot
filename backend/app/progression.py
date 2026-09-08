@@ -107,6 +107,8 @@ def _score_checkpoints(record: dict) -> list[dict]:
         return []
 
     # Latest '<Slot> result recorded' timestamp per slot from the audit trail
+    # (kept for the `at` reference field -- NOT for x-positioning: auto-workup
+    # completes stages minutes apart, which clusters unreadably on the axis)
     event_times: dict[str, datetime] = {}
     now = datetime.now()
     label_prefixes = {
@@ -139,15 +141,9 @@ def _score_checkpoints(record: dict) -> list[dict]:
         if not res:
             continue
         at_dt = event_times.get(slot)
-        if at_dt is not None:
-            t = round((at_dt - now).total_seconds() / 86400 / 30.44, 2)
-            t = max(t, -5.8)  # keep inside the chart's observed window
-        else:
-            t = round(-0.45 * (5 - stage), 2)  # PET -0.45, MRI -0.9, blood -1.35
         slot_result = record.get(slot) or {}
         checkpoints.append(
             {
-                "t": t,
                 "score": res["score"],
                 "slot": slot,
                 "stage": stage,
@@ -157,12 +153,13 @@ def _score_checkpoints(record: dict) -> list[dict]:
             }
         )
 
-    # Auto-workup can complete stages within the same minute -- nudge markers
-    # apart on the x-axis so they stay readable.
+    # Position markers EVENLY across the observed window (-6..0) so multiple
+    # checkpoints never overlap: rightmost at -0.6, stepping back 1.5 months
+    # per earlier stage (1 marker -> -0.6, 2 -> -2.1/-0.6, 3 -> -3.6/-2.1/-0.6).
     checkpoints.sort(key=lambda c: c["stage"])
-    for i in range(1, len(checkpoints)):
-        if checkpoints[i]["t"] - checkpoints[i - 1]["t"] < 0.3:
-            checkpoints[i]["t"] = round(checkpoints[i - 1]["t"] + 0.3, 2)
+    k = len(checkpoints)
+    for i, cp in enumerate(checkpoints):
+        cp["t"] = round(-0.6 - 1.5 * (k - 1 - i), 2)
     return checkpoints
 
 
