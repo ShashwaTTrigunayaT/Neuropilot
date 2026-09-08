@@ -20,17 +20,17 @@ re-ranks live.
 
 | Area | Status | Evidence |
 |---|---|---|
-| Data pipeline (ETL) | ✅ Run & verified | Real OASIS-1: 373 visits / 150 subjects; missing values flagged (SES ×19, MMSE ×2), never silently dropped |
-| Synthetic ADNI-shaped cohort | ✅ Run & verified | 800 subjects in true ADNI-1 proportions (200 CN / 400 MCI / 200 AD); workup mix 354 / 179 / 140 / 127 across Stages 1–4 |
-| Model trained (all 4 stages) | ✅ Run & verified | XGBoost, 10 features spanning cognition + blood + MRI + PET; CV AUC **0.842 ± 0.032**, test AUC **0.871** |
-| Explainability | ✅ Run & verified | Global SHAP + full per-subject attribution (all 10 factors, grouped by pipeline stage, with `model default` badges for un-ordered tests) |
-| Escalation rule engine | ✅ 23 pytest cases | Deterministic stage gates; clinician-in-the-loop via `override: true`; results loop via `POST /results` |
-| Autonomous triage | ✅ Run & verified (browser E2E) | `POST /workup/next` / `/workup/run`: model picks subject → orders test → re-scores → re-ranks; live rank movements (e.g. `#12 → #2` after an abnormal blood panel) |
-| Backend API | ✅ Run & verified | FastAPI + Swagger at `/docs`; `/health` reports `data_source`; live scoring via `pipeline.joblib` |
-| Frontend dashboard | ✅ Run & verified (headless Chrome) | Zero mock data; ranked cohort, detail view, radar/attribution panels, Autonomous Triage toggle with live step banner; production build clean |
-| PostgreSQL store | ✅ Written (optional) | Activated by `DATABASE_URL`; not yet exercised end-to-end |
-| Docker demo | ✅ Written | `docker compose up --build` (not yet exercised) |
-| CI (GitHub Actions) | ❌ Not built | Deliberately excluded from scope |
+| Data pipeline (ETL) |  Run & verified | Real OASIS-1: 373 visits / 150 subjects; missing values flagged (SES ×19, MMSE ×2), never silently dropped |
+| Synthetic ADNI-shaped cohort |  Run & verified | 800 subjects in true ADNI-1 proportions (200 CN / 400 MCI / 200 AD); workup mix 354 / 179 / 140 / 127 across Stages 1–4 |
+| Model trained (all 4 stages) |  Run & verified | XGBoost, 10 features spanning cognition + blood + MRI + PET; CV AUC **0.842 ± 0.032**, test AUC **0.871** |
+| Explainability |  Run & verified | Global SHAP + full per-subject attribution (all 10 factors, grouped by pipeline stage, with `model default` badges for un-ordered tests) |
+| Escalation rule engine |  23 pytest cases | Deterministic stage gates; clinician-in-the-loop via `override: true`; results loop via `POST /results` |
+| Autonomous triage |  Run & verified (browser E2E) | `POST /workup/next` / `/workup/run`: model picks subject → orders test → re-scores → re-ranks; live rank movements (e.g. `#12 → #2` after an abnormal blood panel) |
+| Backend API |  Run & verified | FastAPI + Swagger at `/docs`; `/health` reports `data_source`; live scoring via `pipeline.joblib` |
+| Frontend dashboard |  Run & verified (headless Chrome) | Zero mock data; ranked cohort, detail view, radar/attribution panels, Autonomous Triage toggle with live step banner; production build clean |
+| PostgreSQL store |  Written (optional) | Activated by `DATABASE_URL`; not yet exercised end-to-end |
+| Docker demo |  Written | `docker compose up --build` (not yet exercised) |
+| CI (GitHub Actions) |  Not built | Deliberately excluded from scope |
 
 ---
 
