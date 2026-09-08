@@ -1,16 +1,18 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
+  Brain,
   CheckCircle2,
-  Layers,
+  FlaskConical,
   Loader2,
   Play,
+  PlusCircle,
+  ScanLine,
   SlidersHorizontal,
-  User,
 } from 'lucide-react';
 import { api } from '../api.js';
-import { fmtScore, fmtPercent } from '../lib.js';
+import { fmtPercent } from '../lib.js';
 import TierTag from './TierTag.jsx';
 import {
   HeroPanel,
@@ -18,81 +20,195 @@ import {
   RiskGauge,
   SectionLabel,
   TIER_HEX,
-  TIER_LABEL,
 } from './widgets.jsx';
+
+/* ------------------------------------------------------------------ */
+/*  The 10 features the served v2 model actually uses (model_meta).    */
+/*  Blood / MRI / PET inputs are only sent when the corresponding      */
+/*  stage is toggled "measured" — otherwise null (model default path). */
+/* ------------------------------------------------------------------ */
+
+const FACTOR_META = {
+  mmse: { stage: 'Cognitive', label: 'MMSE (latest)' },
+  mmse_change: { stage: 'Cognitive', label: 'MMSE change' },
+  age: { stage: 'Demographic', label: 'Age' },
+  sex: { stage: 'Demographic', label: 'Sex' },
+  education_years: { stage: 'Demographic', label: 'Education' },
+  ptau181: { stage: 'Blood', label: 'p-tau181' },
+  abeta4240: { stage: 'Blood', label: 'Aβ42/40' },
+  hippocampal_volume: { stage: 'MRI', label: 'Hippocampal volume' },
+  amyloid_positive: { stage: 'PET', label: 'Amyloid PET' },
+  tau_positive: { stage: 'PET', label: 'Tau PET' },
+};
+
+const STAGE_COLORS = {
+  Cognitive: '#0D8282',
+  Blood: '#3B82F6',
+  MRI: '#8B5CF6',
+  PET: '#EC4899',
+  Demographic: '#6E7175',
+};
+
+function formatFactorValue(f) {
+  const v = f.value;
+  if (v === null || v === undefined) return 'not measured';
+  switch (f.feature) {
+    case 'sex':
+      return v === 1 ? 'Male' : 'Female';
+    case 'amyloid_positive':
+    case 'tau_positive':
+      return v === 1 ? 'Positive' : 'Negative';
+    case 'age':
+      return `${Math.round(v)} yrs`;
+    case 'education_years':
+      return `${Math.round(v)} yrs`;
+    case 'mmse':
+      return `${Math.round(v)}/30`;
+    case 'mmse_change':
+      return `${v > 0 ? '+' : ''}${v} pts`;
+    case 'ptau181':
+      return `${Number(v).toFixed(1)} pg/mL`;
+    case 'abeta4240':
+      return Number(v).toFixed(3);
+    case 'hippocampal_volume':
+      return `${Number(v).toFixed(2)} cm³`;
+    default:
+      return typeof v === 'number' ? v.toFixed(2) : String(v);
+  }
+}
 
 const PRESETS = [
   {
-    name: 'High Risk (Suspected MCI)',
-    desc: 'Rapid MMSE decline, advanced age, brain atrophy',
+    name: 'High Risk (Suspected AD)',
+    desc: 'Rapid decline, amyloid + tau positive, severe atrophy',
     features: {
       age: 78,
       sex: 'F',
       education_years: 12,
-      ses: 2,
       mmse: 21,
       mmse_change: -4,
-      nwbv: 0.692,
-      etiv: 1480,
-      asf: 1.18,
-      n_visits: 2,
-      study_years: 1.5,
+      ptau181: 5.8,
+      abeta4240: 0.055,
+      hippocampal_volume: 1.9,
+      amyloid_positive: true,
+      tau_positive: true,
     },
+    stages: { blood: true, mri: true, pet: true },
   },
   {
-    name: 'Borderline (Moderate Watch)',
-    desc: 'Mild MMSE decrease, moderate age, preserved brain volume',
+    name: 'Borderline (MCI Watch)',
+    desc: 'Mild decline, borderline blood panel, MRI/PET pending',
     features: {
       age: 72,
       sex: 'M',
       education_years: 16,
-      ses: 2,
       mmse: 26,
       mmse_change: -1,
-      nwbv: 0.738,
-      etiv: 1620,
-      asf: 1.08,
-      n_visits: 2,
-      study_years: 1.2,
+      ptau181: 3.4,
+      abeta4240: 0.075,
+      hippocampal_volume: 2.4,
+      amyloid_positive: false,
+      tau_positive: false,
     },
+    stages: { blood: true, mri: false, pet: false },
   },
   {
     name: 'Low Risk (Healthy Aging)',
-    desc: 'Normal MMSE, stable trajectory, high education',
+    desc: 'Normal cognition, clean blood panel, preserved volumes',
     features: {
       age: 67,
       sex: 'F',
       education_years: 18,
-      ses: 1,
       mmse: 29,
       mmse_change: 0,
-      nwbv: 0.785,
-      etiv: 1390,
-      asf: 1.26,
-      n_visits: 2,
-      study_years: 2.0,
+      ptau181: 1.2,
+      abeta4240: 0.135,
+      hippocampal_volume: 3.8,
+      amyloid_positive: false,
+      tau_positive: false,
     },
+    stages: { blood: true, mri: true, pet: false },
   },
 ];
 
+function featuresFromPatient(p) {
+  const cog = p.cognitive || {};
+  const blood = p.blood || {};
+  const imaging = p.imaging || {};
+  const pet = p.pet || {};
+  const latest = cog.latest ?? 25;
+  const prior = cog.prior ?? latest;
+  return {
+    features: {
+      age: p.age || 75,
+      sex: p.sex || 'F',
+      education_years: p.education_years || 14,
+      mmse: latest,
+      mmse_change: Math.round((latest - prior) * 10) / 10,
+      ptau181: blood.pTau181 ?? 2.5,
+      abeta4240: blood.abeta4240 ?? 0.12,
+      hippocampal_volume: imaging.hippocampalVolumeCm3 ?? 3.0,
+      amyloid_positive: pet.amyloid === 'positive',
+      tau_positive: pet.tau === 'positive',
+    },
+    stages: {
+      blood: blood.status === 'completed',
+      mri: imaging.status === 'completed',
+      pet: pet.status === 'completed',
+    },
+  };
+}
+
+function StageToggle({ on, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={on ? 'Results included in scoring — click to simulate "test not ordered"' : 'Simulates a test that has not been ordered — model falls back to its learned default'}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide transition ${
+        on
+          ? 'border-accent/40 bg-accent/10 text-accent'
+          : 'border-line dark:border-darkBorder bg-white/60 dark:bg-darkCard/60 text-muted dark:text-darkMuted'
+      }`}
+    >
+      {on ? <CheckCircle2 className="h-3 w-3" /> : <PlusCircle className="h-3 w-3" />}
+      {on ? 'Measured' : 'Not ordered'}
+    </button>
+  );
+}
+
+function Slider({ label, value, display, min, max, step = 1, marks, disabled, onChange }) {
+  return (
+    <div className={disabled ? 'opacity-40 pointer-events-none' : ''}>
+      <div className="flex justify-between text-xs">
+        <span className="font-medium text-ink dark:text-darkText">{label}</span>
+        <span style={MONO} className="font-bold text-accent">{display}</span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="mt-2 w-full accent-accent cursor-pointer"
+      />
+      {marks && (
+        <div className="flex justify-between text-[10px] text-muted dark:text-darkMuted" style={MONO}>
+          {marks.map((m) => (
+            <span key={m}>{m}</span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function RiskSimulator({ initialPatient = null, onSelectPatient }) {
-  const [features, setFeatures] = useState(() => {
-    if (initialPatient) {
-      return {
-        age: initialPatient.age || 75,
-        sex: initialPatient.sex || 'F',
-        education_years: initialPatient.education_years || 14,
-        ses: 2,
-        mmse: initialPatient.cognitive?.latest || 25,
-        mmse_change: (initialPatient.cognitive?.latest || 25) - (initialPatient.cognitive?.prior || 25),
-        nwbv: 0.725,
-        etiv: 1510,
-        asf: 1.15,
-        n_visits: 2,
-        study_years: 1.5,
-      };
-    }
-    return PRESETS[0].features;
+  const [{ features, stages }, setSimState] = useState(() => {
+    if (initialPatient) return featuresFromPatient(initialPatient);
+    const preset = PRESETS[0];
+    return { features: preset.features, stages: preset.stages };
   });
 
   const [scoring, setScoring] = useState(false);
@@ -100,43 +216,68 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
   const [error, setError] = useState('');
   const [autoScore, setAutoScore] = useState(true);
 
-  const runScore = useCallback(
-    async (feat) => {
-      setScoring(true);
-      setError('');
-      try {
-        const payload = {
-          ...feat,
-          sex: feat.sex === 'M' || feat.sex === 1 ? 1 : 0,
-        };
-        const res = await api.scorePatient(payload);
-        setResult(res);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setScoring(false);
-      }
-    },
-    []
-  );
+  const runScore = useCallback(async (feat) => {
+    setScoring(true);
+    setError('');
+    try {
+      const payload = {
+        age: feat.features.age,
+        sex: feat.features.sex === 'M' ? 1 : 0,
+        education_years: feat.features.education_years,
+        mmse: feat.features.mmse,
+        mmse_change: feat.features.mmse_change,
+        ptau181: feat.stages.blood ? feat.features.ptau181 : null,
+        abeta4240: feat.stages.blood ? feat.features.abeta4240 : null,
+        hippocampal_volume: feat.stages.mri ? feat.features.hippocampal_volume : null,
+        amyloid_positive: feat.stages.pet ? (feat.features.amyloid_positive ? 1 : 0) : null,
+        tau_positive: feat.stages.pet ? (feat.features.tau_positive ? 1 : 0) : null,
+      };
+      const res = await api.scorePatient(payload);
+      setResult(res);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setScoring(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (autoScore) {
-      const timer = setTimeout(() => runScore(features), 250);
+      const timer = setTimeout(() => runScore({ features, stages }), 250);
       return () => clearTimeout(timer);
     }
-  }, [features, autoScore, runScore]);
+  }, [features, stages, autoScore, runScore]);
 
   const updateField = (key, val) => {
-    setFeatures((prev) => ({ ...prev, [key]: val }));
+    setSimState((prev) => ({ ...prev, features: { ...prev.features, [key]: val } }));
+  };
+
+  const toggleStage = (slot) => {
+    setSimState((prev) => ({ ...prev, stages: { ...prev.stages, [slot]: !prev.stages[slot] } }));
   };
 
   const applyPreset = (preset) => {
-    setFeatures({ ...preset.features });
+    setSimState({ features: { ...preset.features }, stages: { ...preset.stages } });
   };
 
   const tier = result ? result.risk_tier : 'medium';
   const factors = result?.factors || [];
+
+  const protocol = useMemo(() => {
+    if (tier === 'low') {
+      return 'Stage 1 complete: Low risk. Schedule routine follow-up cognitive evaluation in 12 months.';
+    }
+    if (!stages.blood) {
+      return 'Order Stage 2: Blood biomarker panel (plasma p-tau181, Aβ42/40) to confirm pathology.';
+    }
+    if (!stages.mri) {
+      return 'Blood panel complete — order Stage 3: MRI volumetrics (hippocampal volume) to quantify neurodegeneration.';
+    }
+    if (!stages.pet) {
+      return 'MRI complete — order Stage 4: PET (amyloid/tau) to confirm pathology before specialist referral.';
+    }
+    return 'Full 4-stage workup complete — refer to specialist memory clinic for diagnostic confirmation.';
+  }, [tier, stages]);
 
   return (
     <div className="space-y-8 animate-fade-up">
@@ -151,9 +292,9 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
               Clinical Risk Simulator
             </h1>
             <p className="mt-1.5 text-[13px] text-muted dark:text-darkMuted flex flex-wrap items-center gap-x-2.5 gap-y-1">
-              <span>Interactive Modeling</span>
+              <span>10-Feature Model Workbench</span>
               <span className="text-line dark:text-darkBorder font-light">/</span>
-              <span>Longitudinal Trajectory Simulation</span>
+              <span>Staged Measurement (Cognition → Blood → MRI → PET)</span>
               <span className="text-line dark:text-darkBorder font-light">/</span>
               <span>SHAP Attribution</span>
             </p>
@@ -170,7 +311,7 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
             Live auto-predict
           </label>
           <button
-            onClick={() => runScore(features)}
+            onClick={() => runScore({ features, stages })}
             disabled={scoring}
             className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-xs font-semibold text-white shadow-soft transition hover:bg-accentHover disabled:opacity-50"
           >
@@ -196,8 +337,8 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
         </p>
         <div className="grid gap-3 sm:grid-cols-3">
           {PRESETS.map((p, idx) => {
-            const IconComp = idx === 0 ? AlertTriangle : (idx === 1 ? Activity : CheckCircle2);
-            const iconColor = idx === 0 ? 'text-tierHigh' : (idx === 1 ? 'text-tierMedium' : 'text-tierLow');
+            const IconComp = idx === 0 ? AlertTriangle : idx === 1 ? Activity : CheckCircle2;
+            const iconColor = idx === 0 ? 'text-tierHigh' : idx === 1 ? 'text-tierMedium' : 'text-tierLow';
             return (
               <button
                 key={p.name}
@@ -217,35 +358,22 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
 
       {/* Main Grid: Controls on Left, Live Output on Right */}
       <div className="grid gap-8 lg:grid-cols-12">
-        {/* Sliders / Inputs - Unified Clinical Parameter Workbench */}
+        {/* Parameter Workbench */}
         <div className="space-y-6 lg:col-span-7">
           <div className="rounded-2xl border border-line/70 dark:border-darkBorder/70 bg-white/60 dark:bg-darkCard/60 divide-y divide-line/60 dark:divide-darkBorder/60">
-            {/* Demographics & Cognitive */}
+            {/* Demographics */}
             <div className="p-6">
-              <SectionLabel size="sm">Patient Demographics & Cognitive Markers</SectionLabel>
-
+              <SectionLabel size="sm">Patient Demographics</SectionLabel>
               <div className="mt-5 grid gap-5 sm:grid-cols-2">
-                {/* Age */}
-                <div>
-                  <div className="flex justify-between text-xs">
-                    <span className="font-medium text-ink dark:text-darkText">Age</span>
-                    <span style={MONO} className="font-bold text-accent">{features.age} yrs</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="55"
-                    max="95"
-                    value={features.age}
-                    onChange={(e) => updateField('age', Number(e.target.value))}
-                    className="mt-2 w-full accent-accent cursor-pointer"
-                  />
-                  <div className="flex justify-between text-[10px] text-muted dark:text-darkMuted" style={MONO}>
-                    <span>55y</span>
-                    <span>95y</span>
-                  </div>
-                </div>
-
-                {/* Sex */}
+                <Slider
+                  label="Age"
+                  value={features.age}
+                  display={`${features.age} yrs`}
+                  min={55}
+                  max={95}
+                  marks={['55y', '95y']}
+                  onChange={(v) => updateField('age', v)}
+                />
                 <div>
                   <span className="block text-xs font-medium text-ink dark:text-darkText">Sex</span>
                   <div className="mt-2 flex gap-2">
@@ -265,143 +393,151 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
                     ))}
                   </div>
                 </div>
-
-                {/* MMSE Score */}
-                <div>
-                  <div className="flex justify-between text-xs">
-                    <span className="font-medium text-ink dark:text-darkText">Latest MMSE Score</span>
-                    <span style={MONO} className="font-bold text-accent">{features.mmse} / 30</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="10"
-                    max="30"
-                    value={features.mmse}
-                    onChange={(e) => updateField('mmse', Number(e.target.value))}
-                    className="mt-2 w-full accent-accent cursor-pointer"
-                  />
-                  <div className="flex justify-between text-[10px] text-muted dark:text-darkMuted" style={MONO}>
-                    <span>10 (Severe)</span>
-                    <span>24 (Cutoff)</span>
-                    <span>30 (Normal)</span>
-                  </div>
-                </div>
-
-                {/* MMSE Change */}
-                <div>
-                  <div className="flex justify-between text-xs">
-                    <span className="font-medium text-ink dark:text-darkText">MMSE Change vs Baseline</span>
-                    <span
-                      style={MONO}
-                      className={`font-bold ${features.mmse_change < 0 ? 'text-tierHigh' : 'text-tierLow'}`}
-                    >
-                      {features.mmse_change > 0 ? `+${features.mmse_change}` : features.mmse_change} pts
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min="-8"
-                    max="3"
-                    value={features.mmse_change}
-                    onChange={(e) => updateField('mmse_change', Number(e.target.value))}
-                    className="mt-2 w-full accent-accent cursor-pointer"
-                  />
-                  <div className="flex justify-between text-[10px] text-muted dark:text-darkMuted" style={MONO}>
-                    <span>-8 (Decline)</span>
-                    <span>0</span>
-                    <span>+3 (Stable)</span>
-                  </div>
-                </div>
-
-                {/* Education */}
-                <div>
-                  <div className="flex justify-between text-xs">
-                    <span className="font-medium text-ink dark:text-darkText">Education Years</span>
-                    <span style={MONO} className="font-bold text-accent">{features.education_years} yrs</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="6"
-                    max="24"
-                    value={features.education_years}
-                    onChange={(e) => updateField('education_years', Number(e.target.value))}
-                    className="mt-2 w-full accent-accent cursor-pointer"
-                  />
-                  <div className="flex justify-between text-[10px] text-muted dark:text-darkMuted" style={MONO}>
-                    <span>6y</span>
-                    <span>12y (HS)</span>
-                    <span>24y</span>
-                  </div>
-                </div>
-
-                {/* SES */}
-                <div>
-                  <div className="flex justify-between text-xs">
-                    <span className="font-medium text-ink dark:text-darkText">Socioeconomic Class (SES)</span>
-                    <span style={MONO} className="font-bold text-accent">Tier {features.ses}</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="1"
-                    max="5"
-                    value={features.ses}
-                    onChange={(e) => updateField('ses', Number(e.target.value))}
-                    className="mt-2 w-full accent-accent cursor-pointer"
-                  />
-                  <div className="flex justify-between text-[10px] text-muted dark:text-darkMuted" style={MONO}>
-                    <span>1 (Highest)</span>
-                    <span>5 (Lowest)</span>
-                  </div>
-                </div>
+                <Slider
+                  label="Education (cognitive reserve)"
+                  value={features.education_years}
+                  display={`${features.education_years} yrs`}
+                  min={6}
+                  max={24}
+                  marks={['6y', '12y (HS)', '24y']}
+                  onChange={(v) => updateField('education_years', v)}
+                />
               </div>
             </div>
 
-            {/* Neuroimaging Biomarkers */}
+            {/* Cognitive — always measured (Stage 1) */}
             <div className="p-6">
-              <SectionLabel size="sm">Structural MRI Morphometry</SectionLabel>
+              <div className="flex items-center justify-between">
+                <SectionLabel size="sm">Cognitive Assessment (Stage 1)</SectionLabel>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-accent/40 bg-accent/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-accent">
+                  <CheckCircle2 className="h-3 w-3" />
+                  Always measured
+                </span>
+              </div>
               <div className="mt-5 grid gap-5 sm:grid-cols-2">
-                {/* nWBV */}
-                <div>
-                  <div className="flex justify-between text-xs">
-                    <span className="font-medium text-ink dark:text-darkText">Normalized Whole Brain Volume (nWBV)</span>
-                    <span style={MONO} className="font-bold text-accent">{(features.nwbv * 100).toFixed(1)}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0.65"
-                    max="0.85"
-                    step="0.005"
-                    value={features.nwbv}
-                    onChange={(e) => updateField('nwbv', Number(e.target.value))}
-                    className="mt-2 w-full accent-accent cursor-pointer"
-                  />
-                  <div className="flex justify-between text-[10px] text-muted dark:text-darkMuted" style={MONO}>
-                    <span>0.65 (Atrophy)</span>
-                    <span>0.75</span>
-                    <span>0.85 (Preserved)</span>
-                  </div>
-                </div>
+                <Slider
+                  label="Latest MMSE Score"
+                  value={features.mmse}
+                  display={`${features.mmse} / 30`}
+                  min={10}
+                  max={30}
+                  marks={['10 (Severe)', '24 (Cutoff)', '30 (Normal)']}
+                  onChange={(v) => updateField('mmse', v)}
+                />
+                <Slider
+                  label="MMSE Change vs Baseline"
+                  value={features.mmse_change}
+                  display={`${features.mmse_change > 0 ? '+' : ''}${features.mmse_change} pts`}
+                  min={-8}
+                  max={3}
+                  marks={['-8 (Decline)', '0', '+3 (Stable)']}
+                  onChange={(v) => updateField('mmse_change', v)}
+                />
+              </div>
+            </div>
 
-                {/* eTIV */}
-                <div>
-                  <div className="flex justify-between text-xs">
-                    <span className="font-medium text-ink dark:text-darkText">Estimated Total Intracranial Volume (eTIV)</span>
-                    <span style={MONO} className="font-bold text-accent">{features.etiv} cm³</span>
+            {/* Blood — Stage 2, toggleable */}
+            <div className="p-6">
+              <div className="flex items-center justify-between">
+                <SectionLabel size="sm">
+                  <span className="inline-flex items-center gap-2">
+                    <FlaskConical className="h-3.5 w-3.5 text-[#3B82F6]" />
+                    Blood Biomarker Panel (Stage 2)
+                  </span>
+                </SectionLabel>
+                <StageToggle on={stages.blood} onClick={() => toggleStage('blood')} />
+              </div>
+              <div className="mt-5 grid gap-5 sm:grid-cols-2">
+                <Slider
+                  label="p-tau181 (plasma)"
+                  value={features.ptau181}
+                  display={`${Number(features.ptau181).toFixed(1)} pg/mL`}
+                  min={0.6}
+                  max={7.5}
+                  step={0.1}
+                  marks={['0.6 (Normal)', '4.0 (Cutoff)', '7.5 (High)']}
+                  disabled={!stages.blood}
+                  onChange={(v) => updateField('ptau181', v)}
+                />
+                <Slider
+                  label="Aβ42/40 ratio"
+                  value={features.abeta4240}
+                  display={Number(features.abeta4240).toFixed(3)}
+                  min={0.04}
+                  max={0.16}
+                  step={0.001}
+                  marks={['0.04 (Low)', '0.068 (Cutoff)', '0.16 (Normal)']}
+                  disabled={!stages.blood}
+                  onChange={(v) => updateField('abeta4240', v)}
+                />
+              </div>
+            </div>
+
+            {/* MRI — Stage 3, toggleable */}
+            <div className="p-6">
+              <div className="flex items-center justify-between">
+                <SectionLabel size="sm">
+                  <span className="inline-flex items-center gap-2">
+                    <Brain className="h-3.5 w-3.5 text-[#8B5CF6]" />
+                    MRI Volumetrics (Stage 3)
+                  </span>
+                </SectionLabel>
+                <StageToggle on={stages.mri} onClick={() => toggleStage('mri')} />
+              </div>
+              <div className="mt-5">
+                <Slider
+                  label="Hippocampal Volume"
+                  value={features.hippocampal_volume}
+                  display={`${Number(features.hippocampal_volume).toFixed(2)} cm³`}
+                  min={1.6}
+                  max={4.3}
+                  step={0.05}
+                  marks={['1.6 (Atrophy)', '2.25 (Cutoff)', '4.3 (Preserved)']}
+                  disabled={!stages.mri}
+                  onChange={(v) => updateField('hippocampal_volume', v)}
+                />
+              </div>
+            </div>
+
+            {/* PET — Stage 4, toggleable */}
+            <div className="p-6">
+              <div className="flex items-center justify-between">
+                <SectionLabel size="sm">
+                  <span className="inline-flex items-center gap-2">
+                    <ScanLine className="h-3.5 w-3.5 text-[#EC4899]" />
+                    PET Tracer Status (Stage 4)
+                  </span>
+                </SectionLabel>
+                <StageToggle on={stages.pet} onClick={() => toggleStage('pet')} />
+              </div>
+              <div className={`mt-5 grid gap-5 sm:grid-cols-2 ${stages.pet ? '' : 'opacity-40 pointer-events-none'}`}>
+                {[
+                  ['amyloid_positive', 'Amyloid PET'],
+                  ['tau_positive', 'Tau PET'],
+                ].map(([key, label]) => (
+                  <div key={key}>
+                    <span className="block text-xs font-medium text-ink dark:text-darkText">{label}</span>
+                    <div className="mt-2 flex gap-2">
+                      {[
+                        [false, 'Negative'],
+                        [true, 'Positive'],
+                      ].map(([val, lab]) => (
+                        <button
+                          key={lab}
+                          type="button"
+                          onClick={() => updateField(key, val)}
+                          className={`flex-1 rounded-lg border py-1.5 text-xs font-semibold transition ${
+                            features[key] === val
+                              ? 'border-accent bg-accent text-white shadow-soft'
+                              : 'border-line dark:border-darkBorder bg-white dark:bg-darkCard text-ink dark:text-darkText'
+                          }`}
+                        >
+                          {lab}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <input
-                    type="range"
-                    min="1100"
-                    max="1950"
-                    step="10"
-                    value={features.etiv}
-                    onChange={(e) => updateField('etiv', Number(e.target.value))}
-                    className="mt-2 w-full accent-accent cursor-pointer"
-                  />
-                  <div className="flex justify-between text-[10px] text-muted dark:text-darkMuted" style={MONO}>
-                    <span>1100 cm³</span>
-                    <span>1950 cm³</span>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
           </div>
@@ -428,17 +564,13 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
                   </div>
                 </div>
 
-                {/* Recommended Next Test */}
+                {/* Recommended Next Test — stage-aware */}
                 <div className="mt-6 rounded-xl border border-line/60 dark:border-darkBorder/60 bg-white/70 dark:bg-darkCard/70 p-4 backdrop-blur">
                   <div className="flex items-center gap-2 text-xs font-semibold text-ink dark:text-darkText">
                     <span className="h-2 w-2 rounded-full bg-accent" />
                     Recommended Protocol:
                   </div>
-                  <p className="mt-1 text-xs text-muted dark:text-darkMuted">
-                    {tier === 'high' || tier === 'medium'
-                      ? 'Order Stage 2: Blood biomarker panel (plasma p-tau181, Aβ42/40) to confirm pathology.'
-                      : 'Stage 1 complete: Low risk. Schedule routine follow-up cognitive evaluation in 12 months.'}
-                  </p>
+                  <p className="mt-1 text-xs text-muted dark:text-darkMuted">{protocol}</p>
                 </div>
               </HeroPanel>
 
@@ -465,6 +597,8 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
                     <p className="text-xs text-muted dark:text-darkMuted">Calculating feature importances…</p>
                   ) : (
                     factors.map((f, i) => {
+                      const meta = FACTOR_META[f.feature] || { stage: 'Other', label: f.feature };
+                      const isDefault = f.value === null || f.value === undefined;
                       const isUp = f.contribution > 0;
                       const abs = Math.abs(f.contribution);
                       const maxVal = Math.max(...factors.map((x) => Math.abs(x.contribution)), 0.05);
@@ -472,18 +606,24 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
                       const color = isUp ? TIER_HEX.high : TIER_HEX.low;
 
                       return (
-                        <div key={`${f.feature}-${i}`} className="space-y-1">
+                        <div key={`${f.feature}-${i}`} className={`space-y-1 ${isDefault ? 'opacity-55' : ''}`}>
                           <div className="flex items-baseline justify-between text-xs">
                             <span className="font-medium text-ink dark:text-darkText truncate">
-                              {f.feature}
+                              <span
+                                className="inline-block h-1.5 w-1.5 rounded-full mr-1.5 align-middle"
+                                style={{ backgroundColor: STAGE_COLORS[meta.stage] || '#6E7175' }}
+                              />
+                              {meta.label}
                               <span style={MONO} className="ml-1 text-[10.5px] text-muted dark:text-darkMuted">
-                                · {typeof f.value === 'number' ? (f.feature === 'sex' ? (f.value === 1 ? 'Male' : 'Female') : f.value.toFixed(2)) : (f.value ?? 'N/A')}
+                                · {formatFactorValue(f)}
                               </span>
+                              {isDefault && (
+                                <span className="ml-1.5 rounded border border-line dark:border-darkBorder px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-muted dark:text-darkMuted">
+                                  model default
+                                </span>
+                              )}
                             </span>
-                            <span
-                              className="font-bold text-[11px]"
-                              style={{ ...MONO, color }}
-                            >
+                            <span className="font-bold text-[11px]" style={{ ...MONO, color }}>
                               {isUp ? '+' : '−'}{abs.toFixed(3)}
                             </span>
                           </div>
