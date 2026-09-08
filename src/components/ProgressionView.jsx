@@ -143,32 +143,6 @@ export default function ProgressionView({ patient, progression, onBack, onOpenDe
               <TrajectoryChart trajectory={progression.trajectory} large />
             </div>
           </div>
-
-          <div className="rounded-2xl border border-line/70 dark:border-darkBorder/70 bg-white/60 dark:bg-darkCard/60 p-6">
-            <SectionLabel size="sm">How this forecast is made</SectionLabel>
-            <ul className="mt-3 space-y-2 text-[11.5px] leading-relaxed text-muted dark:text-darkMuted">
-              <li className="flex gap-2">
-                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
-                A regression model forecasts the expected MMSE change over 12 months from this patient's
-                baseline across all measured stages — cognition, blood biomarkers, MRI volumetrics, and PET.
-              </li>
-              <li className="flex gap-2">
-                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
-                A classifier estimates the probability of clinical progression (e.g. MCI → Alzheimer's disease)
-                within the horizon, with the drivers below as its leading evidence.
-              </li>
-              <li className="flex gap-2">
-                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
-                The projected risk tier re-scores this patient through the same risk model used today, applied
-                to their projected 12-month profile — one consistent model family end-to-end.
-              </li>
-              <li className="flex gap-2">
-                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
-                Tests never ordered (Stage &lt; their slot) enter the models as unmeasured; the shaded band
-                reflects forecast uncertainty, not a guarantee.
-              </li>
-            </ul>
-          </div>
         </div>
 
         {/* Right: headline numbers */}
