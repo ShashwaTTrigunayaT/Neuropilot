@@ -547,7 +547,7 @@ export function PatientTable({
           {rows.map((p) => (
             <tr
               key={p.id}
-              onClick={() => (selectable ? onToggleSelect(p.id) : onSelect(p.id))}
+              onClick={() => onSelect(p.id)}
               className={`group cursor-pointer transition last:border-0 hover:bg-[#FAF9F5] dark:hover:bg-darkCardHover ${
                 selected.has(p.id) ? 'bg-accent/[0.07]' : ''
               }`}
