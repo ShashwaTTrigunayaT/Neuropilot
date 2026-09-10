@@ -1,5 +1,5 @@
 /**
- * Render NeuroPilot — System Architecture Blueprint to HTML + PDF + PNGs.
+ * Render NeuroPilot — System Architecture FLOWCHART (SVG) to HTML + PDF + PNGs.
  * Usage: node scripts/render_architecture.cjs
  *
  * Outputs (project root):
@@ -7,11 +7,12 @@
  *   NeuroPilot_Architecture.pdf           (4 sheets, 1280x880 px pages)
  *   architecture_pages/arch_page_1..4.png (2x high-res, drop into PPT)
  *
- * Sheets:
- *   1. End-to-end system blueprint (data -> pipeline -> artifacts -> serving -> API -> UI -> persistence)
- *   2. Autonomous triage loop (the live runtime decision cycle)
- *   3. Model layer detail (risk model + progression forecaster + explainability)
- *   4. Deployment topology & trust/audit rails
+ * Sheets (all drawn as genuine flowcharts — boxes, labeled arrows, decision
+ * diamonds, loop-backs; no card grids):
+ *   1. End-to-end system flow (data -> training -> artifacts -> serving -> API -> UI -> deploy)
+ *   2. Autonomous triage loop (flowchart with decision diamonds + loop-back arrow)
+ *   3. Model layer flow (one feature vector branching into two model families)
+ *   4. Deployment & trust flow (git push -> container -> clinician browser)
  */
 const path = require('path');
 const fs = require('fs');
@@ -25,326 +26,396 @@ const PNG_DIR = path.join(ROOT, 'architecture_pages');
 
 const PAGE_W = 1280;
 const PAGE_H = 880;
+const SVG_W = 1188;
+const SVG_H = 726;
+
+/* palette */
+const INK = '#16181B';
+const MUTED = '#5B6472';
+const FAINT = '#8A94A6';
+const LINE = '#E3DFD6';
+const PAPER = '#F7F5F1';
+const TEAL = '#0D8282';
+const AMBER = '#B45309';
+const PURPLE = '#7C3AED';
+const BLUE = '#2563EB';
+const GREEN = '#0F766E';
 
 /* ------------------------------------------------------------------ */
-/* Shared CSS                                                          */
+/* SVG primitives                                                      */
 /* ------------------------------------------------------------------ */
 
-const CSS = `
-* { margin:0; padding:0; box-sizing:border-box; }
-body { font-family:'Inter',Arial,Helvetica,sans-serif; color:#16181B; background:#ECE9E2; }
-.mono { font-family:'IBM Plex Mono','Courier New',monospace; }
+const DEFS =
+  '<defs>'
+  + mk('mk-teal', TEAL) + mk('mk-amber', AMBER) + mk('mk-purple', PURPLE)
+  + mk('mk-blue', BLUE) + mk('mk-gray', FAINT) + mk('mk-green', GREEN)
+  + '</defs>';
 
-.page {
-  width:${PAGE_W}px; height:${PAGE_H}px; background:#F7F5F1;
-  padding:34px 46px 44px; position:relative; overflow:hidden;
-  page-break-after:always; margin:0 auto 24px;
-}
-.page:last-child { page-break-after:auto; margin-bottom:0; }
-
-.page-head { display:flex; align-items:flex-end; justify-content:space-between; margin-bottom:14px; }
-.page-title { font-size:24px; font-weight:900; letter-spacing:-0.4px; }
-.page-sub { font-size:11.5px; color:#5B6472; margin-top:3px; max-width:860px; }
-.brand-chip {
-  display:inline-flex; align-items:center; gap:8px; background:#fff; border:1px solid #E3DFD6;
-  border-radius:999px; padding:6px 13px; font-size:10.5px; font-weight:800; color:#0D8282; white-space:nowrap;
-}
-.brand-tile {
-  width:18px; height:18px; border-radius:6px;
-  background:linear-gradient(135deg,#0D8282 0%,#0FA0A0 55%,#2563EB 100%);
+function mk(id, color) {
+  return '<marker id="' + id + '" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">'
+    + '<path d="M 0 0 L 10 5 L 0 10 z" fill="' + color + '"/></marker>';
 }
 
-.node {
-  background:#fff; border:1.5px solid #E3DFD6; border-radius:12px; padding:9px 12px 10px;
-  box-shadow:0 1px 3px rgba(22,24,27,0.05); flex:1; min-width:0;
+function txt(x, y, s, o) {
+  o = o || {};
+  return '<text x="' + x + '" y="' + y + '"'
+    + ' font-size="' + (o.size || 9.5) + '"'
+    + ' font-weight="' + (o.weight || 400) + '"'
+    + ' fill="' + (o.fill || MUTED) + '"'
+    + (o.anchor ? ' text-anchor="' + o.anchor + '"' : '')
+    + (o.mono ? ' font-family="IBM Plex Mono, Courier New, monospace"' : '')
+    + (o.spacing ? ' letter-spacing="' + o.spacing + '"' : '')
+    + '>' + s + '</text>';
 }
-.node-title { font-size:12px; font-weight:800; color:#16181B; line-height:1.25; }
-.node-body { font-size:9.8px; line-height:1.4; color:#5B6472; margin-top:3px; }
-.node-tag {
-  display:inline-block; font-size:8px; font-weight:800; letter-spacing:0.9px; text-transform:uppercase;
-  color:#0D8282; background:rgba(13,130,130,0.08); border-radius:999px; padding:2px 8px; margin-bottom:4px;
+
+/* process box: tag pill + bold title + small lines (lines starting with '`' render mono) */
+function rbox(x, y, w, h, o) {
+  o = o || {};
+  const accent = o.accent || TEAL;
+  const strokeC = o.glow ? accent : LINE;
+  const sw = o.glow ? 1.8 : 1.4;
+  let s = '<g>';
+  s += '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="11" fill="#FFFFFF"'
+    + ' stroke="' + strokeC + '" stroke-width="' + sw + '"'
+    + (o.glow ? ' filter="url(#soft)"' : '') + '/>';
+  let ty = y + 20;
+  if (o.tag) {
+    const tw = o.tag.length * 5.6 + 16;
+    s += '<rect x="' + (x + 13) + '" y="' + (y + 9) + '" width="' + tw + '" height="14" rx="7" fill="' + accent + '14"/>';
+    s += txt(x + 13 + tw / 2, y + 19.5, o.tag.toUpperCase(), { size: 7.6, weight: 800, fill: accent, anchor: 'middle', spacing: '0.8' });
+    ty = y + 38;
+  }
+  s += txt(x + 14, ty, o.title, { size: 12, weight: 800, fill: INK });
+  const lines = o.lines || [];
+  let ly = ty + 13.5;
+  for (let i = 0; i < lines.length; i++) {
+    const mono = lines[i].charAt(0) === '`';
+    s += txt(x + 14, ly, mono ? lines[i].slice(1) : lines[i], { size: mono ? 8.8 : 9.3, fill: MUTED, mono: mono });
+    ly += 12.5;
+  }
+  s += '</g>';
+  return s;
 }
-.node-tag.warn { color:#B45309; background:rgba(217,119,6,0.10); }
-.node-tag.db { color:#7C3AED; background:rgba(124,58,237,0.08); }
-.node-tag.ui { color:#2563EB; background:rgba(37,99,235,0.08); }
-.node-tag.model { color:#0F766E; background:rgba(15,118,110,0.09); }
 
-.col-label { font-size:9.5px; font-weight:800; letter-spacing:1.1px; text-transform:uppercase; color:#8A94A6; margin-bottom:6px; }
-
-.flow-row { display:flex; align-items:stretch; gap:8px; }
-.flow-row .node { flex:1; }
-.flow-arrow { display:flex; align-items:center; color:#B9B3A8; flex:0 0 auto; }
-
-.down { display:flex; justify-content:center; color:#B9B3A8; margin:3px 0; }
-
-.footer-note { position:absolute; bottom:14px; left:46px; right:46px; display:flex; justify-content:space-between; font-size:9px; color:#8A94A6; }
-
-.badge-row { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
-.mini {
-  background:#fff; border:1px solid #E3DFD6; border-radius:8px; padding:5px 10px;
-  font-size:9px; color:#3F4654; font-weight:600;
+/* start/end terminal */
+function pill(cx, y, w, h, label, color) {
+  const x = cx - w / 2;
+  return '<g>'
+    + '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="' + h / 2 + '" fill="' + color + '12" stroke="' + color + '" stroke-width="1.6"/>'
+    + txt(cx, y + h / 2 + 4, label, { size: 10.5, weight: 800, fill: color, anchor: 'middle', spacing: '1' })
+    + '</g>';
 }
-.mini b { color:#0D8282; }
 
-/* Sheet 2 */
-.loop-band { border:2px dashed rgba(13,130,130,0.55); border-radius:16px; padding:16px 16px 12px; background:rgba(13,130,130,0.03); position:relative; }
-.loop-label {
-  position:absolute; top:-8px; left:20px; background:#F7F5F1; padding:0 8px;
-  font-size:8.5px; font-weight:800; letter-spacing:1px; color:#0D8282; text-transform:uppercase;
+/* decision diamond */
+function diamond(cx, cy, w, h, label, sub) {
+  const p = (cx) + ',' + (cy - h / 2) + ' ' + (cx + w / 2) + ',' + cy + ' ' + cx + ',' + (cy + h / 2) + ' ' + (cx - w / 2) + ',' + cy;
+  let s = '<g><polygon points="' + p + '" fill="#FFF9F0" stroke="' + AMBER + '" stroke-width="1.7"/>';
+  s += txt(cx, cy - (sub ? 2 : -4), label, { size: 11, weight: 800, fill: INK, anchor: 'middle' });
+  if (sub) s += txt(cx, cy + 12, sub, { size: 8.8, fill: MUTED, anchor: 'middle' });
+  s += '</g>';
+  return s;
 }
-.step { display:flex; gap:8px; align-items:center; flex:1; min-width:0; }
-.step-num {
-  width:20px; height:20px; border-radius:999px; background:#0D8282; color:#fff;
-  font-size:10.5px; font-weight:800; display:flex; align-items:center; justify-content:center; flex-shrink:0;
+
+/* polyline arrow with optional label near a chosen point */
+function flow(pts, o) {
+  o = o || {};
+  const color = o.color || FAINT;
+  const mkId = { [TEAL]: 'mk-teal', [AMBER]: 'mk-amber', [PURPLE]: 'mk-purple', [BLUE]: 'mk-blue', [GREEN]: 'mk-green' }[color] || 'mk-gray';
+  const d = 'M ' + pts.map((p) => p[0] + ' ' + p[1]).join(' L ');
+  let s = '<path d="' + d + '" fill="none" stroke="' + color + '" stroke-width="1.7"'
+    + (o.dash ? ' stroke-dasharray="5 4"' : '') + ' marker-end="url(#' + mkId + ')"/>';
+  if (o.label) {
+    const lp = o.labelAt || pts[1];
+    s += txt(lp[0], lp[1], o.label, { size: 8.6, weight: 600, fill: color === FAINT ? FAINT : color, anchor: o.labelAnchor || 'start' });
+  }
+  return s;
 }
-.node-glow { border-color:rgba(13,130,130,0.5); box-shadow:0 0 0 3px rgba(13,130,130,0.08); }
 
-/* Sheet 3 */
-.model-card { border-radius:13px; padding:12px 14px; background:#fff; border:1.5px solid #E3DFD6; flex:1; min-width:0; }
-.model-card.primary { border-color:rgba(13,130,130,0.5); }
-.metric-chip {
-  display:inline-flex; flex-direction:column; background:#F7F5F1; border:1px solid #E3DFD6;
-  border-radius:9px; padding:6px 9px; min-width:78px;
+function svgWrap(inner) {
+  return '<svg width="' + SVG_W + '" height="' + SVG_H + '" viewBox="0 0 ' + SVG_W + ' ' + SVG_H + '"'
+    + ' style="font-family:Inter,Arial,Helvetica,sans-serif">' + DEFS
+    + '<filter id="soft" x="-20%" y="-20%" width="140%" height="140%">'
+    + '<feDropShadow dx="0" dy="1.5" stdDeviation="2.5" flood-color="' + TEAL + '" flood-opacity="0.18"/></filter>'
+    + inner + '</svg>';
 }
-.metric-chip .k { font-size:8px; font-weight:700; letter-spacing:0.5px; text-transform:uppercase; color:#8A94A6; }
-.metric-chip .v { font-size:14px; font-weight:900; color:#16181B; font-family:'IBM Plex Mono',monospace; }
-`;
 
-/* ------------------------------------------------------------------ */
-/* Icons + builders                                                    */
-/* ------------------------------------------------------------------ */
-
-const ARROW_R = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>';
-const ARROW_D = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m6 13 6 6 6-6"/></svg>';
-
-function node(tag, tagClass, title, body) {
-  const bodyHtml = body ? '<div class="node-body">' + body + '</div>' : '';
-  return '<div class="node"><span class="node-tag ' + (tagClass || '') + '">' + tag + '</span>'
-    + '<div class="node-title">' + title + '</div>' + bodyHtml + '</div>';
+/* stage chip on the left rail */
+function chip(cx, cy, n, color) {
+  return '<g><circle cx="' + cx + '" cy="' + cy + '" r="11" fill="' + color + '12" stroke="' + color + '" stroke-width="1.4"/>'
+    + txt(cx, cy + 4, String(n), { size: 10.5, weight: 800, fill: color, anchor: 'middle' }) + '</g>';
 }
+
+const pageCSS = ''
+  + '* { margin:0; padding:0; box-sizing:border-box; }'
+  + 'body { font-family:"Inter",Arial,sans-serif; background:#ECE9E2; color:' + INK + '; }'
+  + '.page { width:' + PAGE_W + 'px; height:' + PAGE_H + 'px; background:' + PAPER + ';'
+  + ' padding:30px 46px 40px; position:relative; overflow:hidden; page-break-after:always; margin:0 auto 24px; }'
+  + '.page:last-child { page-break-after:auto; margin-bottom:0; }'
+  + '.page-head { display:flex; align-items:flex-end; justify-content:space-between; margin-bottom:10px; }'
+  + '.page-title { font-size:23px; font-weight:900; letter-spacing:-0.4px; }'
+  + '.page-sub { font-size:11px; color:' + MUTED + '; margin-top:3px; max-width:900px; }'
+  + '.brand-chip { display:inline-flex; align-items:center; gap:8px; background:#fff; border:1px solid ' + LINE
+  + '; border-radius:999px; padding:6px 13px; font-size:10.5px; font-weight:800; color:' + TEAL + '; white-space:nowrap; }'
+  + '.brand-tile { width:18px; height:18px; border-radius:6px; background:linear-gradient(135deg,#0D8282 0%,#0FA0A0 55%,#2563EB 100%); }'
+  + '.footer-note { position:absolute; bottom:13px; left:46px; right:46px; display:flex; justify-content:space-between; font-size:9px; color:' + FAINT + '; }';
 
 function pageHead(title, sub) {
-  return '<div class="page-head"><div>'
-    + '<div class="page-title">' + title + '</div>'
-    + '<div class="page-sub">' + sub + '</div>'
-    + '</div><span class="brand-chip"><span class="brand-tile"></span>NeuroPilot</span></div>';
+  return '<div class="page-head"><div><div class="page-title">' + title + '</div>'
+    + '<div class="page-sub">' + sub + '</div></div>'
+    + '<span class="brand-chip"><span class="brand-tile"></span>NeuroPilot</span></div>';
 }
 
 function footer(n) {
-  return '<div class="footer-note">'
-    + '<span>NeuroPilot &mdash; Priority Triage for Cognitive Care &middot; Precision Care Challenge 2026</span>'
+  return '<div class="footer-note"><span>NeuroPilot &mdash; Priority Triage for Cognitive Care &middot; Precision Care Challenge 2026</span>'
     + '<span>' + n + ' / 4</span></div>';
 }
 
-const down = '<div class="down">' + ARROW_D + '</div>';
+function page(title, sub, n, inner) {
+  return '<div class="page">' + pageHead(title, sub) + svgWrap(inner) + footer(n) + '</div>';
+}
 
 /* ------------------------------------------------------------------ */
-/* SHEET 1 — End-to-end system blueprint                               */
+/* SHEET 1 — End-to-end system flow                                    */
 /* ------------------------------------------------------------------ */
 
 function sheet1() {
-  const head = pageHead(
-    'System Blueprint',
-    'End-to-end architecture &mdash; data &rarr; training pipeline &rarr; model artifacts &rarr; serving &rarr; decision API &rarr; dashboard &rarr; persistence. One command runs the whole loop.'
-  );
+  const CX = 594;               // main spine x
+  const BW = 560, BX = CX - BW / 2; // main column boxes
+  let s = '';
 
-  const r1 = '<div class="flow-row">'
-    + node('INPUT', '', 'Real OASIS-1 longitudinal', '150 subjects &middot; 373 visits &middot; SES/MMSE gaps audited, never silently dropped')
-    + node('INPUT', '', 'Synthetic ADNI-shaped cohort v2', '800 subjects &middot; 200 CN / 400 MCI / 200 AD &middot; all 4 stages measured')
-    + node('INPUT', '', '12-month follow-up simulation', 'biomarker-driven drift &middot; 133 conversions &middot; published conversion base rates')
-    + '</div>';
+  /* row 1: three data sources */
+  const y1 = 6, h1 = 62;
+  s += rbox(40, y1, 356, h1, { tag: 'input', title: 'Real OASIS-1 longitudinal', lines: ['150 subjects · 373 visits · gaps audited, never dropped'] });
+  s += rbox(416, y1, 356, h1, { tag: 'input', title: 'Synthetic ADNI-shaped cohort v2', lines: ['800 subjects · 200 CN / 400 MCI / 200 AD · all 4 stages'] });
+  s += rbox(792, y1, 356, h1, { tag: 'input', title: '12-month follow-up simulation', lines: ['biomarker-driven drift · 133 conversions'] });
 
-  const r2 = '<div class="flow-row">'
-    + node('ETL', '', 'scripts/ingest.py', 'schema check &middot; dedupe &middot; missing-value audit &middot; patients + visits tables')
-    + node('TRAIN', '', 'scripts/train_model.py', 'XGBoost pipeline + RF fallback &middot; subject-level split &middot; leakage guards')
-    + node('TRAIN', '', 'scripts/train_progression_model.py', 'MMSE-&Delta; regressor + conversion classifier &middot; same 10-feature vector')
-    + '</div>';
+  /* merge into training */
+  const ym = y1 + h1 + 10;
+  s += flow([[218, y1 + h1], [218, ym], [CX, ym]]);
+  s += flow([[594, y1 + h1], [CX, ym]]);
+  s += flow([[970, y1 + h1], [970, ym], [CX, ym]]);
+  s += flow([[CX, ym], [CX, ym + 24]], { color: TEAL, label: 'cohort tables + feature vectors' });
 
-  const r3 = '<div class="flow-row">'
-    + node('ARTIFACTS', '', 'artifacts/ &mdash; git-tracked for deployment',
-      'pipeline.joblib &middot; rf_pipeline.joblib &middot; progression_delta.joblib &middot; progression_conversion.joblib &middot; model_meta.json &middot; eval reports + global importance')
-    + '</div>';
+  /* row 2: training pipeline */
+  const y2 = ym + 24, h2 = 62;
+  s += rbox(BX, y2, BW, h2, { tag: 'training', title: 'scripts/ — ingest, train, validate', glow: true, lines: ['ingest.py (audit) -> train_model.py (XGBoost + RF) -> train_progression_model.py', 'subject-level split · CDR excluded · thresholds 0.4 / 0.7'] });
+  s += chip(288, y2 + h1 / 2 + 8, 1, TEAL);
 
-  const r4 = '<div class="flow-row">'
-    + node('SERVING', '', 'FastAPI app &mdash; backend/app', 'lifespan loads artifacts once &middot; model_service + progression modules &middot; SHAP TreeExplainer cached')
-    + node('SERVING', '', 'Escalation rule engine', 'transparent (stage &times; tier) &rarr; next-test matrix &middot; clinician-in-the-loop &middot; explicit override path')
-    + node('SERVING', '', 'Storage layer', 'in-memory cohort + optional Postgres mirror &middot; 24 pytest cases cover the API surface')
-    + '</div>';
+  /* row 3: artifacts */
+  const y3 = y2 + h2 + 26;
+  s += flow([[CX, y2 + h2], [CX, y3]], { color: TEAL, label: 'joblib + meta + eval reports' });
+  s += rbox(BX, y3, BW, h2, { tag: 'artifacts', title: 'artifacts/ — git-tracked, shipped in the image', lines: ['`pipeline.joblib · rf_pipeline.joblib · progression_delta.joblib', '`progression_conversion.joblib · model_meta.json · eval reports'] });
+  s += chip(288, y3 + h1 / 2 + 8, 2, TEAL);
 
-  const r5 = '<div class="flow-row">'
-    + node('API', '', 'Decision API &mdash; 14 typed endpoints',
-      '/patients &middot; /patients/{id} &middot; /explain &middot; /pipeline &middot; /progression &middot; /compare &middot; /score &middot; /workup/* &middot; /advance-stage &middot; /results &middot; /health &middot; /model/info')
-    + node('API', '', 'OpenAPI + Swagger at /docs',
-      'every request/response typed with Pydantic &middot; no diagnosis field anywhere &mdash; risk tier + reasoning only')
-    + '</div>';
+  /* row 4: serving + DB side */
+  const y4 = y3 + h2 + 26;
+  s += flow([[CX, y3 + h2], [CX, y4]], { color: TEAL, label: 'loaded once at lifespan startup' });
+  s += rbox(BX, y4, BW, 78, { tag: 'serving', title: 'FastAPI app — backend/app', glow: true, lines: ['model_service (score + SHAP) · progression (forecast)', 'escalation.py rule engine · storage.py + db.py mirror'] });
+  s += chip(288, y4 + 32, 3, TEAL);
+  s += rbox(914, y4 + 2, 234, 74, { tag: 'persistence', accent: PURPLE, title: 'SQLite / PostgreSQL', lines: ['init_db() · seed_if_empty()', 'persist() on every event'] });
+  s += flow([[BX + BW, y4 + 39], [914, y4 + 39]], { color: PURPLE, label: 'writes', labelAt: [BX + BW + 6, y4 + 32] });
+  s += flow([[914, y4 + 58], [BX + BW, y4 + 58]], { color: PURPLE, label: 'reads', labelAt: [BX + BW + 6, y4 + 66] });
 
-  const r6 = '<div class="flow-row">'
-    + node('UI', 'ui', 'React 19 + Vite + Tailwind',
-      'Dashboard &middot; Worklist &middot; Patient record &middot; Progression view &middot; Priority Comparison &middot; Risk Simulator')
-    + node('UI', 'ui', 'Decision aids on the record',
-      'risk gauge with 0.4 / 0.7 threshold marks &middot; SHAP attribution &middot; event &amp; reasoning trail &middot; 12-mo forecast')
-    + node('UI', 'ui', 'Autonomous Triage toggle',
-      'workup/next every ~1.4 s &middot; the model picks patient AND test &middot; every pick streams to the live banner')
-    + '</div>';
+  /* row 5: API + swagger side */
+  const y5 = y4 + 78 + 26;
+  s += flow([[CX, y4 + 78], [CX, y5]], { color: TEAL, label: 'in-process' });
+  s += rbox(BX, y5, BW, 62, { tag: 'api', title: 'Decision API — 14 typed endpoints', lines: ['`/patients · /compare · /progression · /score · /workup/* · /advance-stage', 'Pydantic contracts — risk tier + reasoning only, never a diagnosis'] });
+  s += chip(288, y5 + 24, 4, TEAL);
+  s += rbox(914, y5 + 2, 234, 58, { tag: 'docs', accent: BLUE, title: 'Swagger UI at /docs', lines: ['/health provenance · /debug/env'] });
+  s += flow([[BX + BW, y5 + 31], [914, y5 + 31]], { color: BLUE });
 
-  const r7 = '<div class="flow-row">'
-    + node('PERSISTENCE', 'db', 'SQLite (local default)', 'backend/neuropilot.db &mdash; zero-config local persistence')
-    + node('PERSISTENCE', 'db', 'PostgreSQL (Railway)', 'DATABASE_URL &rarr; init_db() &middot; seed_if_empty() &middot; per-event persist() mirror &middot; verified live')
-    + node('PACKAGING', 'db', 'Docker + compose', 'single Dockerfile: builds UI &rarr; serves SPA from FastAPI on $PORT &middot; compose spins Postgres + API + UI')
-    + '</div>';
+  /* row 6: UI */
+  const y6 = y5 + 62 + 26;
+  s += flow([[CX, y5 + 62], [CX, y6]], { color: BLUE, label: 'HTTP / JSON — the only data source the UI has' });
+  s += rbox(254, y6, 680, 62, { tag: 'dashboard', accent: BLUE, title: 'React 19 + Vite + Tailwind — src/', glow: true, lines: ['Overview · Worklist · Patient record · Progression view · Priority Comparison · Risk Simulator', 'risk gauge (0.4 / 0.7 marks) · SHAP attribution · event trail · autonomous triage toggle'] });
+  s += chip(228, y6 + 24, 5, BLUE);
 
-  return '<div class="page">' + head
-    + '<div class="col-label">1 &middot; Data sources</div>' + r1 + down
-    + '<div class="col-label">2 &middot; Training pipeline (python scripts/)</div>' + r2 + down
-    + '<div class="col-label">3 &middot; Model artifacts</div>' + r3 + down
-    + '<div class="col-label">4 &middot; Serving layer (backend/app)</div>' + r4 + down
-    + '<div class="col-label">5 &middot; Decision API</div>' + r5 + down
-    + '<div class="col-label">6 &middot; React dashboard (src/)</div>' + r6 + down
-    + '<div class="col-label">7 &middot; Persistence &amp; packaging</div>' + r7
-    + footer(1) + '</div>';
+  /* row 7: deploy */
+  const y7 = y6 + 62 + 26;
+  s += flow([[CX, y6 + 62], [CX, y7]], { color: BLUE, label: 'bundled by' });
+  s += rbox(40, y7, 1108, 56, { tag: 'packaging', accent: PURPLE, title: 'Dockerfile (UI build -> SPA served by FastAPI on $PORT) · docker-compose (Postgres + API + UI) · GitHub -> Railway' });
+  s += chip(288, y7 + 21, 6, PURPLE);
+
+  return page('System Flow — End to End',
+    'How a subject becomes a decision: data lands, models train, artifacts ship, the API serves, the dashboard decides — every arrow is a real data path in the repo.',
+    1, s);
 }
 
 /* ------------------------------------------------------------------ */
-/* SHEET 2 — Autonomous triage loop                                    */
+/* SHEET 2 — Autonomous triage loop (true flowchart)                   */
 /* ------------------------------------------------------------------ */
 
 function sheet2() {
-  const head = pageHead(
-    'Autonomous Triage Loop',
-    'The runtime decision cycle: the model picks the patient AND the test, every result re-scores the cohort, and every step lands in the audit trail. Cognition drives blood; the blood-informed score drives MRI; and so on.'
-  );
+  const CX = 594;
+  const BW = 372, BX = CX - BW / 2;
+  let s = '';
 
-  const s1 = '<div class="step"><div class="step-num">1</div>'
-    + node('PICK', '', 'POST /workup/next', 'highest full-precision score whose tier still indicates a test &mdash; deterministic, auditable max() pick')
-    + '</div>';
-  const s2 = '<div class="step"><div class="step-num">2</div>'
-    + node('GATE', '', 'Rule-engine gate', 'escalation matrix (stage &times; tier) decides WHICH test &mdash; never another ML layer')
-    + '</div>';
-  const s3 = '<div class="step"><div class="step-num">3</div>'
-    + node('EXECUTE', '', 'Test runs, result lands', 'blood &rarr; MRI &rarr; PET &middot; severity-coherent result ranges stand in for LIS/RIS feeds')
-    + '</div>';
-  const s4 = '<div class="step"><div class="step-num">4</div>'
-    + node('RE-SCORE', 'model', 'Trained model re-runs', 'NaN slot becomes a measured value &rarr; score, tier, SHAP attribution update live &middot; example 0.68 &rarr; 0.81, rank #12 &rarr; #2')
-    + '</div>';
-  const s5 = '<div class="step"><div class="step-num">5</div>'
-    + node('STOP', 'warn', 'Stop conditions', 'tier says no test indicated &middot; Stage 4 complete &middot; queue empty &mdash; the model never over-tests')
-    + '</div>';
-  const s6 = '<div class="step"><div class="step-num">6</div>'
-    + node('AUDIT', 'warn', 'Trail + live banner', 'append-only events with API timestamps &middot; rank before/after logged &middot; clinician sees every pick')
-    + '</div>';
+  /* start */
+  s += pill(CX, 4, 240, 32, 'AUTONOMOUS TRIAGE ON', TEAL);
+  s += flow([[CX, 36], [CX, 58]], { color: TEAL });
 
-  const loop = '<div class="loop-band"><span class="loop-label">Continuous loop while Autonomous Triage is ON</span>'
-    + '<div class="flow-row">' + s1 + '<div class="flow-arrow">' + ARROW_R + '</div>' + s2 + '</div>'
-    + down
-    + '<div class="flow-row">' + s3 + '<div class="flow-arrow">' + ARROW_R + '</div>' + s4 + '</div>'
-    + down
-    + '<div class="flow-row">' + s5 + '<div class="flow-arrow">' + ARROW_R + '</div>' + s6 + '</div>'
-    + '</div>';
+  /* pick */
+  const yP = 58, hP = 58;
+  s += rbox(BX, yP, BW, hP, { tag: '1 · pick', title: 'POST /workup/next — pick the subject', glow: true, lines: ['highest full-precision score whose tier still', 'indicates a test — deterministic max(), auditable'] });
 
-  const safety = '<div class="flow-row" style="margin-top:12px;">'
-    + node('SAFETY', 'warn', 'Clinician override', 'engine can decline an escalation (409 with reason); clinician can force with override=true &mdash; logged as an explicit override event')
-    + node('SAFETY', 'warn', 'No silent failures', 'declined escalations return the engine reason; queue drains visibly on the banner; every state change is an event')
-    + node('SAFETY', 'warn', 'Priority comparison built in', '2&ndash;6 patients ranked on an explicit ladder: full-precision score &rarr; 12-mo conversion probability &rarr; stage &rarr; stable ID')
-    + '</div>';
+  /* decision 1 */
+  const d1y = yP + hP + 46;
+  s += flow([[CX, yP + hP], [CX, d1y - 44]], { color: TEAL });
+  s += diamond(CX, d1y, 320, 84, 'Tier indicates a test?');
+  s += txt(CX + 168, d1y - 6, 'YES', { size: 9, weight: 800, fill: GREEN, anchor: 'start' });
+  s += txt(CX - 168, d1y - 10, 'NO', { size: 9, weight: 800, fill: AMBER, anchor: 'end' });
 
-  const badges = '<div class="badge-row" style="margin-top:10px;">'
-    + '<span class="mini"><b>~1.4 s</b> cadence between autonomous steps</span>'
-    + '<span class="mini"><b>409</b> = engine decline with human-readable reason</span>'
-    + '<span class="mini"><b>0.68 &rarr; 0.81</b> blood result moves rank #12 &rarr; #2 (live verification run)</span>'
-    + '<span class="mini"><b>max(candidates, key=score)</b> &mdash; the entire selection policy, in one line</span>'
-    + '</div>';
+  /* NO branch -> stop */
+  s += flow([[CX - 160, d1y], [900, d1y], [900, d1y + 24]], { color: AMBER });
+  s += rbox(744, d1y + 24, 312, 62, { tag: 'stop', accent: AMBER, title: 'No over-testing — decline with reason', lines: ['low tier · monitor · pathway complete', 'returned to the UI as 409 + human-readable cause'] });
+  s += pill(900, d1y + 108, 236, 30, 'SUBJECT LEFT UNTOUCHED', AMBER);
+  s += flow([[900, d1y + 86], [900, d1y + 108]], { color: AMBER });
 
-  return '<div class="page">' + head + loop + safety + badges + footer(2) + '</div>';
+  /* YES path: rule engine */
+  const yG = d1y + 42, hG = 58;
+  s += flow([[CX, d1y + 42], [CX, yG]], { color: TEAL });
+  s += rbox(BX, yG, BW, hG, { tag: '2 · gate', title: 'Escalation rule engine decides WHICH test', lines: ['(stage x tier) matrix: blood / MRI / PET', 'plain if-else — auditable, never another ML layer'] });
+
+  /* execute */
+  const yE = yG + hG + 24;
+  s += flow([[CX, yG + hG], [CX, yE]], { color: TEAL });
+  s += rbox(BX, yE, BW, hG, { tag: '3 · execute', title: 'Test runs, result lands', lines: ['blood -> MRI -> PET cascade, tier-gated each step', 'severity-coherent values stand in for LIS / RIS feeds'] });
+
+  /* re-score */
+  const yR = yE + hG + 24;
+  s += flow([[CX, yE + hG], [CX, yR]], { color: TEAL });
+  s += rbox(BX, yR, BW, 62, { tag: '4 · re-score', accent: GREEN, title: 'Trained model re-runs on new evidence', glow: true, lines: ['NaN slot becomes a measured value -> score, tier, SHAP', 'update live — example 0.68 -> 0.81, rank #12 -> #2'] });
+
+  /* audit side */
+  s += rbox(744, yR + 2, 312, 58, { tag: 'audit', accent: AMBER, title: 'Append-only event trail', lines: ['API-timestamped · rank before / after · Postgres mirror'] });
+  s += flow([[BX + BW, yR + 31], [744, yR + 31]], { color: AMBER, dash: true });
+
+  /* decision 2 */
+  const d2y = yR + 62 + 46;
+  s += flow([[CX, yR + 62], [CX, d2y - 42]], { color: TEAL });
+  s += diamond(CX, d2y, 330, 84, 'Stage 4 or queue empty?', 'every subject worked to its indicated depth');
+  s += txt(CX + 173, d2y - 8, 'YES', { size: 9, weight: 800, fill: GREEN, anchor: 'start' });
+  s += txt(CX - 173, d2y - 8, 'NO', { size: 9, weight: 800, fill: TEAL, anchor: 'end' });
+
+  /* end */
+  s += pill(CX, d2y + 64, 250, 32, 'PATHWAY COMPLETE — AUDITED', GREEN);
+  s += flow([[CX, d2y + 42], [CX, d2y + 64]], { color: GREEN });
+
+  /* NO -> loop back to pick */
+  s += flow([[CX - 165, d2y], [236, d2y], [236, yP + 29], [BX, yP + 29]], { color: TEAL, label: 'next subject · ~1.4 s cadence', labelAt: [244, d2y - 8] });
+
+  /* override side (dashed) */
+  s += rbox(40, yG - 6, 178, 72, { tag: 'safety', accent: AMBER, title: 'Clinician override', dash: true, lines: ['force with override=true', 'event flagged + logged'] });
+  s += flow([[218, yG + 29], [BX, yG + 29]], { color: AMBER, dash: true });
+
+  return page('Autonomous Triage — Decision Flowchart',
+    'The live loop: the model picks the patient AND the test, every result re-scores the cohort, and two honest exits exist — the engine declines with a reason, or the clinician overrides on the record.',
+    2, s);
 }
 
 /* ------------------------------------------------------------------ */
-/* SHEET 3 — Model layer                                               */
+/* SHEET 3 — Model layer flow                                          */
 /* ------------------------------------------------------------------ */
 
 function sheet3() {
-  const head = pageHead(
-    'Model Layer',
-    'Two XGBoost model families on one shared 10-feature stage-aware vector. Missing tests are never imputed or invented &mdash; missingness is a learned, informative state; the pipeline orders the right test to resolve it.'
-  );
+  const CX = 594;
+  let s = '';
 
-  const vec = node('SHARED INPUT', 'model',
-    'The 10-feature stage-aware vector',
-    '<span class="mono">age &middot; sex &middot; education_years &middot; mmse &middot; mmse_change &middot; ptau181 &middot; abeta4240 &middot; hippocampal_volume &middot; amyloid_positive &middot; tau_positive</span>'
-    + '<br>Un-ordered tests stay <b>NaN</b> &mdash; XGBoost routes them down a learned default path; SHAP badges it <span class="mono">model default</span>. Measured-but-gappy values (OASIS SES/MMSE) are median-imputed inside the bundled sklearn pipeline &mdash; identical at train and serve time.');
+  /* shared vector */
+  s += rbox(294, 4, 600, 66, { tag: 'shared input', accent: GREEN, title: 'Patient record -> 10-feature stage-aware vector', glow: true, lines: ['`age · sex · edu · mmse · mmse_change · ptau181 · abeta42/40 · hip_vol · amyloid · tau', 'un-ordered tests stay NaN — learned missing path, never imputed or invented'] });
 
-  const m1 = '<div class="model-card primary">'
-    + '<span class="node-tag model">MODEL 1 &middot; RISK SCORING</span>'
-    + '<div class="node-title">XGBoost classifier &mdash; who needs attention now</div>'
-    + '<div class="node-body">Severity-correlated labels &middot; CDR excluded (label-leakage guard) &middot; subject-level split &middot; preprocessing bundled in the served artifact. Serves score, tier (0.4 / 0.7 thresholds), per-patient SHAP attribution, global importance and Risk Simulator re-scoring.</div>'
-    + '<div style="display:flex; gap:7px; margin-top:9px; flex-wrap:wrap;">'
-    + '<div class="metric-chip"><span class="k">CV AUC</span><span class="v">0.842</span></div>'
-    + '<div class="metric-chip"><span class="k">Test AUC</span><span class="v">0.871</span></div>'
-    + '<div class="metric-chip"><span class="k">Accuracy</span><span class="v">0.750</span></div>'
-    + '<div class="metric-chip"><span class="k">RF fallback</span><span class="v">0.874</span></div>'
-    + '</div></div>';
+  /* branch elbows */
+  s += flow([[444, 70], [444, 104], [300, 104], [300, 128]], { color: GREEN });
+  s += flow([[744, 70], [744, 104], [888, 104], [888, 128]], { color: GREEN });
 
-  const m2 = '<div class="model-card">'
-    + '<span class="node-tag model">MODEL 2 &middot; PROGRESSION FORECAST</span>'
-    + '<div class="node-title">XGBoost pair &mdash; where the patient is headed</div>'
-    + '<div class="node-body">Same 10 features, two heads: MMSE-&Delta; regressor (expected 12-month point change &plusmn; uncertainty band) + conversion classifier (probability of crossing into the next phase: CN&rarr;MCI, MCI&rarr;AD, AD&rarr;severe). Projected tier = the risk model re-scoring the future vector.</div>'
-    + '<div style="display:flex; gap:7px; margin-top:9px; flex-wrap:wrap;">'
-    + '<div class="metric-chip"><span class="k">&Delta; MAE</span><span class="v">0.611</span></div>'
-    + '<div class="metric-chip"><span class="k">&Delta; R&sup2;</span><span class="v">0.679</span></div>'
-    + '<div class="metric-chip"><span class="k">Conv. AUC</span><span class="v">0.770</span></div>'
-    + '<div class="metric-chip"><span class="k">PR lift</span><span class="v">2.8&times;</span></div>'
-    + '</div></div>';
+  /* left: risk model */
+  s += rbox(60, 128, 480, 66, { tag: 'model 1 · risk', accent: TEAL, title: 'XGBoost classifier — who needs attention now', glow: true, lines: ['severity-correlated labels · subject-level split', 'preprocessing bundled in the served artifact'] });
+  s += flow([[300, 194], [300, 226]], { color: TEAL, label: 'predict + explain' });
+  s += rbox(60, 226, 480, 60, { tag: 'outputs', title: 'risk score · tier (0.4 / 0.7) · per-patient SHAP attribution', lines: ['serves the gauge, ranked worklist, attribution panel, global importance'] });
 
-  const shap = node('EXPLAINABILITY', 'model', 'SHAP everywhere &mdash; same explainer family across both models',
-    'Per-patient waterfall attribution with measured values &middot; global mean-|SHAP| importance chart &middot; missing-stage <span class="mono">model default</span> badge (dimmed, footnoted) &middot; progression forecast drivers &middot; Risk Simulator live waterfall &mdash; a clinician can see WHY before trusting WHAT.');
+  /* right: progression */
+  s += rbox(648, 128, 480, 66, { tag: 'model 2 · forecast', accent: PURPLE, title: 'XGBoost pair — where the patient is headed', lines: ['MMSE-delta regressor (12-mo point change ± band)', 'conversion classifier (CN->MCI, MCI->AD, AD->severe)'] });
+  s += flow([[888, 194], [888, 226]], { color: PURPLE, label: 'predict' });
+  s += rbox(648, 226, 480, 60, { tag: 'outputs', accent: PURPLE, title: 'expected MMSE change · conversion probability', lines: ['projected tier* · trajectory with stage-score checkpoints'] });
 
-  const guards = '<div class="badge-row" style="margin-top:10px;">'
-    + '<span class="mini"><b>Guardrail</b> &middot; CDR excluded &mdash; clinician rating &asymp; diagnosis (label leakage)</span>'
-    + '<span class="mini"><b>Guardrail</b> &middot; subject-level split &mdash; no subject in train AND test</span>'
-    + '<span class="mini"><b>Guardrail</b> &middot; imputation inside artifact &mdash; train/serve parity</span>'
-    + '<span class="mini"><b>Guardrail</b> &middot; no diagnosis field in any API contract</span>'
-    + '<span class="mini"><b>Guardrail</b> &middot; disclaimer on every forecast</span>'
-    + '</div>';
+  /* feedback loop: forecast -> risk model (projected tier) */
+  s += flow([[648, 256], [578, 256], [578, 161], [540, 161]], { color: PURPLE, dash: true });
+  s += txt(584, 214, '*risk model re-scores', { size: 8.4, weight: 600, fill: PURPLE });
+  s += txt(584, 226, 'the projected future vector', { size: 8.4, weight: 600, fill: PURPLE });
 
-  return '<div class="page">' + head
-    + '<div class="col-label">Shared feature space</div>' + vec + down
-    + '<div class="flow-row">' + m1 + m2 + '</div>' + down
-    + '<div class="col-label">One explainability surface</div>' + shap
-    + guards + footer(3) + '</div>';
+  /* merge into API */
+  s += flow([[300, 286], [300, 318], [CX, 318]]);
+  s += flow([[888, 286], [888, 318], [CX, 318]]);
+  s += flow([[CX, 318], [CX, 340]], { color: TEAL, label: 'one API surface for both families' });
+
+  s += rbox(314, 340, 560, 54, { tag: 'serving', title: 'Decision API — 14 typed endpoints, no diagnosis field', lines: ['`/patients · /compare · /progression · /score · /workup/* · /docs'] });
+
+  /* UI surfaces */
+  s += flow([[CX, 394], [CX, 420]], { color: BLUE, label: 'HTTP / JSON' });
+  s += rbox(254, 420, 680, 78, { tag: 'dashboard', accent: BLUE, title: 'Where the models become decisions', glow: true, lines: ['risk gauge with threshold marks · SHAP attribution · event and reasoning trail', '12-month forecast view with trajectory + stage-score lane', 'priority comparison ladder (score -> conversion -> stage -> ID) · risk simulator'] });
+
+  /* guardrails */
+  s += rbox(40, 530, 1108, 118, { tag: 'guardrails', accent: AMBER, title: 'Why the numbers are defensible', lines: [
+    'CDR excluded — a clinician rating approximates the diagnosis (label leakage)',
+    'subject-level split — no subject appears in train AND test',
+    'imputation lives inside the artifact — identical at train and serve time',
+    'no diagnosis field in any API contract · disclaimer on every forecast',
+    'metrics — risk AUC 0.871 (CV 0.842) · conversion AUC 0.770, PR lift 2.8x · delta MAE 0.611',
+  ] });
+
+  return page('Model Layer — Two Families, One Vector',
+    'Both model families read the same stage-aware feature vector; the forecast loops back through the risk model to project the future tier — one consistent model story end to end.',
+    3, s);
 }
 
 /* ------------------------------------------------------------------ */
-/* SHEET 4 — Deployment & trust                                        */
+/* SHEET 4 — Deployment & trust flow                                   */
 /* ------------------------------------------------------------------ */
 
 function sheet4() {
-  const head = pageHead(
-    'Deployment &amp; Trust Architecture',
-    'One container to production, Postgres-backed persistence, and the provenance rails that make every number on screen defensible under questioning.'
-  );
+  const CX = 594;
+  let s = '';
 
-  const deploy = '<div class="flow-row">'
-    + node('CI/CD', '', 'GitHub &rarr; Railway', 'push &rarr; Dockerfile build &rarr; image ships UI bundle + backend + model artifacts &rarr; $PORT serves SPA and API same-origin')
-    + node('CI/CD', '', 'docker-compose (local)', 'Postgres + API + frontend spin up in one command &mdash; the judged demo runs offline-safe')
-    + node('CONFIG', '', 'Config &amp; provenance', 'env-overridable thresholds &middot; /health data_source pill (synthetic | real | real+postgres) &middot; /debug/env deploy diagnostics')
-    + '</div>';
+  s += pill(CX, 4, 160, 30, 'git push', TEAL);
+  s += flow([[CX, 34], [CX, 52]], { color: TEAL, label: 'main branch' });
 
-  const trust = '<div class="flow-row" style="margin-top:10px;">'
-    + node('AUDIT', 'warn', 'Append-only event trail', 'every order, result, re-score and override logged with API timestamps &middot; mirrored to Postgres &middot; visible on record + pipeline views')
-    + node('AUDIT', 'warn', 'Provenance always visible', 'data-source pill + model card in the UI &middot; /model/info exposes trained-at, thresholds, AUROC &middot; no hidden state')
-    + node('AUDIT', 'warn', 'Clinician-in-the-loop', 'autonomy is bounded: the engine recommends, the clinician confirms &mdash; override is explicit, flagged and logged')
-    + '</div>';
+  s += rbox(434, 52, 320, 46, { tag: 'ci', title: 'GitHub repository', lines: ['source + git-tracked model artifacts'] });
+  s += flow([[CX, 98], [CX, 116]], { color: TEAL });
 
-  const verified = '<div class="badge-row" style="margin-top:12px;">'
-    + '<span class="mini"><b>Railway verified</b> &middot; real+postgres live &middot; 800 subjects seeded &middot; progression + compare endpoints 200 OK</span>'
-    + '<span class="mini"><b>24 pytest cases</b> &middot; API surface covered on every push</span>'
-    + '<span class="mini"><b>0 mock data</b> &middot; the dashboard reads only the decision API</span>'
-    + '<span class="mini"><b>Artifacts in git</b> &middot; deploy contains the exact trained models</span>'
-    + '</div>';
+  s += rbox(434, 116, 320, 56, { tag: 'build', title: 'Railway — builds the Dockerfile', glow: true, lines: ['UI bundle + backend + artifacts in one image'] });
+  s += flow([[CX, 172], [CX, 196]], { color: TEAL, label: 'deploy' });
 
-  return '<div class="page">' + head
-    + '<div class="col-label">1 &middot; Deployment topology</div>' + deploy + down
-    + '<div class="col-label">2 &middot; Trust &amp; audit rails</div>' + trust
-    + verified + footer(4) + '</div>';
+  /* container */
+  s += rbox(254, 196, 680, 84, { tag: 'production container', title: 'FastAPI serves the decision API + built SPA on $PORT', glow: true, lines: ['artifacts loaded once at startup · escalation rule engine in-process', 'same-origin: dashboard and API share one origin — no CORS in the demo path'] });
+
+  /* postgres side */
+  s += rbox(954, 196, 194, 84, { tag: 'database', accent: PURPLE, title: 'PostgreSQL', lines: ['`DATABASE_URL', 'init + seed + per-event', 'persist() mirror'] });
+  s += flow([[934, 224], [954, 224]], { color: PURPLE, label: 'writes', labelAt: [908, 218], labelAnchor: 'end' });
+  s += flow([[954, 252], [934, 252]], { color: PURPLE, label: 'reads', labelAt: [908, 264], labelAnchor: 'end' });
+
+  /* local compose side */
+  s += rbox(40, 196, 194, 84, { tag: 'local demo', accent: BLUE, title: 'docker-compose', dash: true, lines: ['Postgres + API + UI', 'one command, offline-safe'] });
+  s += flow([[234, 238], [254, 238]], { color: BLUE, dash: true });
+
+  /* browser */
+  s += flow([[CX, 280], [CX, 316]], { color: BLUE, label: 'same-origin HTTP' });
+  s += rbox(314, 316, 560, 56, { tag: 'clinician browser', accent: BLUE, title: 'Dashboard — Overview · Worklist · Record · Forecast · Compare', lines: ['zero mock data — the UI renders only what the API returns'] });
+
+  /* trust rails */
+  s += rbox(40, 412, 1108, 122, { tag: 'trust rails', accent: AMBER, title: 'What makes the deployment defensible', lines: [
+    'append-only audit trail — every order, result, re-score and override, with API timestamps',
+    'provenance always visible — /health data_source pill · /model/info AUROC + thresholds + trained-at',
+    'clinician-in-the-loop — the engine recommends, a human confirms; override is explicit and logged',
+    'Railway verified live — real+postgres · 800 subjects seeded · progression + compare endpoints 200 OK',
+    '24 pytest cases cover the API surface on every push',
+  ] });
+
+  /* deployment verification arrows back */
+  s += flow([[314, 344], [120, 344], [120, 412]], { color: AMBER, dash: true, label: 'audit', labelAt: [128, 380] });
+
+  return page('Deployment and Trust — Flow to Production',
+    'One push goes from laptop to a Postgres-backed, artifact-complete deployment; every runtime event lands in an append-only trail a judge can inspect.',
+    4, s);
 }
 
 /* ------------------------------------------------------------------ */
@@ -352,10 +423,10 @@ function sheet4() {
 /* ------------------------------------------------------------------ */
 
 const html = '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
-  + '<title>NeuroPilot — System Architecture Blueprint</title>'
+  + '<title>NeuroPilot — System Architecture Flowchart</title>'
   + '<link rel="preconnect" href="https://fonts.googleapis.com">'
   + '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">'
-  + '<style>' + CSS + '</style></head><body>'
+  + '<style>' + pageCSS + '</style></head><body>'
   + sheet1() + sheet2() + sheet3() + sheet4()
   + '</body></html>';
 
