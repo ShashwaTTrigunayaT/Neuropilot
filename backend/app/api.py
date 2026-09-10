@@ -8,6 +8,8 @@ from .schemas import (
     AdvanceRequest,
     AdvanceResponse,
     AutoWorkupResponse,
+    CompareRequest,
+    CompareResponse,
     ExplainResponse,
     ProgressionResponse,
     WorkupNextResponse,
@@ -88,6 +90,23 @@ def get_progression(patient_id: str) -> dict:
     payload = service.progression(patient_id)
     if payload is None:
         raise HTTPException(status_code=404, detail="Patient not found")
+    return payload
+
+
+@router.post("/patients/compare", response_model=CompareResponse, tags=["patients"])
+def compare_patients(body: CompareRequest) -> dict:
+    """Rank 2..6 selected patients with an EXPLICIT tiebreak ladder.
+
+    Answers "these two display the same score at the same stage — who is more
+    priority?": re-ranks on full-precision score, then 12-month conversion
+    probability, then stage, then a stable ID fallback, and returns a
+    human-readable reason for every adjacent pair.
+    """
+    payload = service.compare_patients(body.patient_ids)
+    if payload is None:
+        raise HTTPException(status_code=422, detail="Select at least two patients to compare")
+    if payload.get("error") == "not_found":
+        raise HTTPException(status_code=404, detail=f"Patient(s) not found: {', '.join(payload['missing'])}")
     return payload
 
 

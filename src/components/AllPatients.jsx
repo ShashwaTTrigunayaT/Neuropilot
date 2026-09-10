@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Users } from 'lucide-react';
+import { Scale, Users } from 'lucide-react';
 import { STAGES_FULL, STAGES_SHORT } from '../lib.js';
 import {
   Chevron,
@@ -16,12 +16,18 @@ import {
 const PAGE_SIZE = 15;
 const TIERS = ['high', 'medium', 'low'];
 
-export default function AllPatients({ patients, onSelect, onSimulate }) {
+export default function AllPatients({ patients, onSelect, onSimulate, onCompare }) {
   const [tierFilter, setTierFilter] = useState('all');
   const [stageFilter, setStageFilter] = useState(0); // 0 = all
   const [sortKey, setSortKey] = useState('risk-desc');
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
+  // Multi-select for priority comparison (2..6 subjects)
+  const [compareIds, setCompareIds] = useState([]);
+  const toggleCompare = (id) =>
+    setCompareIds((cur) =>
+      cur.includes(id) ? cur.filter((x) => x !== id) : cur.length >= 6 ? cur : [...cur, id]
+    );
 
   const counts = useMemo(() => {
     const c = { high: 0, medium: 0, low: 0 };
@@ -135,6 +141,40 @@ export default function AllPatients({ patients, onSelect, onSimulate }) {
         </div>
       </div>
 
+      {/* Compare selection bar */}
+      {compareIds.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-accent/40 bg-accent/5 px-5 py-3.5 dark:bg-accent/10 animate-fade-up">
+          <Scale className="h-4 w-4 text-accent" />
+          <p className="text-xs font-semibold text-ink dark:text-darkText">
+            <strong style={MONO}>{compareIds.length}</strong> selected{compareIds.length < 2 && ' — pick at least one more'}
+            {compareIds.length >= 6 && ' (max 6)'}
+          </p>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {compareIds.map((id) => (
+              <span key={id} style={MONO} className="inline-flex items-center gap-1 rounded-full bg-white dark:bg-darkCard px-2 py-0.5 text-[10.5px] font-bold text-accent border border-accent/30">
+                {id}
+                <button onClick={() => toggleCompare(id)} aria-label={`Deselect ${id}`} className="hover:text-tierHigh">✕</button>
+              </span>
+            ))}
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={() => setCompareIds([])}
+              className="rounded-xl border border-line dark:border-darkBorder bg-white dark:bg-darkCard px-3 py-1.5 text-[11px] font-semibold text-muted dark:text-darkMuted transition hover:border-accent"
+            >
+              Clear
+            </button>
+            <button
+              onClick={() => onCompare?.(compareIds)}
+              disabled={compareIds.length < 2}
+              className="rounded-xl bg-accent px-4 py-1.5 text-[11px] font-bold text-white shadow-soft transition hover:bg-accentHover disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Compare Priority
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Stage filter pills */}
       <div className="-mt-2 flex flex-wrap items-center gap-3">
         <span className="text-xs font-semibold text-muted dark:text-darkMuted">Stage Gate:</span>
@@ -159,7 +199,14 @@ export default function AllPatients({ patients, onSelect, onSimulate }) {
           <NoRows onClear={clearFilters} hasFilters={hasFilters} />
         ) : (
           <>
-            <PatientTable rows={pageRows} onSelect={onSelect} onSimulate={onSimulate} />
+            <PatientTable
+            rows={pageRows}
+            onSelect={onSelect}
+            onSimulate={onSimulate}
+            selectable
+            selectedIds={compareIds}
+            onToggleSelect={toggleCompare}
+          />
             {/* Pagination */}
             <div className="flex items-center justify-between border-t border-line dark:border-darkBorder px-6 py-3.5 bg-tint/40 dark:bg-darkCard">
               <p style={MONO} className="text-xs text-muted dark:text-darkMuted">

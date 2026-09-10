@@ -205,6 +205,10 @@ class HealthResponse(BaseModel):
     data_source: str
 
 
+class CompareRequest(BaseModel):
+    patient_ids: List[str]
+
+
 class ScoreRequest(BaseModel):
     features: dict[str, Any]
 
@@ -220,6 +224,16 @@ class ScoreResponse(BaseModel):
     risk_tier: str
     factors: List[ScoreFactor]
     model_type: Optional[str] = None
+
+
+class CompareResponse(BaseModel):
+    count: int
+    patients: List[dict]
+    reasons: List[dict]
+    ladder: List[str]
+    disclaimer: str
+    error: Optional[str] = None
+    missing: Optional[List[str]] = None
 
 
 class ModelInfoResponse(BaseModel):

@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import AllPatients from './components/AllPatients.jsx';
 import { NeuroPilotLogo } from './components/BrandLogo.jsx';
+import CompareView from './components/CompareView.jsx';
 import Footer from './components/Footer.jsx';
 import Overview from './components/Overview.jsx';
 import PatientDetail from './components/PatientDetail.jsx';
@@ -174,7 +175,7 @@ export default function App() {
   const [status, setStatus] = useState('loading');
   const [loadError, setLoadError] = useState('');
 
-  const [view, setView] = useState('overview'); // overview | all | simulator | progression
+  const [view, setView] = useState('overview'); // overview | all | simulator | progression | compare
   const [selectedId, setSelectedId] = useState(null);
   const [simulatedPatient, setSimulatedPatient] = useState(null);
   const [detail, setDetail] = useState(null);
@@ -189,6 +190,11 @@ export default function App() {
   const [autopilot, setAutopilot] = useState(false);
   const [autoLog, setAutoLog] = useState([]); // last autonomous steps for the live banner
   const [autoBusy, setAutoBusy] = useState(false);
+  // Priority comparison (2..6 selected patients)
+  const [compareIds, setCompareIds] = useState([]);
+  const [compare, setCompare] = useState(null);
+  const [compareStatus, setCompareStatus] = useState('idle');
+  const [compareError, setCompareError] = useState('');
 
   const showToast = (title, message = '', type = 'success') => {
     setToast({ title, message, type });
@@ -243,6 +249,7 @@ export default function App() {
   );
 
   const openPatient = (id) => {
+    if (view === 'compare') setView('all'); // leaving comparison — open the record underneath
     setSelectedId(id);
     loadDetail(id);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -377,6 +384,27 @@ export default function App() {
     setView('simulator');
   };
 
+  // Priority comparison: fetch the explicit tiebreak ranking for the selection
+  const handleCompare = useCallback(
+    async (ids) => {
+      if (!ids || ids.length < 2) return;
+      setCompareIds(ids);
+      setCompareStatus('loading');
+      setCompareError('');
+      setView('compare');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      try {
+        const payload = await api.comparePatients(ids);
+        setCompare(payload);
+        setCompareStatus('ready');
+      } catch (err) {
+        setCompareError(err.message);
+        setCompareStatus('error');
+      }
+    },
+    []
+  );
+
   // Previous & Next navigation for patient detail
   const currentIndex = patients.findIndex((p) => p.id === selectedId);
   const hasPrev = currentIndex > 0;
@@ -392,6 +420,10 @@ export default function App() {
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (e.key === 'Escape' && view === 'compare') {
+        setView('all');
+        return;
+      }
       if (e.key === 'Escape' && selectedId) {
         if (view === 'progression') {
           closeProgression(); // Esc: back to the patient record
@@ -508,6 +540,7 @@ export default function App() {
                   patients={patients}
                   onSelect={openPatient}
                   onSimulate={handleSimulate}
+                  onCompare={handleCompare}
                 />
               )}
 
@@ -518,6 +551,17 @@ export default function App() {
                 />
               )}
             </div>
+
+            {/* Full-page priority comparison view */}
+            {view === 'compare' && (
+              <CompareView
+                compare={compare}
+                loading={compareStatus === 'loading'}
+                error={compareError}
+                onExit={() => setView('all')}
+                onOpenPatient={openPatient}
+              />
+            )}
 
             {/* Full-page progression forecast view */}
             {view === 'progression' && selectedId && (

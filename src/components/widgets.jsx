@@ -515,12 +515,22 @@ export function NoRows({ onClear, hasFilters }) {
   );
 }
 
-export function PatientTable({ rows, compact = false, onSelect, onSimulate }) {
+export function PatientTable({
+  rows,
+  compact = false,
+  onSelect,
+  onSimulate,
+  selectable = false,
+  selectedIds = [],
+  onToggleSelect,
+}) {
+  const selected = new Set(selectedIds);
   return (
     <div className="max-h-[68vh] overflow-auto">
       <table className="w-full text-left">
         <thead>
           <tr className="border-b border-line dark:border-darkBorder sticky-th">
+            {selectable && <th className="w-10 px-3 py-3" />}
             <th className="px-5 py-3 text-left font-semibold text-muted dark:text-darkMuted uppercase tracking-wider" style={{ fontSize: '10.5px' }}>Subject</th>
             {!compact && (
               <th className="px-4 py-3 text-left font-semibold text-muted dark:text-darkMuted uppercase tracking-wider" style={{ fontSize: '10.5px' }}>Cognitive (MMSE)</th>
@@ -537,9 +547,32 @@ export function PatientTable({ rows, compact = false, onSelect, onSimulate }) {
           {rows.map((p) => (
             <tr
               key={p.id}
-              onClick={() => onSelect(p.id)}
-              className="group cursor-pointer transition last:border-0 hover:bg-[#FAF9F5] dark:hover:bg-darkCardHover"
+              onClick={() => (selectable ? onToggleSelect(p.id) : onSelect(p.id))}
+              className={`group cursor-pointer transition last:border-0 hover:bg-[#FAF9F5] dark:hover:bg-darkCardHover ${
+                selected.has(p.id) ? 'bg-accent/[0.07]' : ''
+              }`}
             >
+              {selectable && (
+                <td className="px-3 py-3.5" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    aria-label={`Select ${p.id} for comparison`}
+                    aria-pressed={selected.has(p.id)}
+                    onClick={() => onToggleSelect(p.id)}
+                    className={`flex h-[18px] w-[18px] items-center justify-center rounded-[6px] border transition ${
+                      selected.has(p.id)
+                        ? 'border-accent bg-accent text-white'
+                        : 'border-line dark:border-darkBorder bg-white dark:bg-darkCard hover:border-accent'
+                    }`}
+                  >
+                    {selected.has(p.id) && (
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20 6 9 17l-5-5" />
+                      </svg>
+                    )}
+                  </button>
+                </td>
+              )}
               <td className="px-5 py-3.5">
                 <div className="flex items-center gap-2">
                   <span style={MONO} className="text-[13px] font-bold text-ink dark:text-darkText group-hover:text-accent dark:group-hover:text-accent transition-colors">

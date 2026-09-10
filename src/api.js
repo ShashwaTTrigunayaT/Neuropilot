@@ -44,6 +44,12 @@ export const api = {
     return items;
   },
   getPatient: (id) => request(`/patients/${encodeURIComponent(id)}`),
+  // Rank 2..6 selected patients with the explicit tiebreak ladder
+  comparePatients: (ids) =>
+    request('/patients/compare', {
+      method: 'POST',
+      body: JSON.stringify({ patient_ids: ids }),
+    }),
   getPipeline: (id) => request(`/patients/${encodeURIComponent(id)}/pipeline`),
   // 12-month progression forecast (trajectory, conversion probability, projected tier)
   getProgression: (id) => request(`/patients/${encodeURIComponent(id)}/progression`),
