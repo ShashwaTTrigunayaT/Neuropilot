@@ -47,6 +47,80 @@ const SECTIONS = [
     ],
   },
   {
+    title: 'Live Demo — A Question Per Functionality',
+    lead: 'For every screen and button a judge can click: what it is, why it is built that way, and the one-line answer.',
+    items: [
+      {
+        q: '[Ranked cohort table] “How is this list ordered, and can I trust the order?”',
+        a: `Every subject is ranked by the <b>trained model's full-precision score</b> (descending by default — sortable risk-asc / by stage). Filters (tier, stage), ID search and pagination are all served by the API — the frontend holds no list of its own. Trust the order because the score behind it is explained one row away: open any patient and every factor is shown with its measured value and signed contribution.`,
+      },
+      {
+        q: '[Overview dashboard] “What do these charts tell a clinician in 10 seconds?”',
+        a: `Tier strip (how many high/medium/low right now) → risk histogram (where the cohort sits against the 0.4/0.7 thresholds) → stage funnel (how far the workup has progressed cohort-wide) → top-8 shortlist (who to see first). It is a triage cockpit: capacity questions answered at a glance, details one click away.`,
+      },
+      {
+        q: '[Autonomous Triage toggle] “What actually happens when I flip this?”',
+        a: `The system runs the loop a clinician would, at ~1.4 s/step: ranks the whole cohort, picks the <b>highest-scoring subject whose tier still indicates a test</b>, orders that test, derives a plausible result, re-scores with the trained model, re-ranks — and the banner narrates each step: <code>SYN-0087 · BLOOD abnormal · 0.68 → 0.81 (high) · #12 → #2</code>. Toggle it off mid-run and it stops cleanly with mid-state intact; it auto-stops when every pathway is complete.`,
+      },
+      {
+        q: '[Autonomous Triage] “Why did it pick that patient and not the one below?”',
+        a: `Deterministic policy, fully auditable: the top of the current ranking whose tier indicates a test. Each pick is logged with before/after score <i>and</i> before/after rank — you can replay the queue's evolution from the audit trail. And as results land, priorities genuinely shift: an abnormal panel pulls one subject up to #2; a normal MRI later pushes it back down.`,
+      },
+      {
+        q: '[Score gauge] “What are those two vertical marks on the gauge?”',
+        a: `The tier thresholds — <b>0.4</b> (medium) and <b>0.7</b> (high) — drawn on the gauge so the number is never presented naked. They are policy, not model output: env-configurable per site, because a clinic's capacity and prevalence should calibrate where "high" begins.`,
+      },
+      {
+        q: '[Clinical Risk Attribution] “Why does an un-ordered test show a contribution? What is that gray badge?”',
+        a: `That is the <code>model default</code> badge — the honest label for a stage that was <b>never measured</b>. XGBoost routes missing values down a learned default path, so SHAP still produces a (small) contribution; presenting it as if the biomarker had been measured would be misleading, so we badge it, dim it, and footnote it. The moment the test completes, the measured contribution replaces it and the score updates live.`,
+      },
+      {
+        q: '[Pipeline stepper] “What do the colors and numbers on Cognitive → Blood → MRI → PET mean?”',
+        a: `Position, not status decoration: green = completed, highlighted = current stage, gray = not reached, with "Stage N of 4" stated in text. The stepper is driven by the same state the API uses to decide the next indicated test — what you see is the actual pipeline position, not a UI guess.`,
+      },
+      {
+        q: '[Recommended Next Step + Confirm] “What happens if the clinician disagrees — or clicks Confirm on a routine follow-up?”',
+        a: `The button only ever executes what the rule engine indicates, and <b>"Schedule/Return" recommendations are refused for auto-execution</b> — the API answers 409 with the reason unless the clinician explicitly passes <code>override: true</code>. Test-ordering escalations confirm normally. The system is decisive about tests, humble about judgment calls.`,
+      },
+      {
+        q: '[Clinician Override button] “You built an override? Isn\u2019t that dangerous?”',
+        a: `It is the safety feature, not a hole. Clinicians see the full attribution before overriding, the override requires an explicit confirmation step, and it is <b>logged as <code>override: true</code> in the audit trail</b> with a note. The dangerous design would be the opposite: a system a clinician cannot overrule. Human-in-the-loop is the requirement in clinical AI — we made it visible.`,
+      },
+      {
+        q: '[Record Result form] “You are entering results by hand — where do they come from in real life?”',
+        a: `From the LIS/RIS — in production these arrive via integration, and the form is where a clinician would correct or enter an actual report. For the demo, ordering a test auto-derives a <b>clinically plausible result from the subject\u2019s severity</b> (declared stand-in), so the full loop — order → result → re-score → re-rank — is demonstrable without a hospital backend. Either way the model re-scores on the same values, in-process, instantly.`,
+      },
+      {
+        q: '[Event & Reasoning Trail] “Why should I trust this trail?”',
+        a: `Because it is append-only and timestamped at the API layer, not written by the UI: every order, result, re-score, tier change and override lands there, and it is mirrored to Postgres when configured — so it survives restarts. For a clinical auditor, this is the difference between "trust the demo" and "verify the log".`,
+      },
+      {
+        q: '[Progression Probability button] “Walk me through this chart.”',
+        a: `Solid line: <b>observed MMSE</b> (−6 months → today, dashed "today" divider). Dashed line with band: <b>predicted trajectory</b> over 12 months with ~75% uncertainty. Vertical outcome-colored lines: the moments blood/MRI/PET completed, each labeled with <b>the risk score at that instant</b> in the lane below (the model re-scored on the patient\u2019s data as it existed then). Right edge: the <b>12-month projected score</b>, colored by projected tier. One chart tells the whole story: where the patient was, what each test did to their priority, and where they are headed.`,
+      },
+      {
+        q: '[Progression view] “What is the percentage under the chart?”',
+        a: `The <b>probability of clinical progression within 12 months</b> — crossing into the next phase (CN→MCI, MCI→AD, AD→severe). It is a separate XGBoost classifier on the same 10 features (ROC AUC 0.770, ~2.8× lift over prevalence), with its top SHAP drivers shown beside it, and a disclaimer that it is decision support, never a diagnosis.`,
+      },
+      {
+        q: '[Risk Simulator] “What is this workbench for?”',
+        a: `What-if scoring against the <b>live model</b> — the same <code>POST /patients/score</code> the pipeline uses. Set demographics, MMSE, then toggle each stage <b>Measured / Not ordered</b>: un-ordered stages send <code>null</code> and route through the model\u2019s learned missing-value path, exactly like a real un-ordered test. Toggle blood on with a p-tau of 5.8 and watch the score jump and the SHAP waterfall light up — it is the "what does ordering this test buy us?" demo, and it doubles as validation that the served model responds sensibly at the extremes.`,
+      },
+      {
+        q: '[Header data-source pill] “What does that label in the header mean?”',
+        a: `Model and data provenance, always visible: it reports what <code>/health</code> says — e.g. <code>synthetic</code> (default cohort) or <code>real+postgres</code> (OASIS subjects with DB persistence on Railway). We surface it because a clinical tool that hides what data it is running on does not deserve trust.`,
+      },
+      {
+        q: '[Export Consultation Report] “What does export give a clinician?”',
+        a: `A print-ready one-pager of the decision dossier — score with thresholds, stage-grouped attribution, pipeline position, recommended step and the audit trail — the artifact a clinician carries into a case review. It is generated by the browser\u2019s print pipeline (no server-side rendering of PHI in this prototype).`,
+      },
+      {
+        q: '[Prev / Next navigation] “Why bother with patient-to-patient arrows?”',
+        a: `Because the real workflow is <i>review the queue in order</i>: a clinician walks down the ranking one high-priority patient at a time without bouncing back to the table. Small thing — but it is the difference between a dashboard and a triage workstation.`,
+      },
+    ],
+  },
+  {
     title: 'Problem & Product',
     items: [
       {

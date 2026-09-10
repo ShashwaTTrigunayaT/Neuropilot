@@ -92,7 +92,7 @@
 
   <div class="toc">
     <h2>Contents</h2>
-    <div class="row"><span class="n">1</span><span class="t">The Question You Were Asked</span><span class="c">4 questions</span></div><div class="row"><span class="n">2</span><span class="t">Problem & Product</span><span class="c">6 questions</span></div><div class="row"><span class="n">3</span><span class="t">Data</span><span class="c">6 questions</span></div><div class="row"><span class="n">4</span><span class="t">Model — Risk Scoring</span><span class="c">7 questions</span></div><div class="row"><span class="n">5</span><span class="t">Explainability</span><span class="c">3 questions</span></div><div class="row"><span class="n">6</span><span class="t">Progression Forecaster</span><span class="c">5 questions</span></div><div class="row"><span class="n">7</span><span class="t">Rule Engine & Pipeline Logic</span><span class="c">4 questions</span></div><div class="row"><span class="n">8</span><span class="t">Autonomy & Safety</span><span class="c">4 questions</span></div><div class="row"><span class="n">9</span><span class="t">Engineering & Architecture</span><span class="c">5 questions</span></div><div class="row"><span class="n">10</span><span class="t">Deployment</span><span class="c">3 questions</span></div><div class="row"><span class="n">11</span><span class="t">Limitations & Roadmap</span><span class="c">3 questions</span></div>
+    <div class="row"><span class="n">1</span><span class="t">The Question You Were Asked</span><span class="c">4 questions</span></div><div class="row"><span class="n">2</span><span class="t">Live Demo — A Question Per Functionality</span><span class="c">17 questions</span></div><div class="row"><span class="n">3</span><span class="t">Problem & Product</span><span class="c">6 questions</span></div><div class="row"><span class="n">4</span><span class="t">Data</span><span class="c">6 questions</span></div><div class="row"><span class="n">5</span><span class="t">Model — Risk Scoring</span><span class="c">7 questions</span></div><div class="row"><span class="n">6</span><span class="t">Explainability</span><span class="c">3 questions</span></div><div class="row"><span class="n">7</span><span class="t">Progression Forecaster</span><span class="c">5 questions</span></div><div class="row"><span class="n">8</span><span class="t">Rule Engine & Pipeline Logic</span><span class="c">4 questions</span></div><div class="row"><span class="n">9</span><span class="t">Autonomy & Safety</span><span class="c">4 questions</span></div><div class="row"><span class="n">10</span><span class="t">Engineering & Architecture</span><span class="c">5 questions</span></div><div class="row"><span class="n">11</span><span class="t">Deployment</span><span class="c">3 questions</span></div><div class="row"><span class="n">12</span><span class="t">Limitations & Roadmap</span><span class="c">3 questions</span></div>
   </div>
 
   
@@ -123,148 +123,221 @@
   </div>
   </section>
   <section class="sec ">
-    <h2><span class="secnum">2</span>Problem & Product</h2>
+    <h2><span class="secnum">2</span>Live Demo — A Question Per Functionality</h2>
+    <p class="lead">For every screen and button a judge can click: what it is, why it is built that way, and the one-line answer.</p>
+    
+  <div class="qa">
+    <div class="q"><span class="qn">2.1</span>[Ranked cohort table] “How is this list ordered, and can I trust the order?”</div>
+    <div class="a">Every subject is ranked by the <b>trained model's full-precision score</b> (descending by default — sortable risk-asc / by stage). Filters (tier, stage), ID search and pagination are all served by the API — the frontend holds no list of its own. Trust the order because the score behind it is explained one row away: open any patient and every factor is shown with its measured value and signed contribution.</div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="qn">2.2</span>[Overview dashboard] “What do these charts tell a clinician in 10 seconds?”</div>
+    <div class="a">Tier strip (how many high/medium/low right now) → risk histogram (where the cohort sits against the 0.4/0.7 thresholds) → stage funnel (how far the workup has progressed cohort-wide) → top-8 shortlist (who to see first). It is a triage cockpit: capacity questions answered at a glance, details one click away.</div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="qn">2.3</span>[Autonomous Triage toggle] “What actually happens when I flip this?”</div>
+    <div class="a">The system runs the loop a clinician would, at ~1.4 s/step: ranks the whole cohort, picks the <b>highest-scoring subject whose tier still indicates a test</b>, orders that test, derives a plausible result, re-scores with the trained model, re-ranks — and the banner narrates each step: <code>SYN-0087 · BLOOD abnormal · 0.68 → 0.81 (high) · #12 → #2</code>. Toggle it off mid-run and it stops cleanly with mid-state intact; it auto-stops when every pathway is complete.</div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="qn">2.4</span>[Autonomous Triage] “Why did it pick that patient and not the one below?”</div>
+    <div class="a">Deterministic policy, fully auditable: the top of the current ranking whose tier indicates a test. Each pick is logged with before/after score <i>and</i> before/after rank — you can replay the queue's evolution from the audit trail. And as results land, priorities genuinely shift: an abnormal panel pulls one subject up to #2; a normal MRI later pushes it back down.</div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="qn">2.5</span>[Score gauge] “What are those two vertical marks on the gauge?”</div>
+    <div class="a">The tier thresholds — <b>0.4</b> (medium) and <b>0.7</b> (high) — drawn on the gauge so the number is never presented naked. They are policy, not model output: env-configurable per site, because a clinic's capacity and prevalence should calibrate where "high" begins.</div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="qn">2.6</span>[Clinical Risk Attribution] “Why does an un-ordered test show a contribution? What is that gray badge?”</div>
+    <div class="a">That is the <code>model default</code> badge — the honest label for a stage that was <b>never measured</b>. XGBoost routes missing values down a learned default path, so SHAP still produces a (small) contribution; presenting it as if the biomarker had been measured would be misleading, so we badge it, dim it, and footnote it. The moment the test completes, the measured contribution replaces it and the score updates live.</div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="qn">2.7</span>[Pipeline stepper] “What do the colors and numbers on Cognitive → Blood → MRI → PET mean?”</div>
+    <div class="a">Position, not status decoration: green = completed, highlighted = current stage, gray = not reached, with "Stage N of 4" stated in text. The stepper is driven by the same state the API uses to decide the next indicated test — what you see is the actual pipeline position, not a UI guess.</div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="qn">2.8</span>[Recommended Next Step + Confirm] “What happens if the clinician disagrees — or clicks Confirm on a routine follow-up?”</div>
+    <div class="a">The button only ever executes what the rule engine indicates, and <b>"Schedule/Return" recommendations are refused for auto-execution</b> — the API answers 409 with the reason unless the clinician explicitly passes <code>override: true</code>. Test-ordering escalations confirm normally. The system is decisive about tests, humble about judgment calls.</div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="qn">2.9</span>[Clinician Override button] “You built an override? Isn’t that dangerous?”</div>
+    <div class="a">It is the safety feature, not a hole. Clinicians see the full attribution before overriding, the override requires an explicit confirmation step, and it is <b>logged as <code>override: true</code> in the audit trail</b> with a note. The dangerous design would be the opposite: a system a clinician cannot overrule. Human-in-the-loop is the requirement in clinical AI — we made it visible.</div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="qn">2.10</span>[Record Result form] “You are entering results by hand — where do they come from in real life?”</div>
+    <div class="a">From the LIS/RIS — in production these arrive via integration, and the form is where a clinician would correct or enter an actual report. For the demo, ordering a test auto-derives a <b>clinically plausible result from the subject’s severity</b> (declared stand-in), so the full loop — order → result → re-score → re-rank — is demonstrable without a hospital backend. Either way the model re-scores on the same values, in-process, instantly.</div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="qn">2.11</span>[Event & Reasoning Trail] “Why should I trust this trail?”</div>
+    <div class="a">Because it is append-only and timestamped at the API layer, not written by the UI: every order, result, re-score, tier change and override lands there, and it is mirrored to Postgres when configured — so it survives restarts. For a clinical auditor, this is the difference between "trust the demo" and "verify the log".</div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="qn">2.12</span>[Progression Probability button] “Walk me through this chart.”</div>
+    <div class="a">Solid line: <b>observed MMSE</b> (−6 months → today, dashed "today" divider). Dashed line with band: <b>predicted trajectory</b> over 12 months with ~75% uncertainty. Vertical outcome-colored lines: the moments blood/MRI/PET completed, each labeled with <b>the risk score at that instant</b> in the lane below (the model re-scored on the patient’s data as it existed then). Right edge: the <b>12-month projected score</b>, colored by projected tier. One chart tells the whole story: where the patient was, what each test did to their priority, and where they are headed.</div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="qn">2.13</span>[Progression view] “What is the percentage under the chart?”</div>
+    <div class="a">The <b>probability of clinical progression within 12 months</b> — crossing into the next phase (CN→MCI, MCI→AD, AD→severe). It is a separate XGBoost classifier on the same 10 features (ROC AUC 0.770, ~2.8× lift over prevalence), with its top SHAP drivers shown beside it, and a disclaimer that it is decision support, never a diagnosis.</div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="qn">2.14</span>[Risk Simulator] “What is this workbench for?”</div>
+    <div class="a">What-if scoring against the <b>live model</b> — the same <code>POST /patients/score</code> the pipeline uses. Set demographics, MMSE, then toggle each stage <b>Measured / Not ordered</b>: un-ordered stages send <code>null</code> and route through the model’s learned missing-value path, exactly like a real un-ordered test. Toggle blood on with a p-tau of 5.8 and watch the score jump and the SHAP waterfall light up — it is the "what does ordering this test buy us?" demo, and it doubles as validation that the served model responds sensibly at the extremes.</div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="qn">2.15</span>[Header data-source pill] “What does that label in the header mean?”</div>
+    <div class="a">Model and data provenance, always visible: it reports what <code>/health</code> says — e.g. <code>synthetic</code> (default cohort) or <code>real+postgres</code> (OASIS subjects with DB persistence on Railway). We surface it because a clinical tool that hides what data it is running on does not deserve trust.</div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="qn">2.16</span>[Export Consultation Report] “What does export give a clinician?”</div>
+    <div class="a">A print-ready one-pager of the decision dossier — score with thresholds, stage-grouped attribution, pipeline position, recommended step and the audit trail — the artifact a clinician carries into a case review. It is generated by the browser’s print pipeline (no server-side rendering of PHI in this prototype).</div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="qn">2.17</span>[Prev / Next navigation] “Why bother with patient-to-patient arrows?”</div>
+    <div class="a">Because the real workflow is <i>review the queue in order</i>: a clinician walks down the ranking one high-priority patient at a time without bouncing back to the table. Small thing — but it is the difference between a dashboard and a triage workstation.</div>
+  </div>
+  </section>
+  <section class="sec ">
+    <h2><span class="secnum">3</span>Problem & Product</h2>
     
     
   <div class="qa">
-    <div class="q"><span class="qn">2.1</span>What problem does NeuroPilot solve?</div>
+    <div class="q"><span class="qn">3.1</span>What problem does NeuroPilot solve?</div>
     <div class="a">Memory-clinic and trial-screening workflows drown in undifferentiated referral lists: every patient waits the same, test ordering is ad-hoc, and the patients who would benefit most from early workup are found late. NeuroPilot turns a static cohort into a <b>continuously re-ranked, self-advancing priority queue</b>: each patient carries a model score, an explanation, a pipeline position (Cognitive → Blood → MRI → PET), and a 12-month outlook — and the system itself can drive the workup, one indicated test at a time, re-scoring and re-ranking as results land.</div>
   </div>
   <div class="qa">
-    <div class="q"><span class="qn">2.2</span>Why prioritization, not diagnosis?</div>
+    <div class="q"><span class="qn">3.2</span>Why prioritization, not diagnosis?</div>
     <div class="a">Because that is the honest, safe, and regulated scope for this evidence base. A diagnosis changes a life; our models are trained on synthetic, ADNI-shaped data and would need local validation before any clinical use. So the system outputs exactly three things — <b>risk tier, reasoning, recommended next test</b> — and no endpoint or screen contains a diagnosis field. It makes the queue smarter; it does not make the call.</div>
   </div>
   <div class="qa">
-    <div class="q"><span class="qn">2.3</span>Who is the user, and what do they see?</div>
+    <div class="q"><span class="qn">3.3</span>Who is the user, and what do they see?</div>
     <div class="a">A clinician or trial coordinator. Overview: tier distribution, risk histogram, stage funnel, top-8 shortlist. Patients: the full ranked, filterable table. Detail: score gauge with thresholds, all 10 SHAP factors grouped by stage, pipeline stepper, recommended next step, interactive results entry, timestamped audit trail. One click: the full-page 12-month progression forecast.</div>
   </div>
   <div class="qa">
-    <div class="q"><span class="qn">2.4</span>Why four stages, in that order?</div>
+    <div class="q"><span class="qn">3.4</span>Why four stages, in that order?</div>
     <div class="a">It mirrors the real diagnostic funnel and a cost/invaiseness gradient: <b>cognition</b> (cheap, universal, always measured) → <b>blood biomarkers</b> (cheap draw, p-tau181 + Aβ42/40) → <b>MRI volumetrics</b> (hippocampal atrophy) → <b>PET</b> (amyloid/tau — most expensive, most invasive, ordered only when the tier still indicates it). Each stage refines the score; the updated tier decides whether the next stage is even indicated. Low-tier patients stop early — that is the resource-saving point.</div>
   </div>
   <div class="qa">
-    <div class="q"><span class="qn">2.5</span>How is this different from "just an ML model"?</div>
+    <div class="q"><span class="qn">3.5</span>How is this different from "just an ML model"?</div>
     <div class="a">The model is one component of five: a <b>deterministic rule engine</b> decides what tests are indicated (auditable if/else, not another ML layer), an <b>explanation layer</b> (SHAP) makes every score defensible, a <b>pipeline/audit layer</b> tracks every order, result and re-score, an <b>autonomy layer</b> drives the cohort workup under tier gating, and a <b>forecasting family</b> projects 12-month trajectories. Remove the model and the product still has a defensible clinical workflow — that is deliberate.</div>
   </div>
   <div class="qa">
-    <div class="q"><span class="qn">2.6</span>Walk me through the product in 30 seconds.</div>
+    <div class="q"><span class="qn">3.6</span>Walk me through the product in 30 seconds.</div>
     <div class="a">Open the dashboard: 800 ranked subjects. Toggle <b>Autonomous Triage</b>: the system picks the highest-priority subject itself, orders its next indicated test, derives the result, re-scores with the trained model, and re-ranks the queue — the banner shows <code>SYN-0087 · BLOOD abnormal · 0.68 → 0.81 (high) · #12 → #2</code>. Open any patient: gauge, stage-grouped SHAP, stepper, audit trail, and a Progression Probability button that opens the full 12-month forecast chart.</div>
   </div>
   </section>
   <section class="sec ">
-    <h2><span class="secnum">3</span>Data</h2>
+    <h2><span class="secnum">4</span>Data</h2>
     
     
   <div class="qa">
-    <div class="q"><span class="qn">3.1</span>Real data or synthetic?</div>
+    <div class="q"><span class="qn">4.1</span>Real data or synthetic?</div>
     <div class="a">Both, by design. <b>Real:</b> public OASIS-1 longitudinal (150 subjects, 373 visits) runs the full ETL — dedupe, missing-value audit (SES ×19, MMSE ×2 flagged, never silently dropped). <b>Synthetic:</b> an 800-subject ADNI-1-proportioned cohort (200 CN / 400 MCI / 200 AD) with severity-correlated measures at all four stages — this is the served default because OASIS-1 has <i>no blood, MRI-volumetry or PET columns</i>, and a 4-stage product needs 4-stage data.</div>
   </div>
   <div class="qa">
-    <div class="q"><span class="qn">3.2</span>Why not use real ADNI data?</div>
+    <div class="q"><span class="qn">4.2</span>Why not use real ADNI data?</div>
     <div class="a">ADNI requires registration, data-use certification and manual downloads — not redistributable in a hackathon repo. We built the generator to ADNI-1's published composition and biomarker ranges specifically so the <b>swap is one command</b>: point <code>train_model.py --data</code> at a real cohort and the same pipeline, guardrails and API serve it unchanged.</div>
   </div>
   <div class="qa">
-    <div class="q"><span class="qn">3.3</span>Is the synthetic cohort clinically plausible — or did you hand the model the answer?</div>
+    <div class="q"><span class="qn">4.3</span>Is the synthetic cohort clinically plausible — or did you hand the model the answer?</div>
     <div class="a">It is generator-shaped, and we say so plainly: measures are severity-correlated with realistic reference ranges (p-tau 0.6–7.5 pg/mL, Aβ42/40 0.04–0.16, hippocampus 1.6–4.3 cm³), CDR included only as the label source and excluded from features. The honest framing: the model demonstrates the <i>methodology</i> end-to-end; performance numbers on synthetic data are a floor, not a claim. The model card, /model/info and /health all disclose <code>data_mode: synthetic</code>.</div>
   </div>
   <div class="qa">
-    <div class="q"><span class="qn">3.4</span>How is missing data handled?</div>
+    <div class="q"><span class="qn">4.4</span>How is missing data handled?</div>
     <div class="a">Two distinct cases. <b>Un-ordered tests</b> stay NaN — XGBoost consumes missing values natively, and SHAP attributes the learned missing-value path (shown in the UI as a dimmed <code>model default</code> badge, so un-measured stages are visible, not hidden). <b>Measured-but-missing values</b> (e.g. OASIS SES/MMSE gaps) are median-imputed inside the sklearn Pipeline, which is bundled into the served artifact — imputation is therefore identical at train and serve time.</div>
   </div>
   <div class="qa">
-    <div class="q"><span class="qn">3.5</span>What prevents subject overlap between train and test?</div>
+    <div class="q"><span class="qn">4.5</span>What prevents subject overlap between train and test?</div>
     <div class="a">Subject-level splitting: a patient is entirely in train or entirely in test — no visit-level leakage. Stratified by label; 80/20. The same discipline carries into the progression models (stratified by conversion).</div>
   </div>
   <div class="qa">
-    <div class="q"><span class="qn">3.6</span>What is your reproducibility story?</div>
+    <div class="q"><span class="qn">4.6</span>What is your reproducibility story?</div>
     <div class="a">Seeded generators (fixed seed in both cohort scripts), deterministic follow-up simulation, versioned artifacts with <code>trained_at</code> and full metric cards (<code>artifacts/eval_report.txt</code>, <code>progression_report.txt</code>), and committed artifacts so a fresh deploy serves the exact model that was evaluated.</div>
   </div>
   </section>
   <section class="sec ">
-    <h2><span class="secnum">4</span>Model — Risk Scoring</h2>
+    <h2><span class="secnum">5</span>Model — Risk Scoring</h2>
     
     
   <div class="qa">
-    <div class="q"><span class="qn">4.1</span>Why XGBoost?</div>
+    <div class="q"><span class="qn">5.1</span>Why XGBoost?</div>
     <div class="a">Tabular, mixed-type, small-to-medium clinical data is its strength: it handles missing values natively (essential for staged workups), captures non-linear threshold effects (MMSE 24 vs 23 is not a linear event), and trains in seconds so re-scoring on every result is practical. A RandomForest fallback ships alongside (test AUC 0.874 vs 0.871) — and the baseline gap proves the complexity is warranted.</div>
   </div>
   <div class="qa">
-    <div class="q"><span class="qn">4.2</span>Why not deep learning / why not an LLM?</div>
+    <div class="q"><span class="qn">5.2</span>Why not deep learning / why not an LLM?</div>
     <div class="a">With 800 subjects, a deep net would overfit and lose the SHAP-speed explainability we serve per request. LLMs are the wrong tool for a calibrated numeric risk estimate — we use deterministic code where determinism matters and reserve narrative language for the UI copy.</div>
   </div>
   <div class="qa">
-    <div class="q"><span class="qn">4.3</span>Exactly what are the features, and why is CDR excluded?</div>
+    <div class="q"><span class="qn">5.3</span>Exactly what are the features, and why is CDR excluded?</div>
     <div class="a">Ten, spanning all four stages: <code>mmse</code>, <code>mmse_change</code>, <code>age</code>, <code>education_years</code>, <code>sex</code>, <code>ptau181</code>, <code>abeta4240</code>, <code>hippocampal_volume</code>, <code>amyloid_positive</code>, <code>tau_positive</code>. CDR is excluded because it is a <b>clinician rating that effectively encodes the diagnosis</b> — training on it is label leakage and the model would be a parrot, not a predictor.</div>
   </div>
   <div class="qa">
-    <div class="q"><span class="qn">4.4</span>What are the actual numbers?</div>
+    <div class="q"><span class="qn">5.4</span>What are the actual numbers?</div>
     <div class="a">5-fold CV AUC <b>0.842 ± 0.032</b> (the honest estimate), held-out test AUC 0.871, accuracy@0.5 <b>0.750</b> on 160 unseen subjects, majority-class baseline 0.581 — about <b>+17 points over naive guessing</b>. Confusion matrix [[52 15],[25 68]]. Per-class: high-tier precision 0.819 / recall 0.731.</div>
   </div>
   <div class="qa">
-    <div class="q"><span class="qn">4.5</span>Is AUC 0.84 good enough for clinical use?</div>
+    <div class="q"><span class="qn">5.5</span>Is AUC 0.84 good enough for clinical use?</div>
     <div class="a">For <i>prioritization</i>, yes-in-principle; for deployment, not yet — because the data is synthetic. Rank quality is what the product needs (AUC measures exactly that), and 0.84 with a 0.58 baseline is a solid signal. The caveat is stated in the model card, the eval report and the UI footer: synthetic training data, optimistic holdout (early stopping used the test set), real deployment requires local validation.</div>
   </div>
   <div class="qa">
-    <div class="q"><span class="qn">4.6</span>Where do the thresholds 0.7 / 0.4 come from?</div>
+    <div class="q"><span class="qn">5.6</span>Where do the thresholds 0.7 / 0.4 come from?</div>
     <div class="a">They are policy, not model output — deliberately configurable via environment (<code>HIGH_RISK_THRESHOLD</code>/<code>MEDIUM_RISK_THRESHOLD</code>) so a clinical site can calibrate to its own capacity and prevalence. The gauge shows them explicitly; nothing about tiering is hidden inside the model.</div>
   </div>
   <div class="qa">
-    <div class="q"><span class="qn">4.7</span>How does a score change when a test result lands?</div>
+    <div class="q"><span class="qn">5.7</span>How does a score change when a test result lands?</div>
     <div class="a">The result is written into the patient record, the 10-feature vector is recomputed (NaN → measured value), and the served pipeline re-scores immediately — score and tier update live, and the audit trail timestamps the transition. In the verification run an abnormal blood panel moved one subject <b>0.68 → 0.81</b> and its rank <b>#12 → #2</b>.</div>
   </div>
   </section>
   <section class="sec ">
-    <h2><span class="secnum">5</span>Explainability</h2>
+    <h2><span class="secnum">6</span>Explainability</h2>
     
     
   <div class="qa">
-    <div class="q"><span class="qn">5.1</span>Why SHAP?</div>
+    <div class="q"><span class="qn">6.1</span>Why SHAP?</div>
     <div class="a">It is the standard for tree-ensemble attribution with solid theoretical grounding (Shapley values): consistent, locally accurate, and fast via TreeExplainer. It gives both views the product needs — <b>global</b> importance (which features drive the cohort: MMSE 1.068, p-tau181 0.304, Aβ42/40 0.233, age 0.184, hippocampal volume 0.175) and <b>per-patient</b> reason codes with signed contributions.</div>
   </div>
   <div class="qa">
-    <div class="q"><span class="qn">5.2</span>What is the "model default" badge?</div>
+    <div class="q"><span class="qn">6.2</span>What is the "model default" badge?</div>
     <div class="a">The contribution shown for a <b>test that was never ordered</b> — XGBoost routed that NaN down a learned default path. We badge it (dimmed, with a footnote) because presenting a number for an un-measured biomarker would be misleading. The moment the test completes, the measured contribution replaces it. This is a transparency feature judges consistently notice.</div>
   </div>
   <div class="qa">
-    <div class="q"><span class="qn">5.3</span>Can a clinician challenge the score?</div>
+    <div class="q"><span class="qn">6.3</span>Can a clinician challenge the score?</div>
     <div class="a">Yes — that is the design. Every factor is shown with its measured value and signed contribution, grouped by pipeline stage; the clinician can see the score is "driven by cognition, biomarkers normal" and act on judgment. The rule engine additionally refuses to auto-escalate routine follow-ups (409) without an explicit <code>override: true</code>, which is logged.</div>
   </div>
   </section>
   <section class="sec ">
-    <h2><span class="secnum">6</span>Progression Forecaster</h2>
+    <h2><span class="secnum">7</span>Progression Forecaster</h2>
     
     
   <div class="qa">
-    <div class="q"><span class="qn">6.1</span>What exactly does "probability of clinical progression" mean?</div>
+    <div class="q"><span class="qn">7.1</span>What exactly does "probability of clinical progression" mean?</div>
     <div class="a">The model's estimate that the patient crosses into the next diagnostic phase within <b>12 months</b>: CN → MCI, MCI → AD, or AD → severe decline (MMSE &lt; 15). It is trained on the same 10-feature baseline vector, with labels from simulated follow-up trajectories driven by published base rates (CN ~4%/yr, MCI ~12%/yr, AD ~28%/yr) modulated by each patient's biomarker evidence.</div>
   </div>
   <div class="qa">
-    <div class="q"><span class="qn">6.2</span>How accurate is the forecast?</div>
+    <div class="q"><span class="qn">7.2</span>How accurate is the forecast?</div>
     <div class="a">MMSE-delta regressor: test MAE <b>0.611 points</b> (mean-baseline 1.043) — a year-ahead forecast within ~0.6 points; R² 0.679. Conversion classifier: ROC AUC <b>0.770</b>, PR AUC 0.465 against 16.6% prevalence (<b>~2.8× lift</b>), Brier 0.143. The uncertainty is visible: the trajectory chart shows a ± band (~75% interval) around the predicted path.</div>
   </div>
   <div class="qa">
-    <div class="q"><span class="qn">6.3</span>How is the "projected tier" computed? Is it a third model?</div>
+    <div class="q"><span class="qn">7.3</span>How is the "projected tier" computed? Is it a third model?</div>
     <div class="a">No third model — deliberately. The <b>current risk model</b> is re-scored on the projected future vector (age+1, forecast MMSE, carried-forward biomarkers). One consistent model family end-to-end means the "today vs 12-month" comparison on screen is apples-to-apples.</div>
   </div>
   <div class="qa">
-    <div class="q"><span class="qn">6.4</span>What are the stage-score markers on the trajectory chart?</div>
+    <div class="q"><span class="qn">7.4</span>What are the stage-score markers on the trajectory chart?</div>
     <div class="a">The risk score <b>at the moment each stage test was completed</b>: the trained model is re-scored on the patient's data <i>as it existed then</i> (later-stage results masked to unmeasured). You literally watch the score climb as blood → MRI → PET results land — the chart tells the same story the live system performed.</div>
   </div>
   <div class="qa">
-    <div class="q"><span class="qn">6.5</span>Is the forecast a diagnosis or a guarantee?</div>
+    <div class="q"><span class="qn">7.5</span>Is the forecast a diagnosis or a guarantee?</div>
     <div class="a">Neither — the card carries the disclaimer in the UI and the API payload. It is a "nothing changes" projection under standard care; an intervention (e.g. anti-amyloid therapy) would alter the trajectory. And it is trained on simulated trajectories shaped by published dynamics — production would retrain on a real longitudinal cohort.</div>
   </div>
   </section>
   <section class="sec ">
-    <h2><span class="secnum">7</span>Rule Engine & Pipeline Logic</h2>
+    <h2><span class="secnum">8</span>Rule Engine & Pipeline Logic</h2>
     
     
   <div class="qa">
-    <div class="q"><span class="qn">7.1</span>Why a rule engine for escalation instead of another ML model?</div>
+    <div class="q"><span class="qn">8.1</span>Why a rule engine for escalation instead of another ML model?</div>
     <div class="a">Because test-ordering policy must be <b>auditable, defensible and inspectable</b> — a transparent (stage × tier) table beats a second black box deciding who gets an MRI. In a clinical/regulatory context, "the if-statement did it" is a feature. The ML decides <i>how risky</i>; the rules decide <i>what that risk means procedurally</i>.</div>
   </div>
   <div class="qa">
-    <div class="q"><span class="qn">7.2</span>State the escalation matrix.</div>
+    <div class="q"><span class="qn">8.2</span>State the escalation matrix.</div>
     <div class="a"><table>
 <tr><th>Stage</th><th>Low</th><th>Medium</th><th>High</th></tr>
 <tr><td>1 Cognitive</td><td>Re-screen 12 mo</td><td>Blood panel</td><td>Blood panel</td></tr>
@@ -274,91 +347,91 @@
 </table></div>
   </div>
   <div class="qa">
-    <div class="q"><span class="qn">7.3</span>How is the clinician kept in the loop?</div>
+    <div class="q"><span class="qn">8.3</span>How is the clinician kept in the loop?</div>
     <div class="a">Three mechanisms: (1) "Schedule/Return" recommendations are never auto-executed — <code>advance-stage</code> 409s unless <code>override: true</code>; (2) every order, result, re-score and override is timestamped in the reasoning trail (mirrored to Postgres); (3) the autonomous loop is opt-in and can be toggled off mid-run — the system stops, mid-state intact.</div>
   </div>
   <div class="qa">
-    <div class="q"><span class="qn">7.4</span>What happens at Stage 4 / pathway end?</div>
+    <div class="q"><span class="qn">8.4</span>What happens at Stage 4 / pathway end?</div>
     <div class="a">The pipeline reports complete and routes to multi-disciplinary review. In autonomous mode that subject simply drops out of the testable queue — the system never loops tests for completeness's sake.</div>
   </div>
   </section>
   <section class="sec ">
-    <h2><span class="secnum">8</span>Autonomy & Safety</h2>
+    <h2><span class="secnum">9</span>Autonomy & Safety</h2>
     
     
   <div class="qa">
-    <div class="q"><span class="qn">8.1</span>How autonomous is it, really?</div>
+    <div class="q"><span class="qn">9.1</span>How autonomous is it, really?</div>
     <div class="a">Fully, within a hard scope: <code>workup/next</code> ranks the cohort, picks the top subject whose tier indicates a test, orders it, derives a plausible result, re-scores, re-ranks — and reports before/after rank for audit. <code>workup/run</code> batches up to N steps. It stops cleanly when no tier indicates a test. It never prescribes treatment, never diagnoses, and never escalates routine follow-ups without override.</div>
   </div>
   <div class="qa">
-    <div class="q"><span class="qn">8.2</span>What stops it ordering unnecessary tests?</div>
+    <div class="q"><span class="qn">9.2</span>What stops it ordering unnecessary tests?</div>
     <div class="a">The tier gate: a low tier at any stage returns "re-screen in 12 months" — no test indicated, the cascade stops with a 409 and a stated reason. Cost escalates with stage by design (PET only for Stage-3 high tier), so the expensive modalities are naturally rationed by the same table.</div>
   </div>
   <div class="qa">
-    <div class="q"><span class="qn">8.3</span>What if the model is wrong?</div>
+    <div class="q"><span class="qn">9.3</span>What if the model is wrong?</div>
     <div class="a">Bounded blast radius: a wrong score mis-<i>orders</i> the queue — it does not diagnose or treat. The clinician sees the attribution behind every score and can override anything; every automated action is reversible and logged. And the failure mode we care about (missed high-risk patients) is measurable: recall on the held-out set is reported in the eval report rather than buried.</div>
   </div>
   <div class="qa">
-    <div class="q"><span class="qn">8.4</span>Are the "results" real?</div>
+    <div class="q"><span class="qn">9.4</span>Are the "results" real?</div>
     <div class="a">No — ordering a test derives a clinically plausible outcome from the subject's severity profile. That is a declared demo stand-in for a real LIS/RIS integration, and it is what makes the live loop (order → result → re-score → re-rank) demonstrable without a hospital backend.</div>
   </div>
   </section>
   <section class="sec ">
-    <h2><span class="secnum">9</span>Engineering & Architecture</h2>
+    <h2><span class="secnum">10</span>Engineering & Architecture</h2>
     
     
   <div class="qa">
-    <div class="q"><span class="qn">9.1</span>Draw the system.</div>
+    <div class="q"><span class="qn">10.1</span>Draw the system.</div>
     <div class="a"><b>Scripts</b> (Python 3.11: generate/ingest/simulate/train) → <b>artifacts</b> (pipeline.joblib + progression models + model cards, committed) → <b>FastAPI</b> (loads cohort, re-scores everyone at startup via vectorized SHAP batch; rule engine; progression serving; optional Postgres persistence) → <b>React + Vite + Tailwind</b> SPA (pure API client, zero mock data). Single Dockerfile: builds the UI, serves it from the API process on $PORT.</div>
   </div>
   <div class="qa">
-    <div class="q"><span class="qn">9.2</span>How is the model served? Any latency concerns?</div>
+    <div class="q"><span class="qn">10.2</span>How is the model served? Any latency concerns?</div>
     <div class="a">In-process — the sklearn Pipeline + XGBoost joblib loads at startup with a cached SHAP TreeExplainer; per-request scoring is milliseconds and startup re-scores all 800 subjects in one vectorized batch. At this scale a separate model server (MLflow/TorchServe) would be over-engineering; the boundary where that changes is clearly understood.</div>
   </div>
   <div class="qa">
-    <div class="q"><span class="qn">9.3</span>Why FastAPI / React / Postgres?</div>
+    <div class="q"><span class="qn">10.3</span>Why FastAPI / React / Postgres?</div>
     <div class="a">FastAPI: async, Pydantic-validated contracts (which structurally enforce "no diagnosis field"), auto Swagger for judges to poke endpoints live. React+Vite+Tailwind: fast, componentized, product-grade UI with zero hardcoded data — <code>src/api.js</code> is the only data source, so an API outage shows an error, never fake rows. Postgres (optional, active on Railway): relational integrity fits one-row-per-event clinical history; the schema mirrors the blueprint (patients, cognitive_assessments, lab_results, pipeline_history…).</div>
   </div>
   <div class="qa">
-    <div class="q"><span class="qn">9.4</span>What is tested?</div>
+    <div class="q"><span class="qn">10.4</span>What is tested?</div>
     <div class="a">24 pytest cases covering the API contract end-to-end (sorting, filtering, tiering, 404/409/422 semantics, workup loop, progression) plus DB seed foreign-key integrity. The frontend was verified with headless-Chrome E2E probes (navigation round-trips, chart rendering, autonomous banner).</div>
   </div>
   <div class="qa">
-    <div class="q"><span class="qn">9.5</span>How do you handle concurrent edits / race conditions in the demo?</div>
+    <div class="q"><span class="qn">10.5</span>How do you handle concurrent edits / race conditions in the demo?</div>
     <div class="a">Single-writer in-process state for the demo scope; Postgres persistence when configured, with every state change event-logged. Production would move to optimistic locking on patient records — acknowledged as out of demo scope.</div>
   </div>
   </section>
   <section class="sec ">
-    <h2><span class="secnum">10</span>Deployment</h2>
+    <h2><span class="secnum">11</span>Deployment</h2>
     
     
   <div class="qa">
-    <div class="q"><span class="qn">10.1</span>Where is this deployed and how?</div>
+    <div class="q"><span class="qn">11.1</span>Where is this deployed and how?</div>
     <div class="a">Railway, from a single Dockerfile: stage 1 builds the React bundle, stage 2 is a Python 3.11 slim runtime that copies the backend, the committed artifacts, and the built SPA, and serves everything from one uvicorn process on $PORT. Push-to-deploy from GitHub. Postgres via Railway plugin with <code>DATABASE_URL=${{Postgres.DATABASE_PRIVATE_URL}}</code>.</div>
   </div>
   <div class="qa">
-    <div class="q"><span class="qn">10.2</span>Why are model artifacts committed to git? Isn’t that an anti-pattern?</div>
+    <div class="q"><span class="qn">11.2</span>Why are model artifacts committed to git? Isn’t that an anti-pattern?</div>
     <div class="a">It is a deliberate deployment trade-off: committed artifacts mean a fresh container serves the exact evaluated model with <b>zero training at boot</b> — critical for a judged demo's reliability. Datasets are <i>not</i> committed (licensing + reproducibility: the cohorts regenerate from seeded scripts in seconds). Production CI would swap this for artifact registry + version pinning; the eval reports already pin what each artifact should produce.</div>
   </div>
   <div class="qa">
-    <div class="q"><span class="qn">10.3</span>Scaling & security posture?</div>
+    <div class="q"><span class="qn">11.3</span>Scaling & security posture?</div>
     <div class="a">Scaling: the app is stateless per request (state lives in the DB when enabled) — scale horizontally behind a load balancer; model inference is cheap. Security/PHI: this demo holds synthetic subjects only; production would need PHI controls (encryption at rest, access control, audit retention) and is explicitly listed out of scope — we would not ship it otherwise.</div>
   </div>
   </section>
   <section class="sec ">
-    <h2><span class="secnum">11</span>Limitations & Roadmap</h2>
+    <h2><span class="secnum">12</span>Limitations & Roadmap</h2>
     
     
   <div class="qa">
-    <div class="q"><span class="qn">11.1</span>State the limitations — before we find them.</div>
+    <div class="q"><span class="qn">12.1</span>State the limitations — before we find them.</div>
     <div class="a">We lead with them: (1) <b>synthetic training data</b> — methodology demo, not a clinical claim; disclosed in the model card, /model/info, /health. (2) <b>Simulated progression labels</b> shaped by published dynamics, not observed outcomes. (3) <b>Simulated test results</b> stand in for LIS/RIS. (4) <b>Optimistic holdout</b> — early stopping used the test set; CV AUC is the honest number. (5) <b>PET signal thin</b> (amyloid/tau correlate in the generator). (6) <b>No auth/multi-clinician</b>, demo prototype. Every one of these has a named production answer.</div>
   </div>
   <div class="qa">
-    <div class="q"><span class="qn">11.2</span>What would productionization actually take?</div>
+    <div class="q"><span class="qn">12.2</span>What would productionization actually take?</div>
     <div class="a">Retrain on a real registered cohort (ADNI/OASIS-3) with local validation; replace derived results with LIS/RIS integration; auth + role-based access; artifact registry and CI; drift monitoring (score distribution + SHAP stability dashboards); prospective evaluation of the escalation matrix with clinical governance. The architecture is already shaped for this swap — that was the design constraint.</div>
   </div>
   <div class="qa">
-    <div class="q"><span class="qn">11.3</span>What would you build next?</div>
+    <div class="q"><span class="qn">12.3</span>What would you build next?</div>
     <div class="a">The explicit tiebreaker policy surfaced in the UI (score → conversion probability → waiting time → ID); intervention-aware forecasting ("what if anti-amyloid therapy starts now"); cohort-level capacity planning (queue vs scanner slots); and FHIR interoperability so orders/results speak hospital language natively.</div>
   </div>
   </section>
