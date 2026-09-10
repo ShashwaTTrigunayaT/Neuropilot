@@ -372,6 +372,11 @@ const html = `<!doctype html>
   .qa-hero .q { color: var(--teal); }
 
   @page { margin: 16mm 15mm 15mm; }
+  @media screen {
+    body { background: #FAF9F6; }
+    .sheet { max-width: 920px; margin: 0 auto; padding: 32px 28px 64px; }
+    .sec { margin-top: 44px; }
+  }
 </style>
 </head>
 <body>
@@ -415,6 +420,11 @@ const html = `<!doctype html>
     args: ['--no-sandbox', '--disable-gpu', '--font-render-hinting=none'],
   });
   try {
+    // Standalone HTML (screen-friendly) — same content, no Chrome needed to view
+    const htmlOut = path.join(__dirname, '..', 'NeuroPilot_Judge_QA.html');
+    fs.writeFileSync(htmlOut, html.replace('<body>', '<body><div class="sheet">').replace('</body>', '</div></body>'));
+    console.log(`[done] wrote ${htmlOut}`);
+
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.evaluate(() => document.fonts.ready);
