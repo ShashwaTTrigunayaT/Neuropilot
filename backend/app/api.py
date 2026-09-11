@@ -1,8 +1,9 @@
 """REST endpoints (blueprint section 4.6)."""
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Response
 
+from . import fhir
 from . import service
 from .schemas import (
     AdvanceRequest,
@@ -217,3 +218,69 @@ def record_result(patient_id: str, body: ResultRequest) -> dict:
             raise HTTPException(status_code=404, detail="Patient not found")
         raise HTTPException(status_code=409, detail=error)
     return payload
+
+
+# --------------------------------------------------------------------------- #
+# FHIR R4 export surface (Phase 1 of FHIR_INTEGRATION.md -- read-only)
+#
+# Content type is application/fhir+json per the FHIR spec. Model output is
+# carried as RiskAssessment (decision support), NEVER as Condition/diagnosis
+# -- the API-wide no-diagnosis contract survives the interoperability layer.
+# --------------------------------------------------------------------------- #
+def _json_fhir(payload: dict) -> Response:
+    from fastapi.responses import JSONResponse
+
+    return JSONResponse(content=payload, media_type=fhir.FHIR_JSON)
+
+
+@router.get("/fhir/metadata", tags=["fhir"])
+def fhir_metadata() -> Response:
+    """FHIR CapabilityStatement: what this export surface serves (R4 4.0.1)."""
+    return _json_fhir(fhir.capability_statement())
+
+
+@router.get("/fhir/Patient", tags=["fhir"])
+def fhir_patient_search(count: int = Query(default=50, ge=1, le=200), page: int = Query(default=1, ge=1)) -> Response:
+    """Whole-cohort Patient searchset (ranked by risk score, NeuroPilot's view)."""
+    return _json_fhir(fhir.search_patients(count=count, page=page))
+
+
+@router.get("/fhir/Patient/{patient_id}/$everything", tags=["fhir"])
+def fhir_patient_everything(patient_id: str) -> Response:
+    """Patient/$everything: complete export (demographics, Observations,
+    RiskAssessment, AuditEvents) as one collection Bundle."""
+    record = service.PATIENTS.get(patient_id)
+    if record is None:
+        return _json_fhir(
+            fhir._operation_outcome("error", "not-found", f"Patient/{patient_id} is not served by NeuroPilot")
+        )
+    return _json_fhir(fhir.everything_bundle(record))
+
+
+@router.get("/fhir/Patient/{patient_id}", tags=["fhir"])
+def fhir_patient_read(patient_id: str) -> Response:
+    record = service.PATIENTS.get(patient_id)
+    if record is None:
+        return _json_fhir(fhir._operation_outcome("error", "not-found", f"Patient/{patient_id} not found"))
+    return _json_fhir(fhir.patient_resource(record))
+
+
+@router.get("/fhir/Observation", tags=["fhir"])
+def fhir_observation_search(patient: str | None = Query(default=None), count: int = Query(default=200, ge=1, le=500)) -> Response:
+    """Observation searchset (MMSE 72106-8, p-tau181, Aβ42/40 41027-4, imaging/PET)."""
+    pid = patient.rsplit("/", 1)[-1] if patient else None  # accepts 'Patient/ADNI-0001' or bare id
+    if pid and service.PATIENTS.get(pid) is None:
+        return _json_fhir(fhir._operation_outcome("error", "not-found", f"Patient/{pid} not found"))
+    return _json_fhir(fhir.search_observations(patient_id=pid, count=count))
+
+
+@router.get("/fhir/RiskAssessment", tags=["fhir"])
+def fhir_risk_assessment_search(patient: str | None = Query(default=None), count: int = Query(default=100, ge=1, le=500)) -> Response:
+    """RiskAssessment searchset: score + tier + SHAP rationale per patient.
+
+    This is the standards-native home for NeuroPilot's output -- decision
+    support by definition, never a Condition."""
+    pid = patient.rsplit("/", 1)[-1] if patient else None
+    if pid and service.PATIENTS.get(pid) is None:
+        return _json_fhir(fhir._operation_outcome("error", "not-found", f"Patient/{pid} not found"))
+    return _json_fhir(fhir.search_risk_assessments(patient_id=pid, count=count))
