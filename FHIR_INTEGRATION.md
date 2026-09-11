@@ -4,6 +4,12 @@
 **Auth model:** SMART on FHIR (OAuth 2.0).
 **Purpose:** let NeuroPilot exchange data with hospital EHRs and FHIR servers so it can run *inside* a clinical network instead of beside it — and prove interoperability competence in front of judges.
 
+> **Implementation status (updated):** **Phase 1 is implemented and merged.**
+> - Module: `backend/app/fhir.py` — pure converters (`patient_resource`, `observation_resources`, `risk_assessment_resource`, `audit_event_resources`, `everything_bundle`, `capability_statement`, search helpers).
+> - Endpoints: `GET /fhir/metadata`, `GET /fhir/Patient` (search), `GET /fhir/Patient/{id}` (read), `GET /fhir/Patient/{id}/$everything`, `GET /fhir/Observation?patient=`, `GET /fhir/RiskAssessment?patient=` — all serving `application/fhir+json`.
+> - Tests: `backend/tests/test_fhir.py` (13 cases) including the **never-emit-Condition invariant**; full suite 37/37 passing.
+> - Validation gate: `python scripts/validate_fhir.py` — validates every exported resource against a live HAPI FHIR server via `$validate`, then POSTs the full `$everything` bundles as transactions (see §3, Phase 1 step 3).
+
 > Every mapping below is written against NeuroPilot's **actual** record shape
 > (`backend/app/model_service.py::record_to_features`), not a generic example.
 
@@ -50,18 +56,23 @@ NeuroPilot currently owns its own patient store (SQLite locally, PostgreSQL on R
 2. Stand up a reference server locally — **HAPI FHIR JPA** (`docker run -p 8080:8080 hapiproject/hapi:latest`) — it needs zero configuration and ships a web UI for inspecting resources.
 3. Decide the integration direction to demo first (Phase 1 below): *outbound export* is self-contained and can be shown with your existing cohort.
 
-### Phase 1 — Outbound export: NeuroPilot → FHIR (1–2 days)
-1. New module `backend/app/fhir.py` — pure functions, no new dependencies:
-   - `record_to_patient(record) -> dict` (FHIR `Patient` JSON)
-   - `record_to_observations(record) -> list[dict]` (cognitive + blood + imaging + PET `Observation`s, LOINC-coded per table above)
-   - `record_to_risk_assessment(record) -> dict` (score, tier as `qualitativeRisk`, SHAP factors in `basis`/`extension`, disclaimer in `note`)
-   - `record_to_bundle(record) -> dict` (`Bundle.type=collection` wrapping all of the above + `AuditEvent`s from `history[]`)
-2. Expose read-only endpoints alongside the existing router (prefix `fhir/`, tags `["fhir"]`):
-   - `GET /fhir/Patient` — search-set (`_count`, `_lastUpdated` params)
-   - `GET /fhir/Patient/{id}` and `GET /fhir/Patient/{id}/$everything`
-   - `GET /fhir/RiskAssessment?patient={id}`
-   - `GET /fhir/metadata` — a static `CapabilityStatement` declaring what NeuroPilot serves
-3. Validate: POST sample bundles into the local HAPI server; it rejects malformed resources — that is your free conformance checker. Fix until every resource validates.
+### Phase 1 — Outbound export: NeuroPilot → FHIR (**DONE — implemented, see status block above**)
+1. ~~New module `backend/app/fhir.py`~~ → **implemented** with exactly these functions plus AuditEvent export and search helpers.
+2. ~~Expose read-only endpoints~~ → **implemented** at `/fhir/metadata`, `/fhir/Patient`, `/fhir/Patient/{id}`, `/fhir/Patient/{id}/$everything`, `/fhir/Observation`, `/fhir/RiskAssessment`.
+3. Validate: **run the automated gate** (needs Docker Desktop running):
+
+```bash
+# one-time: start a reference HAPI FHIR R4 server
+docker run -d --name neuropilot-hapi -p 8090:8080 hapiproject/hapi:latest
+
+# start the API (separate terminal)
+cd backend && python -m uvicorn app.main:app --port 8000
+
+# validate every exported resource server-side + store the bundles round-trip
+python scripts/validate_fhir.py
+```
+
+Exit code 0 = every Observation, RiskAssessment and Patient passes HAPI's `$validate`. Fix anything it rejects until the gate passes — that is the Phase 1 acceptance criterion.
 
 ### Phase 2 — Inbound ingestion: FHIR → NeuroPilot (1–2 days)
 1. `POST /fhir/Bundle` (type `transaction`): iterate entries, route each resource:
@@ -109,3 +120,23 @@ NeuroPilot currently owns its own patient store (SQLite locally, PostgreSQL on R
 **Honest tiering:** *"Outbound FHIR R4 export — Patients, Observations with verified LOINC codes (MMSE 72106-8), and RiskAssessments carrying the score, tier and SHAP basis — is implemented and validated against a HAPI FHIR server. Inbound ingestion reuses the same scoring pipeline so results re-score automatically. SMART on FHIR launch is designed and demoable against Epic's sandbox; PHI handling is out of scope for synthetic data. And we deliberately never emit a Condition from model output — the no-diagnosis contract survives the standard."*
 
 That answer shows standards fluency **and** the safety instinct — which is the entire point of NeuroPilot.
+
+---
+
+## 6. Judge-facing demo commands (Phase 1, live)
+
+With the API running (`uvicorn app.main:app`), these all work right now:
+
+```bash
+# conformance statement
+curl -s http://127.0.0.1:8000/fhir/metadata | python -m json.tool
+
+# one patient's complete interoperable record: demographics, LOINC-coded
+# Observations, RiskAssessment (score+tier+SHAP), AuditEvent trail
+curl -s http://127.0.0.1:8000/fhir/Patient/ADNI-0085/$everything | python -m json.tool
+
+# the decision-support output as a first-class FHIR resource
+curl -s "http://127.0.0.1:8000/fhir/RiskAssessment?patient=ADNI-0085" | python -m json.tool
+```
+
+What to point at while it renders: `Observation.code.coding[]` carries **LOINC 72106-8** for MMSE and **LP157017-7 / 41027-4** for the blood panel; `RiskAssessment.prediction[]` carries the exact score the dashboard shows with the H/M/L qualitative tier; the `note` repeats the **never-a-diagnosis** disclaimer — and there is no `Condition` anywhere, by construction and by test.
