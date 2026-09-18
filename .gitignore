@@ -16,6 +16,16 @@ data/processed/*
 !data/processed/risk_scores.json
 !data/processed/.gitkeep
 
+# ---- Restricted datasets (ADNI / OASIS Data Use Agreements) ----
+# Never commit these: ADNI is access-controlled under a DUA, not redistributable.
+ADNI DATA/
+ADNI_DATA/
+adni*/
+!scripts/generate_adni_like*.py
+*.csv
+!artifacts/*.csv
+!data/raw/README.md
+
 # ---- ML artifacts for deployment ----
 artifacts/*
 !artifacts/pipeline.joblib
