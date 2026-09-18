@@ -31,7 +31,8 @@ FILES = {
               ["RID", "PTID", "VISCODE", "EXAMDATE", "pT217_F", "AB42_F", "AB40_F",
                "AB42_AB40_F", "NfL_Q", "GFAP_Q"], "EXAMDATE"),
     "mri": ("UCSFFSX7_17Sep2026.csv",
-            ["RID", "PTID", "VISCODE", "EXAMDATE", "OVERALLQC", "ST29SV", "ST88SV"],
+            ["RID", "PTID", "VISCODE", "EXAMDATE", "STATUS", "OVERALLQC",
+             "ST10CV", "ST29SV", "ST88SV"],
             "EXAMDATE"),
     "pet_amyloid": ("UCBERKELEY_AMY_6MM_17Sep2026.csv",
                     ["RID", "PTID", "VISCODE", "SCANDATE", "qc_flag", "TRACER",
@@ -84,6 +85,87 @@ def nearest_match(subject_df: pd.DataFrame, cog: pd.DataFrame, tol: int) -> pd.D
             matches.append(pd.NaT)
             gaps.append(pd.NA)
     return cog.assign(match_date=matches, gap_days=gaps)
+
+
+# model feature -> (modality, source column)
+FEATURE_SPEC = [
+    ("mmse", "cognition", "MMSCORE"),
+    ("mmse_prior", "cognition", "__prev__"),
+    ("age", "demographics", "age"),
+    ("sex", "demographics", "PTGENDER"),
+    ("education_years", "demographics", "PTEDUCAT"),
+    ("hippocampus_left", "mri", "ST29SV"),
+    ("hippocampus_right", "mri", "ST88SV"),
+    ("icv", "mri", "ST10CV"),
+    ("ptau217", "blood", "pT217_F"),
+    ("abeta42_ab40", "blood", "AB42_AB40_F"),
+    ("nfl", "blood", "NfL_Q"),
+    ("gfap", "blood", "GFAP_Q"),
+    ("centiloids", "pet_amyloid", "CENTILOIDS"),
+    ("amyloid_status", "pet_amyloid", "AMYLOID_STATUS"),
+    ("tau_meta_temporal", "pet_tau", "META_TEMPORAL_SUVR"),
+    ("diagnosis", "diagnosis", "DIAGNOSIS"),
+]
+
+MEASURE_MODS = [
+    ("blood", ["pT217_F", "AB42_AB40_F", "NfL_Q", "GFAP_Q"]),
+    ("mri", ["ST10CV", "ST29SV", "ST88SV"]),
+    ("pet_amyloid", ["CENTILOIDS", "AMYLOID_STATUS", "SUMMARY_SUVR"]),
+    ("pet_tau", ["META_TEMPORAL_SUVR"]),
+    ("diagnosis", ["DIAGNOSIS"]),
+]
+
+
+def build_wide(frames: dict[str, pd.DataFrame], tol: int = TOLERANCE_DAYS) -> pd.DataFrame:
+    """One row per scored MMSE visit, with the nearest value of every other
+    modality attached (NaN when nothing falls inside `tol`)."""
+    cog = frames["cognition"].copy()
+    cog["date"] = pd.to_datetime(cog["VISDATE"], errors="coerce")
+    cog["MMSCORE"] = pd.to_numeric(cog["MMSCORE"], errors="coerce")
+    cog = cog[cog["MMSCORE"].notna() & (cog["MMSCORE"] >= 0) & cog["date"].notna()]
+    cog = cog[["RID", "date", "MMSCORE"]].sort_values(["RID", "date"])
+    cog["year"] = cog["date"].dt.year
+
+    for mod, cols in MEASURE_MODS:
+        raw = frames.get(mod)
+        if raw is None or raw.empty:
+            continue
+        o = raw.copy()
+        o["date"] = pd.to_datetime(o[FILES[mod][2]], errors="coerce")
+        o = o[o["date"].notna() & o["RID"].notna()]
+        cols = [c for c in cols if c in o.columns]
+        if not cols:
+            continue
+        o = o[["RID", "date"] + cols].sort_values("date")
+        for c in cols:
+            o[c] = pd.to_numeric(o[c], errors="coerce")
+        by_rid = {int(r): g for r, g in o.groupby("RID")}
+        collected = {c: [] for c in cols}
+        for rid, d in zip(cog["RID"], cog["date"]):
+            g = by_rid.get(int(rid))
+            if g is None or g.empty:
+                for c in cols:
+                    collected[c].append(pd.NA)
+                continue
+            idx = (g["date"] - d).abs().idxmin()
+            in_window = abs((g.loc[idx, "date"] - d).days) <= tol
+            for c in cols:
+                collected[c].append(g.loc[idx, c] if in_window else pd.NA)
+        for c in cols:
+            cog[c] = pd.Series(collected[c], index=cog.index)
+
+    # subject-level demographics
+    demo = frames.get("demographics")
+    if demo is not None and not demo.empty:
+        d = demo.drop_duplicates(subset=["RID"]).set_index("RID")
+        cog["PTGENDER"] = cog["RID"].map(d.get("PTGENDER"))
+        cog["PTEDUCAT"] = pd.to_numeric(cog["RID"].map(d.get("PTEDUCAT")), errors="coerce")
+        # PTDOBYY is a date string (e.g. "1931-01-01"), not an integer year.
+        dob = pd.to_datetime(cog["RID"].map(d.get("PTDOBYY")), errors="coerce")
+        cog["age"] = pd.to_numeric(cog["year"], errors="coerce") - dob.dt.year
+
+    cog["__prev__"] = cog.groupby("RID")["MMSCORE"].shift(1)
+    return cog
 
 
 def main() -> int:
@@ -211,6 +293,43 @@ def main() -> int:
         print(f"\n  of those {len(all_four):,}, with >=2 scored MMSE visits: "
               f"{int((reps >= 2).sum()):,}")
         print(f"  mean scored visits per such subject: {reps.mean():.1f}")
+
+    # ---- are the data points we actually serve populated? ----
+    print("\n" + "=" * 72)
+    print("Feature completeness on aligned, scored MMSE visits")
+    print("=" * 72)
+    wide = build_wide(frames)
+    total = len(wide)
+    print(f"  rows (scored MMSE visits): {total:,} across {wide['RID'].nunique():,} subjects\n")
+    print(f"  {'feature':<20}{'source':<14}{'present':>10}{'%':>8}")
+    for feat, mod, col in FEATURE_SPEC:
+        if col not in wide.columns:
+            print(f"  {feat:<20}{mod:<14}{'MISSING':>10}{'-':>8}")
+            continue
+        present = int(wide[col].notna().sum())
+        print(f"  {feat:<20}{mod:<14}{present:>10,}{100 * present / total:>7.1f}%")
+
+    have_core = wide[["MMSCORE", "age", "PTGENDER"]].notna().all(axis=1)
+    have_all_mri = wide[["ST29SV", "ST88SV", "ST10CV"]].notna().all(axis=1)
+    have_blood = wide[["pT217_F", "AB42_AB40_F", "NfL_Q", "GFAP_Q"]].notna().all(axis=1)
+    have_all_four = (have_all_mri & have_blood & wide["CENTILOIDS"].notna()
+                     & wide[["DIAGNOSIS", "age", "PTGENDER"]].notna().all(axis=1))
+    print(f"\n  rows with cognition + age + sex            : {int(have_core.sum()):,}")
+    print(f"  rows with full MRI (hippo + ICV)           : {int(have_all_mri.sum()):,}")
+    print(f"  rows with full blood panel                 : {int(have_blood.sum()):,}")
+    print(f"  rows with ALL FOUR + label + age + sex     : {int(have_all_four.sum()):,}")
+    print(f"  such subjects                              : "
+          f"{wide.loc[have_all_four, 'RID'].nunique():,}")
+    if have_all_four.any():
+        lbl = wide.loc[have_all_four, "DIAGNOSIS"].value_counts()
+        print(f"  their label mix (1=CN, 2=MCI, 3=Dementia)  : "
+              f"{ {int(k): int(v) for k, v in lbl.items()} }")
+        sub = wide.loc[have_all_four]
+        print(f"  of those rows, tau PET also present        : "
+              f"{int(sub['META_TEMPORAL_SUVR'].notna().sum()):,}"
+              f"  ({sub.loc[sub['META_TEMPORAL_SUVR'].notna(), 'RID'].nunique():,} subjects)")
+        print(f"  rows usable for mmse_change (prior visit)  : "
+              f"{int((have_all_four & wide['__prev__'].notna()).sum()):,}")
 
     print("\n[done] ADNI data copy is read-only; nothing written.")
     return 0

@@ -62,6 +62,33 @@ Their labelled visits split CN 3,880 / MCI 2,580 / Dementia 879, with a median o
 **4** labelled visits per subject (max 21) — so real conversion labels exist, no
 simulation required.
 
+### 3.1 Per-feature completeness on aligned visits
+
+Across all 14,746 scored MMSE visits in the drop:
+
+| Feature | Source | Present | % |
+|---|---|---|---|
+| `mmse` | MMSCORE | 14,746 | 100.0% |
+| `age` | PTDOBYY vs visit year | 14,681 | 99.6% |
+| `sex` | PTGENDER | 14,682 | 99.6% |
+| `education_years` | PTEDUCAT | 14,675 | 99.5% |
+| `diagnosis` | DIAGNOSIS | 13,414 | 91.0% |
+| `icv` | ST10CV | 10,744 | 72.9% |
+| `hippocampus_left` / `_right` | ST29SV / ST88SV | 10,604 | 71.9% |
+| `mmse_prior` | previous scored MMSE | 10,097 | 68.5% |
+| `centiloids` | amyloid PET | 5,163 | 35.0% |
+| `amyloid_status` | amyloid PET | 5,089 | 34.5% |
+| `ptau217` `abeta42_ab40` `nfl` `gfap` | plasma panel | 2,409 | 16.3% |
+| `tau_meta_temporal` | tau PET | 2,341 | 15.9% |
+
+**The number to quote: 1,035 subjects / 1,238 visits carry the complete vector**
+(cognition + age + sex + hippocampus + ICV + plasma panel + Centiloids + label)
+**at a single aligned visit** — label mix CN 717 / MCI 384 / Dementia 137.
+Of those, **899 subjects also have tau PET**. 418 of the 1,238 visits additionally
+have a prior scored MMSE, so `mmse_change` is a real value there; on the rest it is
+NaN because that visit *is* the subject's baseline — which is honest, and XGBoost
+handles it natively.
+
 ## 4. Mapping to the served feature vector
 
 | Model feature | Real ADNI source | Status |
@@ -86,6 +113,9 @@ simulation required.
    before building the ingester.
 2. **`MMDATE` is not a date** — it is a 0/1 flag (as are `MMYEAR`/`MMMONTH`/`MMDAY`).
    Use **`VISDATE`** (14,903 non-null) for all MMSE timing.
+2b. **`PTDOBYY` is a date string, not a year** (`"1931-01-01"`). `to_numeric` on
+   it silently yields all-NaN, which zeroed out `age` on the first pass of the
+   audit. Parse it as a date and take `.dt.year`.
 3. **`MMSCORE = -1` sentinel** for "not administered" (147 rows). Must filter
    `MMSCORE >= 0` or the model learns a fake cognitive score.
 4. **`OVERALLQC` is empty for 11,135 of 12,289 MRI rows** — QC flags are largely
@@ -111,6 +141,11 @@ plus real OASIS-1. With this drop you can serve a **real 1,420-subject cohort** 
 genuine diagnosis labels, genuine conversion events, all four modalities — which
 removes the "it's synthetic" caveat that was the biggest honest limitation in the
 README and the judge Q&A.
+
+**Estimated training cohort:** ~1,035 subjects with the full vector at baseline
+(1,420 with all four modalities somewhere), real 1/2/3 labels, and genuine
+longitudinal conversions — comfortably more than the 800 synthetic subjects the
+app serves today, and with no fabrication anywhere.
 
 **Suggested build order**
 1. `scripts/ingest_adni.py` — the 7-file → unified record join (nearest-visit,
