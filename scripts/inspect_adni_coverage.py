@@ -40,10 +40,31 @@ FILES = {
     "pet_tau": ("UCBERKELEY_TAU_6MM_17Sep2026.csv",
                 ["RID", "PTID", "VISCODE", "SCANDATE", "qc_flag", "TRACER",
                  "META_TEMPORAL_SUVR"], "SCANDATE"),
+    # --- added in the second drop (17 Sep 2026) ---
+    "neuropsych_adas": ("ADAS_17Sep2026.csv",
+                        ["RID", "PTID", "VISCODE", "VISDATE", "DONE", "TOTSCORE",
+                         "TOTAL13"], "VISDATE"),
+    "neuropsych_cdr": ("CDR_17Sep2026.csv",
+                       ["RID", "PTID", "VISCODE", "VISDATE", "CDGLOBAL", "CDRSB",
+                        "CDMEMORY"], "VISDATE"),
+    "neuropsych_faq": ("FAQ_17Sep2026.csv",
+                       ["RID", "PTID", "VISCODE", "VISDATE", "FAQTOTAL"], "VISDATE"),
+    "apoe": ("APOERES_17Sep2026.csv",
+             ["RID", "PTID", "VISCODE", "GENOTYPE", "APTESTDT"], None),
+    "mri_qc": ("MRIQC_17Sep2026.csv",
+               ["ParticipantID", "VISCODE2", "StudyDate", "MRIProtocolPhase",
+                "ScannerManufacturer", "MagneticFieldStrength", "SeriesDescription"],
+               "StudyDate"),
+    "dictionary": ("DATADIC_17Sep2026.csv",
+                   ["CRFNAME", "TBLNAME", "FLDNAME", "TEXT", "UNITS", "TYPE"], None),
 }
 
 # modalities we try to co-locate around a cognitive visit
-ALIGN = ["blood", "mri", "pet_amyloid", "pet_tau"]
+ALIGN = ["blood", "mri", "pet_amyloid", "pet_tau", "neuropsych_adas",
+         "neuropsych_cdr", "neuropsych_faq"]
+
+# the four measure families the served feature vector actually needs
+CORE_ALIGN = ["blood", "mri", "pet_amyloid", "pet_tau"]
 TOLERANCE_DAYS = 183  # +/- 6 months
 
 
@@ -105,6 +126,12 @@ FEATURE_SPEC = [
     ("amyloid_status", "pet_amyloid", "AMYLOID_STATUS"),
     ("tau_meta_temporal", "pet_tau", "META_TEMPORAL_SUVR"),
     ("diagnosis", "diagnosis", "DIAGNOSIS"),
+    # --- second drop ---
+    ("adas_cog_total", "neuropsych_adas", "TOTSCORE"),
+    ("cdr_sb", "neuropsych_cdr", "CDRSB"),
+    ("cdr_global", "neuropsych_cdr", "CDGLOBAL"),
+    ("faq_total", "neuropsych_faq", "FAQTOTAL"),
+    ("apoe_genotype", "apoe", "GENOTYPE"),
 ]
 
 MEASURE_MODS = [
@@ -113,6 +140,9 @@ MEASURE_MODS = [
     ("pet_amyloid", ["CENTILOIDS", "AMYLOID_STATUS", "SUMMARY_SUVR"]),
     ("pet_tau", ["META_TEMPORAL_SUVR"]),
     ("diagnosis", ["DIAGNOSIS"]),
+    ("neuropsych_adas", ["TOTSCORE", "TOTAL13"]),
+    ("neuropsych_cdr", ["CDGLOBAL", "CDRSB"]),
+    ("neuropsych_faq", ["FAQTOTAL"]),
 ]
 
 
@@ -164,6 +194,14 @@ def build_wide(frames: dict[str, pd.DataFrame], tol: int = TOLERANCE_DAYS) -> pd
         dob = pd.to_datetime(cog["RID"].map(d.get("PTDOBYY")), errors="coerce")
         cog["age"] = pd.to_numeric(cog["year"], errors="coerce") - dob.dt.year
 
+    # subject-level genotype (one row per subject; APOERES has a row per RID)
+    apoe = frames.get("apoe")
+    if apoe is not None and not apoe.empty and "GENOTYPE" in apoe.columns:
+        a = apoe.dropna(subset=["GENOTYPE"]).drop_duplicates(subset=["RID"])
+        cog["GENOTYPE"] = cog["RID"].map(a.set_index("RID")["GENOTYPE"])
+        # e4 carrier = any allele 4 (2/4, 3/4, 4/4) -- the AD risk allele
+        cog["apoe_e4"] = cog["GENOTYPE"].astype("string").str.contains("4").astype("Int64")
+
     cog["__prev__"] = cog.groupby("RID")["MMSCORE"].shift(1)
     return cog
 
@@ -185,8 +223,10 @@ def main() -> int:
             continue
         print(f"\n[{name}] {fname}")
         print(f"  rows                 : {len(df):,}")
-        print(f"  unique RID           : {df['RID'].nunique():,}")
-        print(f"  unique PTID          : {df['PTID'].nunique():,}")
+        if "RID" in df.columns:
+            print(f"  unique RID           : {df['RID'].nunique():,}")
+        if "PTID" in df.columns:
+            print(f"  unique PTID          : {df['PTID'].nunique():,}")
         if "VISCODE" in df.columns:
             top = df["VISCODE"].value_counts().head(6)
             print(f"  visits (top)         : {dict(top)}")
@@ -210,14 +250,58 @@ def main() -> int:
             print(f"  TRACER values        : {dict(df['TRACER'].value_counts(dropna=False))}")
             if "AMYLOID_STATUS" in df.columns:
                 print(f"  AMYLOID_STATUS       : {dict(df['AMYLOID_STATUS'].value_counts(dropna=False))}")
+        if name == "neuropsych_adas":
+            for c in ("TOTSCORE", "TOTAL13"):
+                if c in df.columns:
+                    v = pd.to_numeric(df[c], errors="coerce")
+                    print(f"  {c:<14} non-null: {v.notna().sum():,}  mean {v.mean():.2f}")
+        if name == "neuropsych_cdr":
+            for c in ("CDGLOBAL", "CDRSB"):
+                if c in df.columns:
+                    v = pd.to_numeric(df[c], errors="coerce")
+                    print(f"  {c:<14} non-null: {v.notna().sum():,}  mean {v.mean():.2f}")
+        if name == "neuropsych_faq" and "FAQTOTAL" in df.columns:
+            v = pd.to_numeric(df["FAQTOTAL"], errors="coerce")
+            print(f"  FAQTOTAL       non-null: {v.notna().sum():,}  mean {v.mean():.2f}")
+        if name == "apoe" and "GENOTYPE" in df.columns:
+            g = df["GENOTYPE"].value_counts(dropna=False)
+            print(f"  GENOTYPE             : { {str(k): int(v) for k, v in g.items()} }")
+            e4 = g.reindex(["2/4", "3/4", "4/4"]).sum() if "2/4" in g.index else (
+                g[g.index.astype(str).str.contains("4", na=False)].sum())
+            tot = int(g.sum())
+            print(f"  e4 carriers          : {int(e4):,} / {tot:,} "
+                  f"({100 * int(e4) / max(tot, 1):.0f}%)")
+        if name == "mri_qc":
+            print(f"  join key             : ParticipantID == PTID (no RID column)")
+            if "MagneticFieldStrength" in df.columns:
+                print(f"  field strength       : "
+                      f"{ {str(k): int(v) for k, v in df['MagneticFieldStrength'].value_counts(dropna=False).items()} }")
+            print(f"  NOTE: acquisition inventory only -- no SNR/CNR quality score")
+        if name == "dictionary":
+            print(f"  dictionary tables    : {df['TBLNAME'].nunique():,}")
+            for code in ("ST10CV", "ST29SV", "ST88SV"):
+                hit = df[df["FLDNAME"] == code]
+                txt = hit["TEXT"].iloc[0] if len(hit) else "(not described)"
+                print(f"  {code:<8} -> {txt}")
 
     # ---- cross-modal coverage on RID ----
     print("\n" + "=" * 72)
     print("Cross-modal coverage (unique RID with >=1 measurement)")
     print("=" * 72)
-    sets = {k: set(v["RID"].dropna().astype(int)) for k, v in frames.items() if not v.empty}
+    sets = {k: set(v["RID"].dropna().astype(int))
+            for k, v in frames.items()
+            if not v.empty and "RID" in v.columns}
     for k, s in sets.items():
-        print(f"  {k:<14}: {len(s):>6,} subjects")
+        print(f"  {k:<18}: {len(s):>6,} subjects")
+
+    # MRIQC / DATADIC carry no RID -- report them separately
+    q = frames.get("mri_qc")
+    if q is not None and not q.empty and "ParticipantID" in q.columns:
+        print(f"  {'mri_qc (PTID)':<18}: {q['ParticipantID'].nunique():>6,} subjects "
+              f"({len(q):,} series)")
+    dd = frames.get("dictionary")
+    if dd is not None and not dd.empty:
+        print(f"  {'dictionary':<18}: {len(dd):>6,} field definitions")
 
     # ---- temporal alignment feasibility ----
     print("\n" + "=" * 72)
@@ -256,13 +340,24 @@ def main() -> int:
             aligned[mod] = pd.DataFrame({"RID": [r for r, _, _ in pairs]})
             print(f"  {mod:<14}: {matched_subjects:>5,} subjects  {matched_visits:>6,} aligned visits")
 
-        common = None
-        for mod in ALIGN:
-            if mod in aligned:
-                s = set(aligned[mod]["RID"].dropna().astype(int))
-                common = s if common is None else (common & s)
-        if common is not None:
-            print(f"\n  all four aligned to a scored MMSE visit  : {len(common):,} subjects")
+        def _inter(mods: list[str]) -> int | None:
+            present = [m for m in mods if m in aligned]
+            if not present:
+                return None
+            s = set(aligned[present[0]]["RID"].dropna().astype(int))
+            for m in present[1:]:
+                s &= set(aligned[m]["RID"].dropna().astype(int))
+            return len(s)
+
+        core = _inter(CORE_ALIGN)
+        if core is not None:
+            print(f"\n  all four CORE aligned to a scored MMSE visit : {core:,} subjects")
+        every = _inter(ALIGN)
+        if every is not None:
+            print(f"  all seven incl. neuropsych aligned           : {every:,} subjects")
+        core_np = _inter(CORE_ALIGN + ["neuropsych_adas", "neuropsych_cdr", "neuropsych_faq"])
+        if core_np is not None:
+            print(f"  all four core + full neuropsych aligned      : {core_np:,} subjects")
 
     def n(label: str, combo: list[str]) -> None:
         if not all(c in sets for c in combo):
@@ -283,6 +378,17 @@ def main() -> int:
     n("ALL FIVE incl. tau PET", ["cognition", "blood", "mri", "pet_amyloid", "pet_tau"])
     n("ALL FIVE incl. tau + dx + demog",
       ["cognition", "blood", "mri", "pet_amyloid", "pet_tau", "diagnosis", "demographics"])
+    n("cognition + ADAS", ["cognition", "neuropsych_adas"])
+    n("cognition + CDR", ["cognition", "neuropsych_cdr"])
+    n("cognition + FAQ", ["cognition", "neuropsych_faq"])
+    n("cognition + APOE", ["cognition", "apoe"])
+    n("+ APOE on ALL FOUR cohort", ["cognition", "blood", "mri", "pet_amyloid", "apoe"])
+    n("+ full neuropsych on ALL FOUR",
+      ["cognition", "blood", "mri", "pet_amyloid", "neuropsych_adas", "neuropsych_cdr",
+       "neuropsych_faq"])
+    n("+ neuropsych + APOE on ALL FOUR",
+      ["cognition", "blood", "mri", "pet_amyloid", "neuropsych_adas", "neuropsych_cdr",
+       "neuropsych_faq", "apoe"])
 
     all_four = set.intersection(sets["cognition"], sets["blood"], sets["mri"], sets["pet_amyloid"])
     if all_four:
