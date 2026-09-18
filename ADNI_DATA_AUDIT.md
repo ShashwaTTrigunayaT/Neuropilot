@@ -149,6 +149,49 @@ handles it natively.
 CDR is still valuable as a **concordance reference** — it lets you check whether the
 model's tier agrees with a clinician's global staging without training on it.
 
+## 4b. Synthetic vs real — features that did not exist before this drop
+
+Diffed against `scripts/generate_adni_like_v2.py` (what the synthetic cohort
+carries) and the served 10-feature vector (`artifacts/model_meta.json`).
+
+**Genuinely new features (no synthetic counterpart) — addable now:**
+
+| New feature | Source column | Coverage on aligned visits | Why it matters |
+|---|---|---|---|
+| `apoe_e4` | `APOERES.GENOTYPE` → carrier flag | 13,248 (89.8%) | Strongest known AD genetic risk factor; synthetic had only a crude `family_history` boolean |
+| `nfl` | `NfL_Q` (pg/mL) | 2,409 (16.3%) | Neurodegeneration blood marker — an *active* axonal-injury axis; synthetic blood had no neurodegeneration measure |
+| `gfap` | `GFAP_Q` (pg/mL) | 2,409 (16.3%) | Astrocyte activation — reactive-gliosis axis, independent of amyloid/tau |
+| `faq_total` | `FAQTOTAL` (0–30) | 12,786 (86.7%) | Functional independence — the dimension MMSE cannot see; synthetic had nothing functional |
+| `adas_cog_13` | `ADAS.TOTAL13` (0–85) | 12,901 (87.5%) | Second cognitive scale with more dynamic range than MMSE (ceiling-free in early decline) |
+
+**Strict upgrades of existing features (same slot, richer quantity):**
+
+| Served synthetic feature | Real replacement | Why richer |
+|---|---|---|
+| `hippocampal_volume` (single cm³) | `ST29SV` + `ST88SV` + `ST10CV` → ICV-normalised bilateral ratio | Asymmetry becomes visible; head-size confound removed |
+| `amyloid_positive` (binary) | `CENTILOIDS` (continuous) | Degree of amyloid burden, not just a threshold call |
+| `tau_positive` (binary) | `META_TEMPORAL_SUVR` (continuous) | Same — graded tau load |
+| `ptau181` | `pT217_F` (pg/mL) | Different analyte; p-tau217 has superior AD accuracy in head-to-head literature |
+| `mmse_change` (one fabricated 6-mo delta) | real deltas across mean 3.9 scored visits (max 21) | Genuine individual decline slopes instead of a draw from a Gaussian |
+
+**Structural gains (not features, but new capability):**
+
+- **326 named FreeSurfer ROIs** (dictionary-verified) — entorhinal, parahippocampal,
+  temporal cortical volumes/thickness are one column away if wanted.
+- **Real longitudinal labels** — synthetic labels descend from the generator's own
+  latent severity (circular); ADNI's CN/MCI/Dementia with genuine conversion events
+  break that circularity.
+- **Acquisition metadata** (`MRIQC`: vendor, 3T/1.5T, protocol phase) — lets the real
+  cohort carry the scanner heterogeneity the synthetic cohort conveniently lacked,
+  and harmonise for it (ComBat) rather than pretend it does not exist.
+- **Raw `AB42_F` / `AB40_F`** alongside the ratio — synthetic stores the ratio only.
+
+**Synthetic-only fields that do NOT survive the switch** (they were fabricated):
+`ses`, `family_history`, `comorbidities` (Hypertension / Type 2 Diabetes /
+Hyperlipidemia / Atrial Fibrillation). Note `HUMAN_FEATURES` in `storage.py` still
+references two of these from the legacy mock — clean them up when the real cohort
+lands. CDR must also stay out of the vector (leakage, §4).
+
 ## 5. Gaps and traps
 
 ### ✅ Closed by this drop
