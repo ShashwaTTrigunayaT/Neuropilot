@@ -52,6 +52,19 @@ class PatientDetail(PatientSummary):
     pet: Optional[dict] = None
     factors: List[Factor] = []
     history: List[HistoryEntry] = []
+    # Real-ADNI cohort measures (None for synthetic/OASIS cohorts). These are
+    # model INPUTS, so exposing them is required for the workbench to show the
+    # patient's real profile. The cohort's DIAGNOSIS / CDR-SB are intentionally
+    # absent: this service never surfaces a diagnosis.
+    adas_cog_13: Optional[float] = None
+    faq_total: Optional[float] = None
+    apoe_genotype: Optional[str] = None
+    apoe_e4: Optional[bool] = None
+    visit_date: Optional[str] = None
+    n_visits: Optional[int] = None
+    # Slots measured outside the ordered pathway (real-cohort ordering gaps)
+    slots_on_file: List[str] = []
+    beyond_stage: bool = False
 
 
 class ExplainFactor(BaseModel):
@@ -94,6 +107,7 @@ class AdvanceRequest(BaseModel):
 
 
 class OrderResultInfo(BaseModel):
+    carried_forward: bool = False
     """Simulated lab result attached when a test is ordered (auto-populated)."""
 
     slot: str
@@ -112,6 +126,7 @@ class AdvanceResponse(BaseModel):
 
 
 class AutoWorkupStep(BaseModel):
+    carried_forward: bool = False
     action: str  # test | stop | complete
     stage: Optional[int] = None
     slot: Optional[str] = None
@@ -203,6 +218,9 @@ class PatientListResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: str
     data_source: str
+    # Exposed so a deploy can be verified at a glance (which cohort is the API
+    # actually serving, and how many patients did the DB hand back).
+    patients: int = 0
 
 
 class CompareRequest(BaseModel):

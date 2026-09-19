@@ -41,6 +41,17 @@ const FEATURE_INFO = {
   asf: { stage: 'MRI', label: 'Atlas scaling factor (MRI)', desc: 'Head-size scaling factor used to normalize volumetrics.' },
   amyloid_positive: { stage: 'PET', label: 'Amyloid PET status', desc: 'Amyloid PET positivity indicates cortical amyloid plaque burden.' },
   tau_positive: { stage: 'PET', label: 'Tau PET status', desc: 'Tau PET positivity indicates neurofibrillary tangle pathology.' },
+  // --- real ADNI 16-feature model ---
+  adas_cog_13: { stage: 'Cognitive', label: 'ADAS-Cog 13 (cognitive scale)', desc: '85-point Alzheimer’s Disease Assessment Scale — wider dynamic range than MMSE, so it resolves early decline the MMSE ceiling hides.' },
+  faq_total: { stage: 'Cognitive', label: 'Functional status (FAQ, 0–30)', desc: 'Functional Activities Questionnaire — independence in finances, shopping, meals. Measures the everyday-impact dimension MMSE cannot see.' },
+  apoe_e4: { stage: 'Demographic', label: 'APOE ε4 carrier', desc: 'The strongest common genetic risk factor for late-onset Alzheimer’s disease.' },
+  ptau217: { stage: 'Blood', label: 'p-tau217 (plasma)', desc: 'Plasma phosphorylated-tau 217 — the strongest single plasma marker of Alzheimer pathology.' },
+  nfl: { stage: 'Blood', label: 'NfL (plasma)', desc: 'Neurofilament light — a marker of active neuroaxonal injury, a different axis from amyloid/tau.' },
+  gfap: { stage: 'Blood', label: 'GFAP (plasma)', desc: 'Glial fibrillary acidic protein — astrocyte activation (reactive gliosis), independent of amyloid burden.' },
+  hippocampal_icv_ratio: { stage: 'MRI', label: 'Hippocampus / intracranial volume', desc: 'Head-size-normalised hippocampal fraction — removes the body-size confound raw volumes carry.' },
+  centiloids: { stage: 'PET', label: 'Amyloid PET burden (Centiloids)', desc: 'Continuous standardised amyloid scale — degree of plaque burden, not just positive/negative.' },
+  tau_meta_temporal: { stage: 'PET', label: 'Tau PET (temporal meta SUVR)', desc: 'Continuous tau load in the temporal meta-ROI — graded neocortical tangle spread.' },
+  icv_cm3: { stage: 'MRI', label: 'Intracranial volume', desc: 'Head-size control used to normalise the hippocampal measurement.' },
 };
 
 const STAGE_COLORS = {
@@ -127,11 +138,21 @@ function ContributionsPanel({ modelInfo }) {
       }
       </ul>
 
-      <div className="rounded-xl border border-line dark:border-darkBorder bg-tint/40 dark:bg-darkBorder/30 p-3 text-[11px] leading-relaxed text-muted dark:text-darkMuted">
-        <strong className="text-ink dark:text-darkText">Missing tests are handled honestly:</strong> a biomarker
-        that has not been ordered yet (e.g. PET for a patient still at cognitive screening) contributes nothing
-        to that patient&rsquo;s score — the model uses what the pipeline has actually measured. For any individual
-        patient, the detail view shows their personal signed contributions under &ldquo;Why this priority&rdquo;.
+      <div className="rounded-xl border border-line dark:border-darkBorder bg-tint/40 dark:bg-darkBorder/30 p-3 text-[11px] leading-relaxed text-muted dark:text-darkMuted space-y-2">
+        <p>
+          <strong className="text-ink dark:text-darkText">Missing tests are handled honestly:</strong> a biomarker
+          that has not been ordered yet (e.g. PET for a patient still at cognitive screening) contributes nothing
+          to that patient&rsquo;s score — the model uses what the pipeline has actually measured. For any individual
+          patient, the detail view shows their personal signed contributions under &ldquo;Why this priority&rdquo;.
+        </p>
+        <p>
+          <strong className="text-ink dark:text-darkText">Reading a rare test&rsquo;s bar:</strong> PET is measured in
+          only a minority of patients, so its <em>cohort-wide</em> bar looks small — that is dilution by
+          un-ordered scans, not irrelevance. Among patients who actually have the scan, tau PET carries one of
+          the strongest per-result contributions in the model. The value shown here is the cohort-wide mean
+          |SHAP|; <code className="rounded bg-tint dark:bg-darkBorder px-1 py-0.5">artifacts/stage_importance.csv</code>{' '}
+          reports both views side by side.
+        </p>
       </div>
     </div>
   );
@@ -435,13 +456,19 @@ export default function Footer({
               <div className="flex justify-between">
                 <span className="text-muted dark:text-darkMuted">Hold-out Test AUC:</span>
                 <span style={MONO} className="font-semibold text-ink dark:text-darkText">
-                  {modelInfo?.test_auc ? modelInfo.test_auc.toFixed(4) : '0.9077'} (ROC-AUC)
+                  {modelInfo?.test_auc ? modelInfo.test_auc.toFixed(4) : '—'} (ROC-AUC)
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted dark:text-darkMuted">5-Fold Cross-Validation AUC:</span>
                 <span style={MONO} className="font-semibold text-ink dark:text-darkText">
-                  {modelInfo?.cv_auc_mean ? modelInfo.cv_auc_mean.toFixed(4) : '0.8980'}
+                  {modelInfo?.cv_auc_mean ? modelInfo.cv_auc_mean.toFixed(4) : '—'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted dark:text-darkMuted">Features consumed:</span>
+                <span style={MONO} className="font-semibold text-ink dark:text-darkText">
+                  {modelInfo?.features?.length ?? '—'} across 4 stages
                 </span>
               </div>
               <div className="flex justify-between">
@@ -500,8 +527,8 @@ export default function Footer({
                   Stage 2: Blood Biomarker Panel
                 </div>
                 <p className="mt-1 text-muted dark:text-darkMuted">
-                  Minimally invasive plasma assays: p-tau181 and A&beta;42/40 ratio. Abnormal biomarker levels
-                  escalate the patient to volumetric neuroimaging.
+                  Minimally invasive plasma assays: p-tau217, A&beta;42/40 ratio, NfL and GFAP. Abnormal biomarker
+                  levels escalate the patient to volumetric neuroimaging.
                 </p>
               </div>
 
@@ -513,8 +540,8 @@ export default function Footer({
                   Stage 3: Structural MRI Volumetrics
                 </div>
                 <p className="mt-1 text-muted dark:text-darkMuted">
-                  High-resolution MRI morphometry: hippocampal volume loss and normalized whole brain volume (nWBV).
-                  Excludes structural mimics and confirms neurodegenerative atrophy.
+                  High-resolution MRI morphometry: bilateral hippocampal volume, normalised by intracranial volume
+                  to remove the head-size confound. Excludes structural mimics and confirms neurodegenerative atrophy.
                 </p>
               </div>
 
@@ -526,8 +553,8 @@ export default function Footer({
                   Stage 4: Molecular PET Imaging
                 </div>
                 <p className="mt-1 text-muted dark:text-darkMuted">
-                  Amyloid PET imaging (Centiloid quantification &gt; 25 CL). Provides definitive biomarker confirmation
-                  for disease-modifying therapy (DMT) eligibility.
+                  Amyloid PET quantified in Centiloids (positive above ~24 CL) and tau PET as temporal-meta SUVR.
+                  Provides the molecular confirmation required for disease-modifying therapy (DMT) eligibility.
                 </p>
               </div>
             </div>
@@ -588,12 +615,37 @@ export default function Footer({
 
               <div className="py-2.5 flex justify-between items-center">
                 <div>
-                  <span className="font-bold text-ink dark:text-darkText">Plasma p-tau181</span>
-                  <p className="text-[11px] text-muted dark:text-darkMuted">Blood Phosphorylated Tau</p>
+                  <span className="font-bold text-ink dark:text-darkText">Plasma p-tau217</span>
+                  <p className="text-[11px] text-muted dark:text-darkMuted">
+                    Cutoff set at the ADNI cohort&rsquo;s own upper quartile
+                  </p>
                 </div>
                 <div style={MONO} className="text-right">
-                  <span className="text-tierHigh font-bold">&gt; 2.0 pg/mL</span> (Positive) &middot;{' '}
-                  <span className="text-tierLow font-bold">&le; 2.0</span> (Normal)
+                  <span className="text-tierHigh font-bold">&gt; 0.40 pg/mL</span> (Elevated) &middot;{' '}
+                  <span className="text-tierLow font-bold">&le; 0.40</span> (Reference)
+                </div>
+              </div>
+
+              <div className="py-2.5 flex justify-between items-center">
+                <div>
+                  <span className="font-bold text-ink dark:text-darkText">Plasma NfL / GFAP</span>
+                  <p className="text-[11px] text-muted dark:text-darkMuted">
+                    Neuroaxonal injury / astrocyte activation
+                  </p>
+                </div>
+                <div style={MONO} className="text-right">
+                  <span className="text-tierHigh font-bold">&gt; 24.4 / 217 pg/mL</span> (Elevated)
+                </div>
+              </div>
+
+              <div className="py-2.5 flex justify-between items-center">
+                <div>
+                  <span className="font-bold text-ink dark:text-darkText">Tau PET SUVR</span>
+                  <p className="text-[11px] text-muted dark:text-darkMuted">Temporal meta-ROI</p>
+                </div>
+                <div style={MONO} className="text-right">
+                  <span className="text-tierHigh font-bold">&ge; 1.30</span> (Tau +) &middot;{' '}
+                  <span className="text-tierLow font-bold">&lt; 1.30</span> (Tau -)
                 </div>
               </div>
 

@@ -11,7 +11,17 @@ import json
 import os
 from typing import List, Optional
 
-from sqlalchemy import Column, Float, ForeignKey, Integer, String, Text, create_engine
+from sqlalchemy import (
+    Column,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    create_engine,
+    inspect,
+    text,
+)
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -31,6 +41,19 @@ class Patient(Base):
     score = Column(Float)
     stage = Column(Integer)
     updated_at = Column(String(32))
+    # Any record field without its own column (ADAS-Cog 13, FAQ, APOE, the real
+    # ADNI diagnosis, visit date...). Stored as JSON so adding a cohort field
+    # never requires a schema change -- and never silently vanishes on the
+    # Postgres round-trip, which would turn those features into permanent NaN.
+    extra = Column(Text, nullable=True)
+
+
+class AppMeta(Base):
+    """Small key/value table: which cohort is loaded (drives re-seeding)."""
+
+    __tablename__ = "app_meta"
+    key = Column(String(64), primary_key=True)
+    value = Column(Text)
 
 
 class CognitiveAssessment(Base):
@@ -125,25 +148,49 @@ def init_db() -> None:
         return
     _connect()
     Base.metadata.create_all(_engine)
+    # create_all() never ALTERs an existing table, so additive columns need an
+    # explicit migration. Idempotent: only runs when the column is missing.
+    try:
+        existing = {c["name"] for c in inspect(_engine).get_columns("patients")}
+        if "extra" not in existing:
+            with _engine.begin() as conn:
+                conn.execute(text("ALTER TABLE patients ADD COLUMN extra TEXT"))
+            print("[db] migrated: added patients.extra")
+    except Exception as exc:  # noqa: BLE001 -- non-fatal; API keeps serving
+        print(f"[db] schema check skipped ({type(exc).__name__})")
 
 
 def enabled() -> bool:
     return bool(get_database_url())
 
 
-def _insert_patient(s, record: dict) -> None:
-    s.add(
-        Patient(
-            id=record["id"],
-            age=record.get("age"),
-            sex=record.get("sex"),
-            education_years=record.get("education_years"),
-            family_history=1 if record.get("family_history") else 0,
-            score=record["score"],
-            stage=record["stage"],
-            updated_at=record["updated_at"],
-        )
+# Top-level record fields carried in Patient.extra (anything not a column)
+_COLUMN_KEYS = {"id", "age", "sex", "education_years", "family_history", "score",
+                "stage", "updated_at"}
+_CHILD_KEYS = {"cognitive", "comorbidities", "blood", "imaging", "pet", "factors", "history"}
+
+
+def _extra_json(record: dict) -> str:
+    payload = {k: v for k, v in record.items() if k not in _COLUMN_KEYS and k not in _CHILD_KEYS}
+    return json.dumps(payload)
+
+
+def _make_patient(record: dict) -> Patient:
+    return Patient(
+        id=record["id"],
+        age=record.get("age"),
+        sex=record.get("sex"),
+        education_years=record.get("education_years"),
+        family_history=1 if record.get("family_history") else 0,
+        score=record["score"],
+        stage=record["stage"],
+        updated_at=record["updated_at"],
+        extra=_extra_json(record),
     )
+
+
+def _insert_patient(s, record: dict) -> None:
+    s.add(_make_patient(record))
 
 
 def _insert_record(s, record: dict) -> None:
@@ -191,20 +238,48 @@ def _insert_children(s, record: dict) -> None:
         s.add(PipelineHistory(patient_id=record["id"], at=h["at"], text=h["text"]))
 
 
-def seed_if_empty(records: List[dict]) -> None:
+def seed_if_empty(records: List[dict], source: str = "") -> None:
+    """Seed the database once per cohort identity.
+
+    A DB seeded with one cohort (e.g. the 800-subject synthetic set) must NOT
+    keep serving that data after the app switches to another (the real ADNI
+    cohort). The stored fingerprint is `source:count`, so a cohort change
+    re-seeds instead of silently showing the old patients.
+    """
     if not enabled():
         return
+    # cohort_version is a content digest of the cohort records (written by the
+    # ingesters). Without it, re-ingesting data with corrected values would keep
+    # serving the previous stage/score values out of Postgres forever.
+    version = str(records[0].get("cohort_version") or "") if records else ""
+    fingerprint = f"{source}:{len(records)}:{version}"
     with _session() as s:
-        if s.query(Patient).count() > 0:
+        meta = s.query(AppMeta).filter_by(key="cohort_fingerprint").first()
+        current = meta.value if meta else None
+        count = s.query(Patient).count()
+        if count > 0 and current == fingerprint:
             return
-        # Parents first, then children, all in ONE transaction: Postgres
-        # rejects child rows whose parent is not yet inserted, and a midway
-        # failure must not leave a half-seeded database behind.
-        for r in records:
-            _insert_patient(s, r)
+        if count > 0:
+            print(f"[db] cohort changed ({current or 'unknown'}) — re-seeding "
+                  f"{count} → {len(records)} patients")
+            # children first: Postgres enforces the FKs
+            for model in (RiskFactor, PipelineHistory, LabResult, Comorbidity,
+                          CognitiveAssessment):
+                s.query(model).delete()
+            s.query(Patient).delete()
+            s.flush()
+        # Parents first, then children, in ONE transaction: Postgres rejects
+        # child rows whose parent is not yet inserted, and a midway failure must
+        # not leave a half-seeded database behind. add_all (rather than add in a
+        # loop) keeps this to batched inserts instead of per-row flushes.
+        s.add_all([_make_patient(r) for r in records])
         s.flush()
         for r in records:
             _insert_children(s, r)
+        if meta is None:
+            meta = AppMeta(key="cohort_fingerprint")
+            s.add(meta)
+        meta.value = fingerprint
         s.commit()
 
 
@@ -222,7 +297,7 @@ def _assemble(patient: Patient) -> dict:
             {"at": h.at, "text": h.text}
             for h in s.query(PipelineHistory).filter_by(patient_id=pid).order_by(PipelineHistory.id)
         ]
-    return {
+    record = {
         "id": pid,
         "age": patient.age,
         "sex": patient.sex,
@@ -239,6 +314,13 @@ def _assemble(patient: Patient) -> dict:
         "updated_at": patient.updated_at,
         "history": history,
     }
+    # restore the non-column fields (ADAS-Cog 13, FAQ, APOE, real diagnosis...)
+    if patient.extra:
+        try:
+            record.update(json.loads(patient.extra))
+        except Exception as exc:  # noqa: BLE001 -- corrupt payload must not break reads
+            print(f"[db] could not parse extra payload for {pid} ({exc})")
+    return record
 
 
 def load_all() -> Optional[List[dict]]:
@@ -266,6 +348,7 @@ def save_record(record: dict) -> None:
         existing.score = record["score"]
         existing.stage = record["stage"]
         existing.updated_at = record["updated_at"]
+        existing.extra = _extra_json(record)
         for model in (CognitiveAssessment, Comorbidity, LabResult, RiskFactor, PipelineHistory):
             s.query(model).filter_by(patient_id=record["id"]).delete()
         s.flush()

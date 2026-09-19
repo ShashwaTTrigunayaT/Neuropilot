@@ -27,17 +27,18 @@ stage test was completed.
 
 | Area | Status | Evidence |
 |---|---|---|
-| Data pipeline (ETL) | Run & verified | Real OASIS-1: 373 visits / 150 subjects; missing values flagged (SES ×19, MMSE ×2), never silently dropped |
-| Synthetic ADNI-shaped cohort | Run & verified | 800 subjects in true ADNI-1 proportions (200 CN / 400 MCI / 200 AD); workup mix 354 / 179 / 140 / 127 across Stages 1–4 |
-| 12-month follow-up simulation | Run & verified | `scripts/simulate_followup.py`: biomarker-driven trajectories, 133 conversions (16.6%); AD declines fastest (−2.83 MMSE/yr), CN slowest (−0.34) |
-| Risk model trained (all 4 stages) | Run & verified | XGBoost, 10 features spanning cognition + blood + MRI + PET; CV AUC **0.842 ± 0.032**, test AUC **0.871** |
-| Progression forecaster trained | Run & verified | XGBRegressor + XGBClassifier on the same 10 features; MMSE-delta MAE **0.611 pts** (R² 0.679), conversion ROC AUC **0.770** (PR AUC 0.465 vs 16.6% prevalence ≈ 2.8× lift) |
-| Explainability | Run & verified | Global SHAP + full per-subject attribution (all 10 factors, grouped by pipeline stage, with `model default` badges for un-ordered tests) |
-| Escalation rule engine | 24 pytest cases | Deterministic stage gates; clinician-in-the-loop via `override: true`; results loop via `POST /results` |
+| Data pipeline (ETL) | Run & verified | **Real ADNI drop: 13 tables → 14,746 scored MMSE visits / 4,649 subjects → 3,636 subjects with a real clinician label.** Sentinels (`MMSCORE −1`, `NfL/GFAP −4/−5`, `PTGENDER −4`, `CDR/FAQ −1`, PET `qc_flag`) all filtered; nothing silently dropped |
+| Real ADNI ingestion | Run & verified | `scripts/ingest_adni.py`: nearest-visit join (±183 d) across MMSE, plasma panel, FreeSurfer MRI, amyloid + tau PET, ADAS-Cog, FAQ, CDR, APOE — emits training matrix, visit table and serving records |
+| Legacy paths still work | Run & verified | OASIS-1 (373 visits / 150 subjects) and the 800-subject synthetic cohort remain available via `--data real|synthetic` / `PATIENT_DATA` |
+| 12-month follow-up labels | Simulated (synthetic cohort) | `scripts/simulate_followup.py` labels still drive the progression forecaster; real ADNI conversions are now available in `data/processed/adni_visits.csv` for the next retrain |
+| Risk model trained on real data | Run & verified | XGBoost, **16 features across all 4 stages**; 5-fold CV AUC **0.913 ± 0.009**, held-out test AUC **0.925**, accuracy 0.839 on 3,636 real ADNI subjects |
+| Progression forecaster trained | Run & verified (synthetic labels) | XGBRegressor + XGBClassifier; MMSE-delta MAE **0.611 pts** (R² 0.679), conversion ROC AUC **0.770** (PR AUC 0.465 ≈ 2.8× lift) |
+| Explainability | Run & verified | Global SHAP **with per-stage rollup** (`stage_importance.csv`) + full per-subject attribution; both an overall and a measured-only view, so a rarely-ordered test (PET) is not diluted to zero |
+| Escalation rule engine | 39 pytest cases | Deterministic stage gates; clinician-in-the-loop via `override: true`; results loop via `POST /results`; **ordering gaps handled** — the stage stops at the first missing test and already-measured later slots are carried forward, never overwritten |
 | Autonomous triage | Run & verified (browser E2E) | `POST /workup/next` / `/workup/run`: model picks subject → orders test → re-scores → re-ranks; live rank movements (e.g. `#12 → #2` after an abnormal blood panel) |
 | Progression forecast served | Run & verified (local + Railway) | `GET /patients/{id}/progression` → trajectory, conversion probability with SHAP drivers, projected tier, stage-completion score checkpoints |
 | Backend API | Run & verified | FastAPI + Swagger at `/docs`; `/health` reports `data_source` (e.g. `real+postgres` on Railway); live scoring via `pipeline.joblib` |
-| Frontend dashboard | Run & verified (headless Chrome) | Zero mock data; ranked cohort, detail view, full-page progression view, risk simulator on the real 10-feature model; production build clean |
+| Frontend dashboard | Run & verified (headless Chrome) | Zero mock data; ranked cohort, detail view, full-page progression view, risk simulator rebuilt on the model's real 16 features; production build clean, zero console errors |
 | PostgreSQL store | Run & verified (Railway) | Activated by `DATABASE_URL`; schema created + seeded on boot, persists workup history across restarts |
 | Docker demo | Written | `docker compose up --build` (single-image Railway deploy is the exercised path) |
 | CI (GitHub Actions) | Not built | Deliberately excluded from scope |
@@ -50,6 +51,13 @@ stage test was completed.
 # Terminal 1 — ML pipeline (once; generates data + artifacts)
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements-ml.txt
+# Preferred — real ADNI drop: place the 13 CSVs in "ADNI DATA/" then:
+python scripts/ingest_adni.py                          # 13 tables → features + serving cohort
+python scripts/train_model.py --data adni              # risk model + SHAP + artifacts
+# or the one-command runner (detects the ADNI drop automatically):
+python scripts/run_pipeline.py
+
+# Fallback — synthetic cohort (no real data needed)
 python scripts/generate_adni_like_v2.py                # 800-subject ADNI-shaped cohort
 python scripts/train_model.py                          # risk model + SHAP + artifacts
 
@@ -96,7 +104,8 @@ without re-training:
 | `data/processed/synthetic_patients.json` | Legacy 500-subject synthetic cohort | `python scripts/generate_adni_like.py` |
 | `data/processed/followup_12mo.json` | Simulated 12-month follow-up labels (MMSE drift + conversion) | `python scripts/simulate_followup.py` |
 | `data/processed/visits.csv`, `patients.csv` | ETL output from real OASIS | `python scripts/ingest.py` |
-| `data/processed/risk_scores.json` | Per-subject model scores + SHAP factors | **Committed** (deployment seed); regenerate with `python scripts/train_model.py` |
+| `data/processed/risk_scores.json` | Per-subject model scores + SHAP attributions. On real ADNI it is written **de-identified** — subject ID, score and feature attributions only, no age/sex/MMSE/ADAS/FAQ/biomarker values, because ADNI is DUA-restricted | **Committed** (deployment seed); regenerate with `python scripts/train_model.py` |
+| `data/processed/adni_cohort.json`, `adni_features.csv`, `adni_visits.csv` | Real ADNI serving records, training matrix and longitudinal visit table | **Gitignored** (regenerate with `python scripts/ingest_adni.py`) |
 | `artifacts/pipeline.joblib`, `model_meta.json`, `global_importance.csv`, `eval_report.txt` | Risk model, model card, global SHAP, eval audit | **Committed** (deployment); regenerate with `python scripts/train_model.py` |
 | `artifacts/progression_delta.joblib`, `progression_conversion.joblib`, `progression_meta.json`, `progression_report.txt` | Progression forecaster (MMSE-delta + conversion) + card + eval audit | **Committed** (deployment); regenerate with `python scripts/train_progression_model.py` |
 | `artifacts/rf_pipeline.joblib` | RandomForest fallback model | Local only — gitignored |
@@ -132,11 +141,11 @@ they are needed for one-command deployment.
    cognitive reserve slows it) and conversion labels from published base rates
    (CN ~4%/yr, MCI ~12%/yr, AD ~28%/yr) modulated by biomarker evidence.
    `scripts/train_progression_model.py` then trains two XGBoost models on the
-   same 10-feature vector: an **MMSE-delta regressor** and a **conversion
+   same baseline feature vector: an **MMSE-delta regressor** and a **conversion
    classifier** (class imbalance handled via `scale_pos_weight`).
 5. **Explainability.** SHAP TreeExplainer produces global importance
    (`artifacts/global_importance.csv`) and per-subject factors. The detail view
-   groups **all 10 factors by pipeline stage** (Cognition / Blood / MRI / PET);
+   groups **all 16 factors by pipeline stage** (Cognition / Blood / MRI / PET);
    factors from un-ordered tests carry a dimmed **`model default`** badge — the
    model's learned missing-value path — with a footnote explaining it. The
    progression forecast exposes its own top SHAP drivers.
@@ -190,28 +199,29 @@ trajectory (−0.05) at 2%.
 
 ```
 ┌───────────────────────────────────────────────────────────────────────┐
-│ DATA (never committed): data/raw/*.csv · data/processed/*.json        │
-│   real OASIS-1 (optional) · synthetic ADNI-shaped cohorts             │
-│   · simulated 12-month follow-up labels                               │
+│ DATA (never committed): ADNI DATA/*.csv · data/raw/*.csv · *.json     │
+│   real ADNI 13-table drop (primary) · real OASIS-1 · synthetic        │
 └───────────────────────────────┬───────────────────────────────────────┘
                                 ▼
 ┌───────────────────────────────────────────────────────────────────────┐
-│ GENERATE/ETL — generate_adni_like_v2.py · ingest.py                   │
-│   · simulate_followup.py (12-mo trajectories, biomarker-driven)       │
-│   harmonize → dedupe → flag missing → per-subject feature table       │
+│ ETL — ingest_adni.py (real) · ingest.py (OASIS) · generate_*.py       │
+│   nearest-visit join (±183 d) → sentinel filtering → per-subject      │
+│   feature table + real DIAGNOSIS labels + serving records             │
 └───────────────────────────────┬───────────────────────────────────────┘
                                 ▼
 ┌───────────────────────────────────────────────────────────────────────┐
 │ TRAIN — train_model.py · train_progression_model.py (sklearn Pipeline)│
-│   RISK:  10 features (4 stages) → XGBoost (RF fallback) → SHAP        │
-│   PROG:  same 10 features → MMSE-delta regressor + conversion clf     │
+│   RISK:  16 features (4 stages) → XGBoost (RF fallback) → SHAP        │
+│   PROG:  same baseline features → MMSE-delta regressor + conv. clf    │
 │   artifacts: pipeline.joblib · progression_*.joblib · model cards     │
 │              global_importance.csv · risk_scores.json · eval reports  │
 └───────────────────────────────┬───────────────────────────────────────┘
                                 ▼
 ┌───────────────────────────────────────────────────────────────────────┐
 │ API — backend/ (FastAPI)                                              │
-│   storage: synthetic cohort + startup batch rescore │ optional PG      │
+│   storage: ADNI cohort + startup batch rescore │ SQLite/Postgres      │
+│   ordering gaps: stage stops at the first missing test, later results  │
+│   stay on file and are never overwritten by a simulated one            │
 │   escalation.py: deterministic stage rules · model_service.py: SHAP   │
 │   progression.py: forecast + stage-completion score checkpoints       │
 │   /patients · /patients/{id} · /explain · /pipeline · /advance-stage  │
@@ -227,7 +237,7 @@ trajectory (−0.05) at 2%.
 │           · audit trail · Progression Probability button              │
 │   Progression (full page): observed-vs-predicted trajectory chart     │
 │           with stage-score lane · conversion probability · drivers    │
-│   Simulator: what-if workbench on the real 10-feature model           │
+│   Simulator: what-if workbench on the model's real 16 features        │
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -296,7 +306,7 @@ trajectory (−0.05) at 2%.
 │       ├── PatientDetail.jsx    #   detail: score, attribution radar, actions, trail
 │       ├── ProgressionView.jsx  #   full-page 12-month forecast
 │       ├── TrajectoryChart.jsx  #   observed-vs-predicted MMSE + stage-score lane
-│       ├── RiskSimulator.jsx    #   what-if scoring on the real 10-feature model
+│       ├── RiskSimulator.jsx    #   what-if scoring on the model's 16 real features
 │       ├── FeatureRadarChart.jsx · RiskDistributionChart.jsx · StageProgressionChart.jsx
 │       ├── Footer.jsx           #   telemetry + "How risk is determined" explainer
 │       ├── TierTag.jsx · BrandLogo.jsx · widgets.jsx
@@ -312,54 +322,112 @@ trajectory (−0.05) at 2%.
 
 ### 7.1 Risk model (current)
 
-Trained on the **v2 synthetic ADNI-1-proportioned cohort** (800 subjects: 200 CN
-/ 400 MCI / 200 AD; workup mix 354 Stage-1 / 179 Stage-2 / 140 Stage-3 /
-127 Stage-4). Synthetic data — see §13 limitations.
+Trained on **real ADNI** (the 13-table drop of 17 Sep 2026): **3,636 subjects**,
+one row each at their latest visit carrying a real `DIAGNOSIS`. Labels are the
+cohort's own clinician assessment — `1 = MCI or Dementia`, `0 = CN` (2,168 /
+1,468; 59.6% impaired). No simulated label rule anywhere.
 
 | Metric | Value |
 |---|---|
 | Model | XGBoost (`pipeline.joblib`), RandomForest fallback exported alongside |
-| Features (10, spanning all 4 stages) | `mmse`, `mmse_change`, `age`, `education_years`, `sex`, `ptau181`, `abeta4240`, `hippocampal_volume`, `amyloid_positive`, `tau_positive` |
-| 5-fold CV AUC | **0.842 ± 0.032** ← headline number |
-| Held-out test AUC | 0.871 (slightly optimistic — early stopping used the test set) |
-| Held-out accuracy @0.5 | 0.750 (confusion `[[52 15], [25 68]]`; Low n=67, High n=93) |
-| RF fallback test AUC | 0.874 |
-| Majority-class baseline | accuracy 0.581, AUC 0.500 |
+| Features (16, spanning all 4 stages) | `age`, `sex`, `education_years`, `apoe_e4`, `mmse`, `mmse_change`, `adas_cog_13`, `faq_total`, `ptau217`, `abeta4240`, `nfl`, `gfap`, `hippocampal_volume`, `hippocampal_icv_ratio`, `centiloids`, `tau_meta_temporal` |
+| 5-fold CV AUC | **0.913 ± 0.009** ← headline number |
+| Held-out test AUC | 0.925 (slightly optimistic — early stopping used the test set) |
+| Held-out accuracy @0.5 | 0.839 (confusion `[[243 51], [66 368]]`; Low n=294, High n=434) |
+| RF fallback test AUC | 0.925 |
+| Majority-class baseline | accuracy 0.596, AUC 0.500 |
 | Thresholds | High > 0.7 · Medium ≥ 0.4 (env-overridable) |
 
-**Global SHAP importance (mean |SHAP|):**
+**Feature contribution (mean |SHAP|).** `overall` is cohort-wide; `measured`
+counts only subjects who actually have that test — the honest way to read a
+partially-observed cohort.
 
-| Rank | Feature | Importance | Stage |
-|---|---|---|---|
-| 1 | `mmse` | 1.068 | Cognition |
-| 2 | `ptau181` | 0.304 | Blood |
-| 3 | `abeta4240` | 0.233 | Blood |
-| 4 | `age` | 0.184 | Demographics |
-| 5 | `hippocampal_volume` | 0.175 | MRI |
-| 6 | `mmse_change` | 0.084 | Cognition (longitudinal) |
-| 7 | `education_years` | 0.031 | Demographics |
-| 8 | `sex` | 0.010 | Demographics |
-| 9 | `amyloid_positive` | 0.008 | PET |
-| 10 | `tau_positive` | 0.000 | PET |
+| Rank | Feature | Overall | Where measured | Measured | Stage |
+|---|---|---|---|---|---|
+| 1 | `faq_total` | 1.112 | 1.294 | 78.1% | Cognition (function) |
+| 2 | `adas_cog_13` | 0.777 | 0.931 | 77.9% | Cognition |
+| 3 | `mmse` | 0.761 | 0.761 | 100% | Cognition |
+| 4 | `tau_meta_temporal` | 0.233 | **0.614** | 19.7% | PET |
+| 5 | `centiloids` | 0.224 | **0.378** | 29.3% | PET |
+| 6 | `age` | 0.118 | 0.118 | 99.9% | Demographics |
+| 7 | `sex` | 0.111 | 0.111 | 99.9% | Demographics |
+| 8 | `hippocampal_volume` | 0.092 | 0.136 | 58.3% | MRI |
+| 9 | `nfl` | 0.080 | 0.279 | 16.9% | Blood |
+| 10 | `hippocampal_icv_ratio` | 0.076 | 0.115 | 58.3% | MRI |
+| 11 | `mmse_change` | 0.075 | 0.105 | 64.2% | Cognition (longitudinal) |
+| 12 | `gfap` | 0.043 | 0.141 | 16.9% | Blood |
+| 13 | `abeta4240` | 0.038 | 0.101 | 30.8% | Blood |
+| 14 | `ptau217` | 0.037 | 0.102 | 30.9% | Blood |
+| 15 | `education_years` | 0.028 | 0.028 | 99.9% | Demographics |
+| 16 | `apoe_e4` | 0.005 | 0.004 | 78.7% | Genetics |
 
-Cognition dominates, and blood biomarkers carry real weight — the ADNI-shaped
-cohort fixed v1's "PET weightless" artifact (only 5 PET subjects then; 127 now).
-`tau_positive` remains near-zero because amyloid/tau status are highly
-correlated in the generator.
+**Contribution by pipeline stage** (`artifacts/stage_importance.csv`):
 
-**Missing-biomarker handling:** a Stage-1 subject (blood/MRI/PET not yet
-ordered) scores from cognition + demographics alone; XGBoost consumes the NaNs
-natively and SHAP attributes the learned missing-value default (small,
-badge-marked in the UI). Once a test completes, its measured contribution
-replaces the default and the subject is re-scored instantly.
+| Stage | Summed mean \|SHAP\| | Share |
+|---|---|---|
+| 1 — cognitive / clinical | 2.986 | 78.4% |
+| 2 — blood biomarkers | 0.199 | 5.2% |
+| 3 — MRI volumetrics | 0.168 | 4.4% |
+| 4 — PET | 0.457 | **12.0%** |
 
-**Cohort tiers after training:** 291 High · 227 Medium · 282 Low (0.7/0.4).
+Read together, these tables answer the obvious challenge — *"isn't the model
+just MMSE?"* No: with cognition held out, **PET alone carries more weight than
+blood and MRI combined** (12.0% vs 5.2% + 4.4%). PET looks small in the
+cohort-wide column only because just 20–29% of subjects have a scan; among
+subjects who *do* have one, tau SUVR is the fourth-strongest result in the
+model. Both views are exported so neither can be quoted misleadingly.
+
+**Missing-biomarker handling:** a subject whose blood/MRI/PET has not been
+measured scores from cognition + demographics alone; XGBoost consumes the NaNs
+natively and SHAP attributes the learned missing-value default (badge-marked in
+the UI). Once a test completes, its measured contribution replaces the default
+and the subject is re-scored instantly. The cohort demonstrates this
+structurally: **2,514 subjects sit at Stage 1 · 332 at Stage 2 · 231 at Stage 3 ·
+559 at Stage 4**.
+
+### Ordering gaps — and why the stage stops at the first missing test
+
+Real ADNI is not a tidy funnel. Modalities were added across study phases, so
+**all eight combinations of blood / MRI / PET exist**: 1,055 subjects have
+cognition only, 965 have an MRI but *no plasma panel*, 365 have MRI + PET and no
+plasma, 129 have PET alone, and so on. **1,459 subjects (40%) have MRI and/or PET
+on file with a missing blood draw.**
+
+A naive "highest completed stage" rule labels every one of those Stage 3/4,
+which claims a blood panel that was never drawn — the stepper then contradicts
+the record. NeuroPilot instead defines:
+
+> **stage = length of the complete prefix of the ordered pathway**
+> (cognition → blood → MRI → PET)
+
+So a subject with an MRI and no plasma panel is **Stage 1**, the rule engine
+correctly recommends the missing blood draw, and two things stay true at once:
+
+1. **Nothing measured is discarded.** The real MRI/PET values still feed the
+   model — the score already uses them, the stage simply does not claim them as
+   ordered milestones. `/patients/{id}` reports `slots_on_file` and
+   `beyond_stage` so the UI can say "already on file" instead of looking
+   self-contradictory.
+2. **A real measurement is never overwritten.** Walking the pathway past an
+already-measured slot *carries the real values forward* — the step is logged as
+`result already on file (normal) — carried forward without re-measurement`, and
+`POST /advance-stage` / `auto-workup` return `result.carried_forward: true`.
+Only genuinely missing slots get a derived result. This is locked by
+`test_ordering_gap_never_overwrites_a_real_measurement`, which asserts the
+carried record is byte-identical before and after.
+
+That behaviour is also the honest answer to *"why does this patient say MRI
+completed but no blood marker?"* — because in the source cohort, that is exactly
+what happened.
+
+**Cohort tiers after training:** 1,687 High · 569 Medium · 1,380 Low (0.7/0.4).
 
 ### 7.2 Progression forecaster (12-month horizon)
 
-Same 10 baseline features as the risk model; labels from the simulated
-follow-up (133 conversions / 16.6% prevalence; 640 train / 160 test subjects,
-stratified by conversion). Synthetic trajectories — see §13.
+Same baseline feature vector as the risk model; labels currently from the
+simulated follow-up (133 conversions / 16.6% prevalence; 640 train / 160 test
+subjects, stratified by conversion). Synthetic trajectories — see §13. Real
+ADNI follow-up labels are extracted and ready for the next retrain.
 
 | Model | Metric | Result |
 |---|---|---|
@@ -421,7 +489,8 @@ field**. Swagger at `/docs`. CORS allows the Vite dev server (+ `CORS_ORIGINS`).
 - **In-process model serving:** `POST /patients/score` predicts on an arbitrary
   feature vector with `pipeline.joblib` + a cached SHAP TreeExplainer (this
   powers the what-if **Risk Simulator** in the UI, whose controls mirror the
-  real 10 features, including per-stage "Measured / Not ordered" toggles).
+  model's real 16 features, including per-stage "Measured / Not ordered"
+  toggles).
 - **Progression serving:** `GET /patients/{id}/progression` returns the full
   forecast (404 → 503-safe: `model_available: false` when artifacts are absent).
 
@@ -495,12 +564,13 @@ Example attribution factor (grouped by stage in the UI):
 - **Autonomous Triage** — header toggle drives the whole cohort: a step banner
   shows `SUBJECT · TEST outcome · 0.68 → 0.81 (high) ↑ #12 → #2`; auto-stops
   when every pathway is complete.
-- **Risk Simulator** — what-if workbench on the live model with the real 10
-  features: demographics, MMSE + change (always measured), p-tau181 /
-  Aβ42/40 (blood), hippocampal volume (MRI), amyloid/tau PET toggles, with
-  per-stage "Measured / Not ordered" switches that send `null` and route the
-  model through its learned missing-value default — plus clinical presets and a
-  live SHAP waterfall.
+- **Risk Simulator** — what-if workbench on the live model with its real 16
+  features: demographics + APOE ε4, MMSE + change + ADAS-Cog 13 + FAQ (always
+  measured), p-tau217 / Aβ42/40 / NfL / GFAP (blood), hippocampal volume + ICV
+  (MRI, the ratio is derived), Centiloids + tau SUVR (PET), with per-stage
+  "Measured / Not ordered" switches that send `null` and route the model through
+  its learned missing-value default — plus clinical presets and a live SHAP
+  waterfall.
 - **Design** — product-grade: Inter type, ambient background, glass sticky
   header with live data-source pill, hairline cards, numbered stepper, sticky
   table headers, dark chart tooltips, skeletons, indigo focus accent, tier
@@ -570,12 +640,21 @@ npm install && npm run dev   # open :5173 → toggle Autonomous Triage;
 
 ## 13. Limitations (stated honestly)
 
-- **The current served models are trained on synthetic data.** The v2 cohort is
-  ADNI-1-proportioned and clinically plausible (severity-correlated biomarkers,
-  realistic reference ranges), but it is generated, not observed. The model
-  cards, `/model/info` and `/health` all disclose `data_mode: synthetic`. The
-  real-OASIS model (cognition + volumes only) remains reproducible via
-  `--data real`.
+- **The risk model now trains on real ADNI, but the progression forecaster does
+  not yet.** The served risk model uses real observed measures and real
+  clinician labels (`data_mode: adni`, 3,636 subjects, test AUC 0.925). The
+  12-month forecaster still trains on simulated trajectories. Real follow-up
+  labels are already extracted into `data/processed/adni_visits.csv` (2,389
+  subjects with ≥2 scored visits, real MMSE deltas and diagnostic conversions),
+  so the retrain is data-ready.
+- **The ADNI cohort is not a general-population sample.** It is a
+  research-cohort drop (highly educated, largely Western, volunteer-recruited)
+  and the latest-visit label mix (40% CN / 33% MCI / 27% Dementia) reflects
+  years of follow-up rather than community prevalence. Real deployment needs
+  local validation data.
+- **ADNI carries a data use agreement.** The CSVs are gitignored and must stay
+  so; this repository ships the *code* that turns them into a model, never the
+  cohort itself.
 - **Progression labels are simulated trajectories**, shaped by published
   progression dynamics (CN ~4%/yr, MCI ~12%/yr, AD ~28%/yr base rates modulated
   by biomarker evidence) — not real patient outcomes. A production forecaster
@@ -583,12 +662,12 @@ npm install && npm run dev   # open :5173 → toggle Autonomous Triage;
 - **The forecast is a "nothing changes" projection** — it assumes standard care
   continues; a real intervention (e.g. anti-amyloid therapy) would alter the
   trajectory. It is a probability, never a diagnosis or a guarantee.
-- **Cohort bias**: OASIS skews Western, highly educated, research-cohort — not
-  representative of a general clinical population. Real deployment needs local
-  validation data.
-- **PET signal is thin even in v2**: `tau_positive` ≈ 0 SHAP weight because
-  amyloid/tau status correlate in the generator; real ADNI-scale data would
-  rank amyloid/tau PET among the strongest predictors.
+- **PET is measured in a minority of real subjects** (tau 19.7%, amyloid 29.3%)
+  because those scans were only added in later ADNI phases. The stage rollup
+  therefore reports both a cohort-wide and a measured-only share — see §7.1.
+- **Fixed by the real data, kept for the record:** in the synthetic cohort the
+  PET features had ≈0 SHAP weight (amyloid/tau status correlate in the
+  generator). On real measures, tau SUVR and Centiloids rank 4th and 5th.
 - **Optimistic holdout**: early stopping used the test set (documented in
   `eval_report.txt`); CV AUC is the honest estimate.
 - **Simulated results**: ordering a test derives a plausible result from the

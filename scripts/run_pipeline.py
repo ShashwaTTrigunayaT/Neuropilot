@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
 """One-command pipeline runner (blueprint section 3, Scheduling row).
 
-Downloads the raw OASIS CSV if missing, then runs ingest + train in order.
-Safe to put on a cron schedule (hackathon answer to "repeatable, auditable
-ingestion" -- Airflow is the production answer).
+Order of preference:
+
+  1. Real ADNI drop present in "ADNI DATA/" -> scripts/ingest_adni.py, then
+     scripts/train_model.py --data adni. Real clinician labels, all four
+     stages, no simulation.
+  2. Otherwise the OASIS-1 CSV path (download if missing), ingest + train.
+
+Safe to put on a cron schedule (the pragmatic hackathon answer to "repeatable,
+auditable ingestion" -- Airflow is the production answer).
 
 Usage:
-    python scripts/run_pipeline.py [--model xgb|rf|auto]
+    python scripts/run_pipeline.py [--model xgb|rf|auto] [--data adni|synthetic|real|auto]
 
 Cron example (weekly, Mondays 02:00):
     0 2 * * 1 cd /path/to/project && python scripts/run_pipeline.py >> data/pipeline.log 2>&1
@@ -19,33 +25,61 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 RAW = ROOT / "data" / "raw" / "oasis_longitudinal.csv"
+ADNI_DIR = ROOT / "ADNI DATA"
 
 
 def run(script: Path, *args: str) -> None:
-    print(f"\n===== {script.name} {' '.join(args)} =====")
+    print(f"\n===== {script.name} {' '.join(args)} ===== ".rstrip())
     subprocess.run([sys.executable, str(script), *args], cwd=ROOT, check=True)
 
 
-def main() -> int:
-    if not RAW.exists():
-        print("[run_pipeline] raw OASIS CSV missing — attempting download…")
-        try:
-            run(ROOT / "scripts" / "download_oasis.py")
-        except subprocess.CalledProcessError:
-            print(
-                "Download failed. Place oasis_longitudinal.csv manually at:\n"
-                f"  {RAW}\nThen re-run this script."
-            )
-            return 1
-        if not RAW.exists():
-            return 1
+def _explicit_data_mode(argv: list[str]) -> str | None:
+    for i, a in enumerate(argv):
+        if a in ("--data",) and i + 1 < len(argv):
+            return argv[i + 1]
+        if a.startswith("--data="):
+            return a.split("=", 1)[1]
+    return None
 
-    run(ROOT / "scripts" / "ingest.py")
-    run(ROOT / "scripts" / "train_model.py", *sys.argv[1:])
+
+def main() -> int:
+    args = sys.argv[1:]
+    data_mode = _explicit_data_mode(args)
+
+    has_adni_tables = ADNI_DIR.exists() and any(ADNI_DIR.glob("*.csv"))
+
+    if data_mode == "adni" or (data_mode is None and has_adni_tables):
+        if not has_adni_tables:
+            print(f"[run_pipeline] --data adni requested but no CSVs in {ADNI_DIR}")
+            return 1
+        n = len(list(ADNI_DIR.glob("*.csv")))
+        print(f"[run_pipeline] real ADNI drop detected ({n} CSV tables) — real data path")
+        run(ROOT / "scripts" / "ingest_adni.py")
+        # pin --data adni unless the caller chose a mode explicitly
+        train_args = args if data_mode is not None else ["--data", "adni", *args]
+        run(ROOT / "scripts" / "train_model.py", *train_args)
+        served = "adni"
+    else:
+        print("[run_pipeline] no ADNI drop — falling back to the OASIS-1 path")
+        if not RAW.exists():
+            print("[run_pipeline] raw OASIS CSV missing — attempting download…")
+            try:
+                run(ROOT / "scripts" / "download_oasis.py")
+            except subprocess.CalledProcessError:
+                print(
+                    "Download failed. Place oasis_longitudinal.csv manually at:\n"
+                    f"  {RAW}\nThen re-run this script."
+                )
+                return 1
+            if not RAW.exists():
+                return 1
+        run(ROOT / "scripts" / "ingest.py")
+        run(ROOT / "scripts" / "train_model.py", *args)
+        served = "real (OASIS)"
 
     print(
-        "\n[done] pipeline finished. The API now serves the real scored subjects "
-        "(check GET /health data_source='real') and POST /patients/score uses "
+        f"\n[done] pipeline finished. The API now serves the {served} cohort "
+        f"(check GET /health -> data_source/patients) and POST /patients/score uses "
         "artifacts/pipeline.joblib."
     )
     print(

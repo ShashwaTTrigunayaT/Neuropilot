@@ -10,11 +10,20 @@ const DRIVER_LABELS = {
   age: 'Age',
   sex: 'Sex',
   education_years: 'Education',
+  apoe_e4: 'APOE ε4',
+  adas_cog_13: 'ADAS-Cog 13',
+  faq_total: 'Functional status (FAQ)',
   ptau181: 'p-tau181 (blood)',
+  ptau217: 'p-tau217 (blood)',
   abeta4240: 'Aβ42/40 (blood)',
+  nfl: 'NfL (blood)',
+  gfap: 'GFAP (blood)',
   hippocampal_volume: 'Hippocampal volume (MRI)',
+  hippocampal_icv_ratio: 'Hippocampus / ICV (MRI)',
   amyloid_positive: 'Amyloid PET',
   tau_positive: 'Tau PET',
+  centiloids: 'Amyloid PET (Centiloids)',
+  tau_meta_temporal: 'Tau PET (SUVR)',
 };
 
 export default function ProgressionView({ patient, progression, onOpenDetail, onExit }) {

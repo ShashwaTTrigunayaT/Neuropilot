@@ -39,17 +39,41 @@ _LOW_ANY = [i["id"] for i in _ITEMS if i["risk_tier"] == "low" and i["stage"] < 
 # Dedicated subjects: read-only tests share READ_HIGH (never mutated); each
 # mutating test owns its own subject.
 assert len(_HIGH_FRESH) >= 6, "cohort needs >= 6 stage-1 high-tier patients for the test plan"
-assert len(_LOW_FRESH) >= 1, "cohort needs >= 1 stage-1 low-tier patient for the test plan"
+assert len(_LOW_FRESH) >= 2, "cohort needs >= 2 stage-1 low-tier patients for the test plan"
 assert len(_LOW_ANY) >= 2, "cohort needs >= 2 low-tier patients below stage 4 for the test plan"
-ADV_HIGH = _HIGH_FRESH[0]        # advanced once (stage 1 -> 2)
-COMPLETE_HIGH = _HIGH_FRESH[1]   # advanced to completion (1 -> 2 -> 3 -> 4)
-RESULT_HIGH = _HIGH_FRESH[2]     # orders blood panel, then records the result
-AUTO_HIGH = _HIGH_FRESH[3]       # model-driven cascade
-AUTO_INFLIGHT = _HIGH_FRESH[4]   # cascade resumes from an in-flight stage
-AUTO_LOW = _LOW_FRESH[0]         # low tier -> 409 (no test indicated)
+def _clean_slate(pid: str) -> bool:
+    """Stage 1 with NO results on file.
+
+    Real cohorts arrive with ordering gaps (an ADNI subject can already hold an
+    MRI with no plasma panel), so a `stage == 1` subject is not necessarily
+    empty. Tests that drive the ordered pathway from the start need one that is.
+    """
+    r = client.get(f"/patients/{pid}")
+    if r.status_code != 200:
+        return False
+    d = r.json()
+    return d["stage"] == 1 and not d.get("slots_on_file")
+
+
+# Scan deep enough: on real ADNI the highest-risk Stage-1 subjects are exactly
+# the ones that already have a scan on file, so a clean slate is rarer at the
+# top of the ranking than it was on synthetic data.
+_CLEAN_HIGH = [pid for pid in _HIGH_FRESH[:400] if _clean_slate(pid)][:6]
+if len(_CLEAN_HIGH) < 5:  # data-dependent fallback: original behaviour
+    _CLEAN_HIGH = list(_HIGH_FRESH)
+
+ADV_HIGH = _CLEAN_HIGH[0]        # advanced once (stage 1 -> 2)
+COMPLETE_HIGH = _CLEAN_HIGH[1]   # advanced to completion (1 -> 2 -> 3 -> 4)
+RESULT_HIGH = _CLEAN_HIGH[2]     # orders blood panel, then records the result
+AUTO_HIGH = _CLEAN_HIGH[3]       # model-driven cascade
+AUTO_INFLIGHT = _CLEAN_HIGH[4]   # cascade resumes from an in-flight stage
+AUTO_LOW = _LOW_FRESH[1]         # low tier -> 409 (no test indicated)
 READ_HIGH = _HIGH_FRESH[-1]      # never mutated -- used by read-only tests
 LOW_409 = _LOW_ANY[0]            # never mutated -- only a 409 is asserted
 LOW_OVERRIDE = _LOW_FRESH[0]     # advanced once via clinician override
+# NB: every mutating test owns a DISTINCT subject. Reusing one (AUTO_LOW ==
+# LOW_OVERRIDE) makes the outcome depend on test order -- the low-tier subject
+# can be re-scored into a higher tier by the override's auto-derived result.
 
 
 # --------------------------------------------------------------------------- #
@@ -59,10 +83,10 @@ def test_health():
     r = client.get("/health")
     assert r.status_code == 200
     assert r.json()["status"] == "ok"
-    assert r.json()["data_source"] in (
-        "mock", "real", "synthetic",
-        "real+postgres", "synthetic+postgres", "real+sqlite", "synthetic+sqlite",
-    )
+    # "<cohort>[+<store>]" -- cohort: adni | synthetic | real (OASIS) | mock
+    cohort, _, _store = r.json()["data_source"].partition("+")
+    assert cohort in ("mock", "real", "synthetic", "adni")
+    assert r.json()["patients"] == _TOTAL
 
 
 # --------------------------------------------------------------------------- #
@@ -131,8 +155,19 @@ def test_get_patient_detail():
     assert d["cognitive"]["scale"] in ("MoCA", "MMSE")
     assert len(d["factors"]) >= 3  # top-3 SHAP factors
     assert len(d["history"]) >= 1
-    # Decision-support contract: no diagnosis field anywhere
-    assert "diagnosis" not in d
+    # Decision-support contract: no diagnosis field anywhere -- including the
+    # ADNI cohort's OWN label, which stays internal (training/audit only)
+    for forbidden in ("diagnosis", "real_diagnosis", "diagnosis_code", "cdr_sb"):
+        assert forbidden not in d
+    # ...while the model INPUTS a clinician needs are exposed for the workbench
+    for exposed in ("adas_cog_13", "faq_total", "apoe_e4", "n_visits", "slots_on_file"):
+        assert exposed in d, f"patient detail should expose {exposed}"
+
+    # The stage must never claim a test that was not measured: any slot listed
+    # beyond the stage is exactly the "already on file" case
+    stage_slots = {2: "blood", 3: "imaging", 4: "pet"}
+    reached = {stage_slots.get(s) for s in range(2, d["stage"] + 1)}
+    assert d["beyond_stage"] == any(s not in reached for s in d["slots_on_file"])
 
 
 def test_get_patient_404():
@@ -224,6 +259,7 @@ def test_advance_unknown_patient_404():
 def test_auto_workup_high_patient_cascades():
     """High-tier patient: model orders tests; each result re-scores and the
     updated tier gates the next step. Final tier must be high at completion."""
+    before = len(client.get(f"/patients/{AUTO_HIGH}").json()["history"])
     r = client.post(f"/patients/{AUTO_HIGH}/auto-workup")
     assert r.status_code == 200
     body = r.json()
@@ -232,7 +268,9 @@ def test_auto_workup_high_patient_cascades():
     assert body["final_stage"] == 4
     assert body["final_tier"] == "high"
     assert body["final_score"] > 0.7  # cognition-dominant high tier holds through the cascade
-    # Every test step logged with outcome + score trajectory
+    # Every test step logged with outcome + score trajectory. `outcome` is a
+    # contract value the UI colour-codes, so it must stay in this vocabulary
+    # even for carried-forward real ADNI results.
     for step in body["steps"]:
         if step["action"] == "test":
             assert step["outcome"] in ("normal", "abnormal", "inconclusive")
@@ -240,8 +278,10 @@ def test_auto_workup_high_patient_cascades():
     detail = client.get(f"/patients/{AUTO_HIGH}").json()
     for slot in ("blood", "imaging", "pet"):
         assert detail[slot]["status"] == "completed"
-    # Audit trail: 1 scored + 2 events x 3 tests = 7 entries
-    assert len(detail["history"]) == 7
+    # Audit trail: 2 events (order + result) per test, on top of whatever the
+    # subject's own record already carried (real ADNI records ship their visit
+    # history, so the baseline is data-dependent)
+    assert len(detail["history"]) == before + 6
 
 
 def test_auto_workup_low_patient_conflicts():
@@ -270,17 +310,96 @@ def test_auto_workup_unknown_patient_404():
 
 
 # --------------------------------------------------------------------------- #
+# Real-cohort ordering gaps (a measured result the ordered pathway has not reached)
+# --------------------------------------------------------------------------- #
+_RESULT_SLOT = {2: "blood", 3: "imaging", 4: "pet"}
+_DEDICATED = {ADV_HIGH, COMPLETE_HIGH, RESULT_HIGH, AUTO_HIGH, AUTO_INFLIGHT, AUTO_LOW,
+              READ_HIGH, LOW_409, LOW_OVERRIDE}
+
+
+def _find_gap_subject(max_scan: int = 150):
+    """A subject holding a result from a LATER stage than the pathway reached.
+
+    Real ADNI arrives this way: 965 subjects have an MRI and no plasma panel.
+    The stage stops at the first gap, so that MRI is "beyond stage".
+    """
+    import pytest
+
+    scanned = 0
+    for item in _ITEMS:
+        if item["stage"] >= 4 or item["id"] in _DEDICATED:
+            continue
+        d = client.get(f"/patients/{item['id']}").json()
+        scanned += 1
+        if d.get("beyond_stage"):
+            return d
+        if scanned >= max_scan:
+            break
+    pytest.skip("cohort has no ordering-gap subject to exercise")
+
+
+def test_ordering_gap_is_reported_not_hidden():
+    d = _find_gap_subject()
+    # the stage stops short of a measured slot...
+    reached = {_RESULT_SLOT.get(s) for s in range(2, d["stage"] + 1)}
+    ahead = [s for s in d["slots_on_file"] if s not in reached]
+    assert ahead, "beyond_stage must be backed by a real later-stage result"
+    # ...and the gap is visible to the UI rather than silently implied
+    assert d["beyond_stage"] is True
+    assert set(ahead) <= set(d["slots_on_file"])
+
+
+def test_ordering_gap_never_overwrites_a_real_measurement():
+    """Walking the pathway past an already-measured slot must carry the real
+    values forward -- never replace them with a simulated result."""
+    d = _find_gap_subject()
+    pid = d["id"]
+    ahead = [
+        _RESULT_SLOT[s]
+        for s in range(d["stage"] + 1, 5)
+        if _RESULT_SLOT[s] in d["slots_on_file"]
+    ]
+    if not ahead:
+        import pytest
+
+        pytest.skip("no measured result sits ahead of this subject's stage")
+    target = ahead[0]
+    before = client.get(f"/patients/{pid}").json()[target]
+    assert before is not None
+
+    carried = False
+    for _ in range(4):
+        r = client.post(f"/patients/{pid}/advance-stage", json={"override": True})
+        assert r.status_code == 200, r.text
+        body = r.json()
+        if body["result"]["slot"] == target:
+            assert body["result"]["carried_forward"] is True
+            carried = True
+            break
+    assert carried, f"pathway never reached the measured {target} slot"
+
+    after = client.get(f"/patients/{pid}").json()[target]
+    assert after == before, "real measurement was overwritten by a simulated result"
+
+
+# --------------------------------------------------------------------------- #
 # Recording test results (closes the loop on "pending")
 # --------------------------------------------------------------------------- #
 def test_record_result_flow():
     # Order the blood panel first (stage 1 -> 2): the result auto-populates
     r = client.post(f"/patients/{RESULT_HIGH}/advance-stage", json={"override": False})
     assert r.status_code == 200
+    before = len(client.get(f"/patients/{RESULT_HIGH}").json()["history"])
 
-    # A slot that was never ordered has nothing to record
-    r = client.post(f"/patients/{RESULT_HIGH}/results", json={"slot": "imaging", "outcome": "normal"})
-    assert r.status_code == 409
-    assert "not been ordered" in r.json()["detail"]
+    # A slot with no result on file has nothing to record. (On real cohorts a
+    # later-stage test can already be measured, so pick one that is genuinely
+    # absent rather than assuming the pathway order.)
+    on_file = set(client.get(f"/patients/{RESULT_HIGH}").json().get("slots_on_file") or [])
+    absent = next((s for s in ("imaging", "pet") if s not in on_file), None)
+    if absent is not None:
+        r = client.post(f"/patients/{RESULT_HIGH}/results", json={"slot": absent, "outcome": "normal"})
+        assert r.status_code == 409
+        assert "not been ordered" in r.json()["detail"]
 
     # Amend the auto-derived result with the actual lab-report values
     r = client.post(
@@ -305,7 +424,7 @@ def test_record_result_flow():
     assert detail["blood"]["outcome"] == "abnormal"
     assert detail["blood"]["pTau181"] == 5.1
     assert detail["blood"]["note"] == "lab-verified: elevated p-tau"
-    assert len(detail["history"]) == 4  # scored + ordered + result + amended
+    assert len(detail["history"]) == before + 1  # + the amendment event
 
     # A second amendment is allowed (lab corrections happen)
     r2 = client.post(

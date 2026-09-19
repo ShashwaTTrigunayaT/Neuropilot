@@ -32,7 +32,8 @@ router = APIRouter()
 
 @router.get("/health", response_model=HealthResponse, tags=["system"])
 def health() -> dict:
-    return {"status": "ok", "data_source": service.DATA_SOURCE}
+    return {"status": "ok", "data_source": service.DATA_SOURCE,
+            "patients": len(service.PATIENTS)}
 
 
 @router.get("/debug/env", tags=["system"])

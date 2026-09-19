@@ -1,14 +1,14 @@
-Risk model evaluation -- synthetic ADNI-shaped cohort (all 4 stages)
+Risk model evaluation -- real ADNI (13-table drop, 17 Sep 2026) — 16 features across all 4 stages
 model type             : xgb
-subjects scored        : 800
-subjects in training   : 800
-test set               : 160 (20%, stratified)
-features               : age, education_years, sex, mmse, mmse_change, ptau181, abeta4240, hippocampal_volume, amyloid_positive, tau_positive
-5-fold CV AUC (train)  : 0.842 +/- 0.032
-held-out test AUC      : 0.871
-held-out accuracy@0.5  : 0.750
-RF fallback test AUC   : 0.874
-majority-class baseline: accuracy 0.581, AUC 0.500 (chance)
+subjects scored        : 3636
+subjects in training   : 3636
+test set               : 728 (20%, stratified)
+features               : age, sex, education_years, mmse, mmse_change, adas_cog_13, faq_total, apoe_e4, ptau217, abeta4240, nfl, gfap, hippocampal_volume, hippocampal_icv_ratio, centiloids, tau_meta_temporal
+5-fold CV AUC (train)  : 0.913 +/- 0.009
+held-out test AUC      : 0.925
+held-out accuracy@0.5  : 0.839
+RF fallback test AUC   : 0.925
+majority-class baseline: accuracy 0.596, AUC 0.500 (chance)
 
 guardrails:
 - CDR excluded from features (clinician rating ~= diagnosis: label leakage)
@@ -18,14 +18,46 @@ guardrails:
 - preprocessing bundled into the served pipeline
 - early stopping used the held-out set, so test numbers are slightly optimistic
 confusion matrix (test):
-[[52 15]
- [25 68]]
+[[243  51]
+ [ 66 368]]
 
               precision    recall  f1-score   support
 
-         Low      0.675     0.776     0.722        67
-        High      0.819     0.731     0.773        93
+         Low      0.786     0.827     0.806       294
+        High      0.878     0.848     0.863       434
 
-    accuracy                          0.750       160
-   macro avg      0.747     0.754     0.747       160
-weighted avg      0.759     0.750     0.752       160
+    accuracy                          0.839       728
+   macro avg      0.832     0.837     0.834       728
+weighted avg      0.841     0.839     0.840       728
+
+
+feature contribution (mean |SHAP| over the scored cohort):
+  feature                  stage   overall  measured       n      %
+  faq_total                    1    1.1123    1.2936   2,840  78.1%
+  adas_cog_13                  1    0.7774    0.9305   2,832  77.9%
+  mmse                         1    0.7606    0.7606   3,636 100.0%
+  tau_meta_temporal            4    0.2331    0.6136     716  19.7%
+  centiloids                   4    0.2243    0.3784   1,065  29.3%
+  age                          1    0.1177    0.1177   3,633  99.9%
+  sex                          1    0.1105    0.1105   3,634  99.9%
+  hippocampal_volume           3    0.0916    0.1360   2,120  58.3%
+  nfl                          2    0.0801    0.2794     614  16.9%
+  hippocampal_icv_ratio        3    0.0761    0.1152   2,120  58.3%
+  mmse_change                  1    0.0749    0.1047   2,335  64.2%
+  gfap                         2    0.0428    0.1412     614  16.9%
+  abeta4240                    2    0.0382    0.1010   1,119  30.8%
+  ptau217                      2    0.0373    0.1019   1,122  30.9%
+  education_years              1    0.0283    0.0283   3,632  99.9%
+  apoe_e4                      1    0.0045    0.0040   2,861  78.7%
+
+contribution by pipeline stage:
+  Stage 1 cognitive / clinical   2.9862   78.4% of total
+  Stage 2 blood biomarkers       0.1985    5.2% of total
+  Stage 3 MRI volumetrics        0.1677    4.4% of total
+  Stage 4 PET                    0.4574   12.0% of total
+
+'overall' is the cohort-wide mean |SHAP|; 'measured' is the mean |SHAP|
+only across subjects where that test exists. A slot that is rarely
+measured (PET) is diluted in 'overall' by the NaN rows but keeps its true
+per-result contribution in 'measured' -- this is how a partially-observed
+cohort is reported honestly rather than as a fabricated complete vector.

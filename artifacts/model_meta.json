@@ -1,30 +1,94 @@
 {
   "model_type": "xgb",
-  "data_mode": "synthetic",
-  "data_source": "synthetic ADNI-shaped cohort (all 4 stages)",
+  "data_mode": "adni",
+  "data_source": "real ADNI (13-table drop, 17 Sep 2026) \u2014 16 features across all 4 stages",
   "features": [
     "age",
-    "education_years",
     "sex",
+    "education_years",
     "mmse",
     "mmse_change",
-    "ptau181",
+    "adas_cog_13",
+    "faq_total",
+    "apoe_e4",
+    "ptau217",
     "abeta4240",
+    "nfl",
+    "gfap",
     "hippocampal_volume",
-    "amyloid_positive",
-    "tau_positive"
+    "hippocampal_icv_ratio",
+    "centiloids",
+    "tau_meta_temporal"
   ],
-  "trained_at": "2026-09-06T18:49:28",
+  "trained_at": "2026-09-19T19:15:33",
   "thresholds": {
     "high": 0.7,
     "medium": 0.4
   },
-  "cv_auc_mean": 0.8423,
-  "cv_auc_std": 0.0315,
-  "test_auc": 0.8708,
-  "test_accuracy": 0.75,
-  "rf_fallback_test_auc": 0.8741,
-  "baseline_accuracy": 0.5813,
-  "n_train": 800,
-  "n_scored": 800
+  "cv_auc_mean": 0.9127,
+  "cv_auc_std": 0.0091,
+  "test_auc": 0.9246,
+  "test_accuracy": 0.8393,
+  "rf_fallback_test_auc": 0.9248,
+  "baseline_accuracy": 0.5962,
+  "n_train": 3636,
+  "n_scored": 3636,
+  "feature_stages": {
+    "age": 1,
+    "sex": 1,
+    "education_years": 1,
+    "mmse": 1,
+    "mmse_change": 1,
+    "adas_cog_13": 1,
+    "faq_total": 1,
+    "apoe_e4": 1,
+    "ptau217": 2,
+    "abeta4240": 2,
+    "nfl": 2,
+    "gfap": 2,
+    "hippocampal_volume": 3,
+    "hippocampal_icv_ratio": 3,
+    "centiloids": 4,
+    "tau_meta_temporal": 4
+  },
+  "stage_importance": {
+    "1": {
+      "name": "cognitive / clinical",
+      "mean_abs_shap": 2.9862,
+      "share_pct": 78.38
+    },
+    "2": {
+      "name": "blood biomarkers",
+      "mean_abs_shap": 0.1985,
+      "share_pct": 5.21
+    },
+    "3": {
+      "name": "MRI volumetrics",
+      "mean_abs_shap": 0.1677,
+      "share_pct": 4.4
+    },
+    "4": {
+      "name": "PET",
+      "mean_abs_shap": 0.4574,
+      "share_pct": 12.01
+    }
+  },
+  "feature_coverage": {
+    "faq_total": 78.1,
+    "adas_cog_13": 77.9,
+    "mmse": 100.0,
+    "tau_meta_temporal": 19.7,
+    "centiloids": 29.3,
+    "age": 99.9,
+    "sex": 99.9,
+    "hippocampal_volume": 58.3,
+    "nfl": 16.9,
+    "hippocampal_icv_ratio": 58.3,
+    "mmse_change": 64.2,
+    "gfap": 16.9,
+    "abeta4240": 30.8,
+    "ptau217": 30.9,
+    "education_years": 99.9,
+    "apoe_e4": 78.7
+  }
 }

@@ -66,17 +66,31 @@ function ScoreSection({ patient }) {
 // corresponding test is ordered and completed, then show their live SHAP
 // contribution from the served model.
 const FEATURE_STAGE = {
+  // stage 1 (cognitive / clinical) + stage 0 (always-known baseline)
   mmse: 1,
   mmse_change: 1,
+  adas_cog_13: 1,
+  faq_total: 1,
   n_visits: 1,
   study_years: 1,
+  // stage 2 blood
   ptau181: 2,
+  ptau217: 2,
   abeta4240: 2,
+  nfl: 2,
+  gfap: 2,
+  // stage 3 MRI
   hippocampal_volume: 3,
+  hippocampal_icv_ratio: 3,
+  // stage 4 PET
   amyloid_positive: 4,
   tau_positive: 4,
+  centiloids: 4,
+  tau_meta_temporal: 4,
+  // never "pending" -- demographics/genetics are known at intake
   age: 0,
   education_years: 0,
+  apoe_e4: 0,
   ses: 0,
   sex: 0,
   etiv: 0,
@@ -100,6 +114,7 @@ function ReasoningSection({ patient }) {
     const width = Math.max(6, (Math.abs(f.effect) / maxAbs) * 100);
     const hex = up ? TIER_HEX.high : TIER_HEX.low;
     const isBinary = f.feature === 'amyloid_positive' || f.feature === 'tau_positive';
+    const isApoe = f.feature === 'apoe_e4';
     return (
       <div key={`${f.feature}-${i}`} className="space-y-1" style={{ opacity: dim ? 0.7 : 1 }}>
         <div className="flex items-baseline justify-between gap-4">
@@ -107,7 +122,11 @@ function ReasoningSection({ patient }) {
             {f.text}
             {f.value != null && (
               <span style={MONO} className="ml-1.5 text-[11px] text-muted dark:text-darkMuted">
-                · {isBinary ? (f.value === 1 ? 'Positive' : 'Negative') : f.value}
+                · {isBinary
+                  ? f.value === 1 ? 'Positive' : 'Negative'
+                  : isApoe
+                    ? f.value === 1 ? 'ε4 carrier' : 'non-carrier'
+                    : f.value}
               </span>
             )}
             {dim && (

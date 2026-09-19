@@ -77,6 +77,27 @@ def get_patient(patient_id: str) -> Optional[dict]:
             "pet": record.get("pet"),
             "factors": record.get("factors", []),
             "history": record.get("history", []),
+            # Real-ADNI cohort fields the model consumes (None for other cohorts).
+            # Deliberately NOT exposed: the cohort's own DIAGNOSIS label and
+            # CDR-SB -- both are label-proximal clinical staging, and the product
+            # contract is that this service never surfaces a diagnosis.
+            "adas_cog_13": record.get("adas_cog_13"),
+            "faq_total": record.get("faq_total"),
+            "apoe_genotype": record.get("apoe_genotype"),
+            "apoe_e4": record.get("apoe_e4"),
+            "visit_date": record.get("visit_date"),
+            "n_visits": record.get("n_visits"),
+            # Slots measured OUTSIDE the ordered pathway. Real cohorts arrive
+            # with gaps (an ADNI subject can have MRI+PET and no plasma panel),
+            # so the stage stops at the first gap while these results stay in
+            # play. The UI uses this to explain the state instead of looking
+            # self-contradictory.
+            "slots_on_file": [
+                slot
+                for slot in ("blood", "imaging", "pet")
+                if isinstance(record.get(slot), dict) and record[slot].get("status") == "completed"
+            ],
+            "beyond_stage": bool(record.get("beyond_stage")),
         }
     )
     return detail
@@ -290,6 +311,20 @@ def _rescore(record: dict) -> None:
     ]
 
 
+def _result_for_slot(record: dict, slot: str) -> tuple[dict, bool]:
+    """Result for the next ordered slot -> (result, carried_forward).
+
+    Real cohorts arrive with ordering gaps: an ADNI subject can have an MRI and
+    a PET but no plasma panel, so the ordered pathway reaches a slot whose
+    values are ALREADY on file. Those measured values are carried forward
+    untouched -- a simulated result must never overwrite real measurements.
+    """
+    existing = record.get(slot)
+    if isinstance(existing, dict) and existing.get("status") == "completed":
+        return existing, True
+    return _simulate_result(record, slot), False
+
+
 def _simulate_result(record: dict, slot: str) -> dict:
     """Derive a clinically-plausible result for `slot` from the patient's severity.
 
@@ -305,23 +340,43 @@ def _simulate_result(record: dict, slot: str) -> dict:
     borderline = not abnormal and rng.random() < 0.18  # some normals land near the boundary
 
     if slot == "blood":
+        # Legacy panel (classic units) AND the real-ADNI slots the served model
+        # actually consumes: pTau217 / NfL / GFAP. Ranges are calibrated to the
+        # ADNI 17 Sep 2026 drop's own quantiles (pTau217 median 0.185,
+        # p75 0.415 pg/mL; NfL median 15.2, p75 24.4; GFAP median 127, p75 217).
         ptau = round(rng.uniform(3.6, 6.2) if abnormal else rng.uniform(2.0, 2.9) if borderline else rng.uniform(0.9, 2.2), 2)
         ratio = round(rng.uniform(0.045, 0.078) if abnormal else rng.uniform(0.082, 0.089) if borderline else rng.uniform(0.095, 0.140), 3)
-        values = {"pTau181": ptau, "abeta4240": ratio}
+        ptau217 = round(rng.uniform(0.45, 1.20) if abnormal else rng.uniform(0.16, 0.35) if borderline else rng.uniform(0.05, 0.15), 3)
+        nfl = round(rng.uniform(32.0, 60.0) if abnormal else rng.uniform(24.5, 31.0) if borderline else rng.uniform(6.0, 20.0), 2)
+        gfap = round(rng.uniform(260.0, 450.0) if abnormal else rng.uniform(218.0, 259.0) if borderline else rng.uniform(60.0, 200.0), 1)
+        values = {"pTau181": ptau, "abeta4240": ratio,
+                  "pTau217": ptau217, "nfl": nfl, "gfap": gfap}
         if abnormal:
             outcome = "abnormal"
-            note = f"p-tau181 elevated ({ptau} pg/mL); Aβ42/40 ratio below reference ({ratio})"
+            note = (f"p-tau217 elevated ({ptau217} pg/mL), Aβ42/40 ratio below reference "
+                    f"({ratio}); NfL {nfl}, GFAP {gfap} pg/mL")
         elif borderline:
             outcome = "inconclusive"
-            note = f"Borderline panel — p-tau181 {ptau} pg/mL near threshold; recommend repeat in 6 months"
+            note = (f"Borderline panel — p-tau217 {ptau217} pg/mL near threshold; "
+                    f"recommend repeat in 6 months")
         else:
             outcome = "normal"
-            note = f"Both markers within reference range (p-tau181 {ptau}, Aβ42/40 {ratio})"
+            note = (f"Markers within reference range (p-tau217 {ptau217} pg/mL, "
+                    f"Aβ42/40 {ratio}, NfL {nfl}, GFAP {gfap})")
         return {"status": "completed", "outcome": outcome, **values, "note": note}
 
     if slot == "imaging":
+        # Real-ADNI MRI contract: bilateral volumes + ICV + ICV-normalized ratio
+        # (FreeSurfer cohort means: hippocampus ~3.4 cm³, ICV ~1,520 cm³).
         hv = round(rng.uniform(1.85, 2.25) if abnormal else rng.uniform(2.30, 2.55) if borderline else rng.uniform(2.70, 3.60), 2)
-        values = {"hippocampalVolumeCm3": hv}
+        icv = round(rng.uniform(1300.0, 1800.0), 0)
+        values = {
+            "hippocampalVolumeCm3": hv,
+            "hippocampusLeftCm3": round(hv * 0.97, 2),
+            "hippocampusRightCm3": round(hv * 1.03, 2),
+            "icvCm3": icv,
+            "hippocampalIcvRatio": round(hv / icv, 5),
+        }
         if abnormal:
             outcome = "abnormal"
             note = f"Bilateral medial temporal atrophy — hippocampal volume {hv} cm³ (<5th percentile)"
@@ -337,7 +392,12 @@ def _simulate_result(record: dict, slot: str) -> dict:
         amy = "Positive" if abnormal or (borderline and rng.random() < 0.5) else "Negative"
         tau = "Positive" if abnormal and rng.random() < 0.85 else ("Positive" if amy == "Positive" and rng.random() < 0.2 else "Negative")
         suvr = round(rng.uniform(1.32, 1.58) if amy == "Positive" else rng.uniform(1.00, 1.14), 2)
-        values = {"amyloid": amy, "tau": tau, "amyloidSUVr": suvr}
+        # Continuous burden in the real units the served model reads: Centiloids
+        # (positive >~24 CL) and temporal-meta tau SUVR (cohort median 1.21).
+        centiloids = round(rng.uniform(45.0, 140.0) if amy == "Positive" else rng.uniform(-15.0, 22.0), 1)
+        tau_suvr = round(rng.uniform(1.35, 2.00) if tau == "Positive" else rng.uniform(0.98, 1.22), 3)
+        values = {"amyloid": amy, "tau": tau, "amyloidSUVr": suvr,
+                  "centiloids": centiloids, "tauMetaTemporalSuvr": tau_suvr}
         if amy == "Positive" and tau == "Positive":
             outcome = "abnormal"
             note = f"Neocortical amyloid retention (SUVR {suvr}) with tau spread — pathological"
@@ -389,14 +449,18 @@ def advance_stage(patient_id: str, override: bool = False, note: Optional[str] =
     record["stage"] = to_stage
     # Result arrives with the order (simulated lab turnaround) -- the slot never
     # sits pending forever. The model is re-run immediately so the score,
-    # tier and attribution factors reflect the new test values.
-    result = _simulate_result(record, slot)
+    # tier and attribution factors reflect the new test values. If the slot was
+    # already measured outside this pathway, the real values are kept as-is.
+    result, carried = _result_for_slot(record, slot)
     record[slot] = result
     _rescore(record)
     tier = risk_tier(record["score"])
     result_event = (
-        f"{RESULT_SLOT_LABEL[slot]} result recorded — {result['outcome']} · "
-        f"re-scored {record['score']:.2f} → {tier} tier by trained model"
+        f"{RESULT_SLOT_LABEL[slot]} result already on file ({result.get('outcome')}) — "
+        f"carried forward without re-measurement · re-scored {record['score']:.2f} → {tier} tier"
+        if carried
+        else f"{RESULT_SLOT_LABEL[slot]} result recorded — {result['outcome']} · "
+             f"re-scored {record['score']:.2f} → {tier} tier by trained model"
     )
 
     record["updated_at"] = now
@@ -411,7 +475,8 @@ def advance_stage(patient_id: str, override: bool = False, note: Optional[str] =
     return {
         "applied": True,
         "event": event,
-        "result": {"slot": slot, "outcome": result["outcome"], "note": result.get("note", "")},
+        "result": {"slot": slot, "outcome": result["outcome"], "note": result.get("note", ""),
+                   "carried_forward": carried},
         "rescored": True,
         "new_score": record["score"],
         "new_tier": tier,
@@ -452,7 +517,7 @@ def auto_workup(patient_id: str) -> tuple[Optional[dict], Optional[str]]:
         to_stage = record["stage"] + 1
         slot = RESULT_SLOT[to_stage]
         now = datetime.now().strftime("%Y-%m-%d %H:%M")
-        result = _simulate_result(record, slot)
+        result, carried = _result_for_slot(record, slot)
         record[slot] = result
         record["stage"] = to_stage
         _rescore(record)
@@ -464,8 +529,12 @@ def auto_workup(patient_id: str) -> tuple[Optional[dict], Optional[str]]:
                 {
                     "at": now,
                     "text": (
-                        f"{RESULT_SLOT_LABEL[slot]} result recorded — {result['outcome']} · "
-                        f"re-scored {record['score']:.2f} → {tier} tier by trained model"
+                        f"{RESULT_SLOT_LABEL[slot]} result already on file "
+                        f"({result.get('outcome')}) — carried forward without "
+                        f"re-measurement · re-scored {record['score']:.2f} → {tier} tier"
+                        if carried
+                        else f"{RESULT_SLOT_LABEL[slot]} result recorded — {result['outcome']} · "
+                             f"re-scored {record['score']:.2f} → {tier} tier by trained model"
                     ),
                 },
             ]
@@ -479,6 +548,7 @@ def auto_workup(patient_id: str) -> tuple[Optional[dict], Optional[str]]:
                 "button": action["button"],
                 "outcome": result["outcome"],
                 "note": result.get("note", ""),
+                "carried_forward": carried,
                 "score_after": record["score"],
                 "tier_after": tier,
             }

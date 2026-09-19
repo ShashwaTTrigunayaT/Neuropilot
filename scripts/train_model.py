@@ -87,11 +87,37 @@ FEATURES_ALL = [
     "amyloid_positive", "tau_positive",
 ]
 
+# Real-ADNI mode. The 16-feature vector and its stage mapping live in
+# scripts/ingest_adni.py -- imported so the ingester and the trainer can never
+# drift apart (a silent mismatch here would train on different columns than
+# the API serves at inference time).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+try:  # pragma: no cover -- import-time wiring
+    from ingest_adni import FEATURES as FEATURES_ADNI, STAGE_OF as STAGE_OF_ADNI
+
+    ADNI_FEATURES_AVAILABLE = True
+except Exception:  # noqa: BLE001 -- trainer must still run in synthetic/OASIS modes
+    FEATURES_ADNI, STAGE_OF_ADNI, ADNI_FEATURES_AVAILABLE = [], {}, False
+
 FEATURES_OASIS = [
     "age", "education_years", "ses", "mmse",
     "etiv", "nwbv", "asf",
     "sex", "mmse_change", "n_visits", "study_years",
 ]
+
+# feature -> pipeline stage, for every cohort's naming scheme. Used to report
+# how much each *stage* (cognition / blood / MRI / PET) contributes to the score.
+STAGE_OF_FEATURE = {
+    # legacy synthetic names
+    "ptau181": 2, "amyloid_positive": 4, "tau_positive": 4,
+    # real ADNI names
+    **STAGE_OF_ADNI,
+    # OASIS names
+    "ses": 1, "n_visits": 1, "study_years": 1,
+    "etiv": 3, "nwbv": 3, "asf": 3,
+}
+
+STAGE_NAMES = {1: "cognitive / clinical", 2: "blood biomarkers", 3: "MRI volumetrics", 4: "PET"}
 
 LABEL_MAP = {"Demented": 1, "Nondemented": 0}
 
@@ -193,6 +219,29 @@ def load_synthetic(path: Path | None = None) -> tuple[pd.DataFrame, pd.Series, l
 
 
 # --------------------------------------------------------------------------- #
+# Real-ADNI loading (scripts/ingest_adni.py output)
+# --------------------------------------------------------------------------- #
+def load_adni() -> tuple[pd.DataFrame, list[str], list[str]]:
+    """Real ADNI cohort -> feature frame (with real labels), feature list, ids.
+
+    One row per subject: their latest visit that carries a real DIAGNOSIS.
+    label = 1 for MCI or Dementia, 0 for CN -- the cohort's own clinician
+    labels, not a simulated rule. Feature slots with no measurement stay NaN
+    (XGBoost consumes that missingness natively; see the coverage report).
+    """
+    path = PROCESSED / "adni_features.csv"
+    if not path.exists():
+        print(f"ERROR: {path} missing.\nRun ingest first:  python scripts/ingest_adni.py")
+        sys.exit(1)
+    feat = pd.read_csv(path)
+    features = [f for f in FEATURES_ADNI if f in feat.columns]
+    missing = [f for f in FEATURES_ADNI if f not in feat.columns]
+    if missing:
+        print(f"[warn] ADNI feature columns absent from ingest output: {missing}")
+    return feat, features, feat["subject_id"].astype(str).tolist()
+
+
+# --------------------------------------------------------------------------- #
 # Real-OASIS loading (unchanged behavior)
 # --------------------------------------------------------------------------- #
 def load_oasis() -> tuple[pd.DataFrame, pd.Series, list[str]]:
@@ -227,8 +276,9 @@ def load_oasis() -> tuple[pd.DataFrame, pd.Series, list[str]]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Train and export the risk model.")
     parser.add_argument("--model", choices=["xgb", "rf", "auto"], default="auto")
-    parser.add_argument("--data", choices=["synthetic", "real", "auto"], default="auto",
-                        help="synthetic (ADNI-shaped, all 4 stages) | real (OASIS) | auto")
+    parser.add_argument("--data", choices=["adni", "synthetic", "real", "auto"], default="auto",
+                        help="adni (real ADNI drop, all 4 stages) | synthetic (ADNI-shaped) "
+                             "| real (OASIS) | auto")
     args = parser.parse_args()
 
     model_type = args.model
@@ -240,10 +290,14 @@ def main() -> int:
 
     synthetic_v2_path = PROCESSED / "synthetic_patients_v2.json"
     synthetic_path = PROCESSED / "synthetic_patients.json"
+    adni_path = PROCESSED / "adni_features.csv"
     data_mode = args.data
     if data_mode == "auto":
-        # Prefer the v2 ADNI-1-proportioned cohort (bigger, all stages populated)
-        if synthetic_v2_path.exists():
+        # Real ADNI first (real labels, all four stages, no simulation),
+        # then the v2 synthetic cohort, then OASIS.
+        if adni_path.exists() and ADNI_FEATURES_AVAILABLE:
+            data_mode = "adni"
+        elif synthetic_v2_path.exists():
             data_mode = "synthetic"
             synthetic_path = synthetic_v2_path
         elif synthetic_path.exists():
@@ -254,7 +308,11 @@ def main() -> int:
         synthetic_path = synthetic_v2_path
 
     raw_ids = None
-    if data_mode == "synthetic":
+    if data_mode == "adni":
+        feat, FEATURES, raw_ids = load_adni()
+        y_all = pd.to_numeric(feat["label"], errors="coerce")
+        labeled_mask = y_all.notna()
+    elif data_mode == "synthetic":
         feat, y_all, FEATURES, raw_ids = load_synthetic(synthetic_path)
         labeled_mask = ~y_all.isna()
     else:
@@ -267,8 +325,12 @@ def main() -> int:
     n_train = len(labeled)
     n_scored = len(feat)
 
-    src = ("synthetic ADNI-shaped cohort (all 4 stages)" if data_mode == "synthetic"
-           else "real OASIS-1 longitudinal (cognitive + volume)")
+    if data_mode == "adni":
+        src = "real ADNI (13-table drop, 17 Sep 2026) — 16 features across all 4 stages"
+    elif data_mode == "synthetic":
+        src = "synthetic ADNI-shaped cohort (all 4 stages)"
+    else:
+        src = "real OASIS-1 longitudinal (cognitive + volume)"
     print(f"[data]  {n_scored} subjects scored · {n_train} with trainable labels "
           f"({int(y.sum())} positive / {int((1 - y).sum())} negative)")
     print(f"[data]  source: {src}")
@@ -363,10 +425,75 @@ def main() -> int:
     if sv.ndim == 3:  # some shap versions return [samples, features, classes]
         sv = sv[:, :, 1]
 
-    global_imp = pd.DataFrame({"feature": FEATURES, "mean_abs_shap": np.abs(sv).mean(axis=0)}).sort_values("mean_abs_shap", ascending=False)
-    print("\n[shap] global feature importance (mean |SHAP|):")
+    # Availability matters: a slot that only 20% of subjects have (PET) gets its
+    # global mean|SHAP| diluted toward zero by all the NaN rows. So report BOTH
+    #   overall  = mean |SHAP| across every subject (what the cohort sees), and
+    #   when present = mean |SHAP| only where the test was actually measured
+    #                (the contribution of the result ITSELF when you have it).
+    present_mask = X_all.notna()
+    imp_rows = []
+    for j, f in enumerate(FEATURES):
+        avail = present_mask[f].to_numpy() if f in present_mask.columns else np.zeros(len(X_all), bool)
+        n_present = int(avail.sum())
+        imp_rows.append(
+            {
+                "feature": f,
+                "stage": STAGE_OF_FEATURE.get(f, 1),
+                "mean_abs_shap": float(np.abs(sv[:, j]).mean()),
+                "shap_when_present": float(np.abs(sv[avail, j]).mean()) if n_present else float("nan"),
+                "n_present": n_present,
+                "pct_present": round(100.0 * n_present / len(X_all), 1),
+            }
+        )
+    global_imp = (pd.DataFrame(imp_rows)
+                  .sort_values("mean_abs_shap", ascending=False)
+                  .reset_index(drop=True))
+    print("\n[shap] feature contribution (mean |SHAP|) -- overall vs where measured:")
+    print(f"  {'feature':<24}{'stg':>4}{'overall':>10}{'measured':>10}{'n':>7}{'%':>7}")
     for _, row in global_imp.iterrows():
-        print(f"  {row['feature']:<20} {row['mean_abs_shap']:.4f}")
+        print(f"  {row['feature']:<24}{int(row['stage']):>4}{row['mean_abs_shap']:>10.4f}"
+              f"{row['shap_when_present']:>10.4f}{int(row['n_present']):>7,}{row['pct_present']:>6.1f}%")
+
+    # Stage-level rollup -- the direct answer to "how much does PET add?"
+    stage_imp = (global_imp.groupby("stage")
+                 .agg(features=("feature", "count"),
+                      mean_abs_shap=("mean_abs_shap", "sum"),
+                      shap_when_present=("shap_when_present", "sum"))
+                 .reset_index()
+                 .sort_values("stage"))
+    total_overall = float(stage_imp["mean_abs_shap"].sum())
+    stage_imp["share_pct"] = 100.0 * stage_imp["mean_abs_shap"] / max(total_overall, 1e-9)
+    print("\n[shap] contribution by pipeline stage (summed mean |SHAP|):")
+    for _, row in stage_imp.iterrows():
+        name = STAGE_NAMES.get(int(row["stage"]), f"stage {int(row['stage'])}")
+        print(f"  Stage {int(row['stage'])} {name:<20} {row['mean_abs_shap']:>8.4f}"
+              f"  {row['share_pct']:>5.1f}% of total")
+
+    report_lines.extend([
+        "",
+        "feature contribution (mean |SHAP| over the scored cohort):",
+        f"  {'feature':<24}{'stage':>6}{'overall':>10}{'measured':>10}{'n':>8}{'%':>7}",
+    ])
+    for _, row in global_imp.iterrows():
+        report_lines.append(
+            f"  {row['feature']:<24}{int(row['stage']):>6}{row['mean_abs_shap']:>10.4f}"
+            f"{row['shap_when_present']:>10.4f}{int(row['n_present']):>8,}{row['pct_present']:>6.1f}%"
+        )
+    report_lines.extend(["", "contribution by pipeline stage:"])
+    for _, row in stage_imp.iterrows():
+        name = STAGE_NAMES.get(int(row["stage"]), f"stage {int(row['stage'])}")
+        report_lines.append(
+            f"  Stage {int(row['stage'])} {name:<20} {row['mean_abs_shap']:>8.4f}"
+            f"  {row['share_pct']:>5.1f}% of total"
+        )
+    report_lines.extend([
+        "",
+        "'overall' is the cohort-wide mean |SHAP|; 'measured' is the mean |SHAP|",
+        "only across subjects where that test exists. A slot that is rarely",
+        "measured (PET) is diluted in 'overall' by the NaN rows but keeps its true",
+        "per-result contribution in 'measured' -- this is how a partially-observed",
+        "cohort is reported honestly rather than as a fabricated complete vector.",
+    ])
 
     # ---- Per-subject risk + top factors (dashboard-ready) -------------------
     risk_proba = pipeline.predict_proba(X_all)[:, 1]
@@ -405,8 +532,30 @@ def main() -> int:
     joblib.dump(pipeline, ARTIFACTS / "pipeline.joblib")
     joblib.dump(rf_pipe, ARTIFACTS / "rf_pipeline.joblib")
     global_imp.to_csv(ARTIFACTS / "global_importance.csv", index=False)
+    stage_imp.to_csv(ARTIFACTS / "stage_importance.csv", index=False)
     (ARTIFACTS / "eval_report.txt").write_text("\n".join(report_lines), encoding="utf-8")
-    (PROCESSED / "risk_scores.json").write_text(json.dumps(records, indent=2), encoding="utf-8")
+
+    # risk_scores.json is the one data file this repo COMMITS (deployment seed),
+    # so on real ADNI it is written de-identified: subject ID, score and
+    # per-feature attributions only. Measured values (age, sex, education, MMSE,
+    # ADAS-Cog, FAQ, biomarker readings) stay out -- ADNI is DUA-restricted and
+    # per-participant measures must never be published from this repo.
+    if data_mode == "adni":
+        seed = [
+            {
+                "subject_id": r["subject_id"],
+                "risk_score": r["risk_score"],
+                "top_factors": [
+                    {"feature": f["feature"], "contribution": f["contribution"]}
+                    for f in r["top_factors"]
+                ],
+                "data_mode": "adni",
+            }
+            for r in records
+        ]
+        (PROCESSED / "risk_scores.json").write_text(json.dumps(seed, indent=2), encoding="utf-8")
+    else:
+        (PROCESSED / "risk_scores.json").write_text(json.dumps(records, indent=2), encoding="utf-8")
 
     meta = {
         "model_type": model_type,
@@ -423,6 +572,19 @@ def main() -> int:
         "baseline_accuracy": round(float(dummy_acc), 4),
         "n_train": n_train,
         "n_scored": n_scored,
+        # the served pipeline's feature contract, stage-tagged for the UI/docs
+        "feature_stages": {f: STAGE_OF_FEATURE.get(f, 1) for f in FEATURES},
+        "stage_importance": {
+            str(int(r["stage"])): {
+                "name": STAGE_NAMES.get(int(r["stage"]), f"stage {int(r['stage'])}"),
+                "mean_abs_shap": round(float(r["mean_abs_shap"]), 4),
+                "share_pct": round(float(r["share_pct"]), 2),
+            }
+            for _, r in stage_imp.iterrows()
+        },
+        "feature_coverage": {
+            str(r["feature"]): round(float(r["pct_present"]), 1) for _, r in global_imp.iterrows()
+        },
     }
     (ARTIFACTS / "model_meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
@@ -433,7 +595,8 @@ def main() -> int:
     print("[done] wrote:")
     for p in (ARTIFACTS / "pipeline.joblib", ARTIFACTS / "rf_pipeline.joblib",
               ARTIFACTS / "model_meta.json", ARTIFACTS / "eval_report.txt",
-              ARTIFACTS / "global_importance.csv", PROCESSED / "risk_scores.json"):
+              ARTIFACTS / "global_importance.csv", ARTIFACTS / "stage_importance.csv",
+              PROCESSED / "risk_scores.json"):
         print(f"  {p}")
     return 0
 

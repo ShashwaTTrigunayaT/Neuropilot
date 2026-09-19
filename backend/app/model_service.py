@@ -60,9 +60,14 @@ def info() -> dict:
 def record_to_features(record: dict) -> dict:
     """Internal patient record -> trained-model feature vector.
 
-    Mirrors the mapping in scripts/train_model.py exactly (same keys, same
-    slot field names). Slots never ordered/completed map to None -> NaN, which
-    the served pipeline handles natively.
+    Emits a SUPERSET of every cohort's slot names, so one function serves any
+    trained pipeline: the model card's `features` list selects which keys are
+    actually used, the rest are ignored. Slots never ordered/completed map to
+    None -> NaN, which the served pipeline handles natively.
+
+    Feature names/encodings mirror scripts/ingest_adni.py (real ADNI) and
+    scripts/train_model.py (synthetic / OASIS) exactly -- a mismatch here would
+    silently feed the model different columns than it was trained on.
     """
     cog = record.get("cognitive") or {}
     blood = record.get("blood") or {}
@@ -77,17 +82,43 @@ def record_to_features(record: dict) -> dict:
             return None
         return 1.0 if str(raw).lower() == "positive" else 0.0
 
+    def _num(v):
+        if v is None or v == "":
+            return None
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return None
+
+    apoe = record.get("apoe_e4")
+    if isinstance(apoe, str):
+        apoe = 1.0 if apoe.strip().lower() in {"true", "1", "yes", "e4"} else 0.0
+    elif apoe is not None:
+        apoe = 1.0 if bool(apoe) else 0.0
+
     return {
+        # ---- real-ADNI vector (16 features, scripts/ingest_adni.py) --------
         "age": record.get("age"),
         "education_years": record.get("education_years"),
         "sex": 1 if record.get("sex") == "M" else 0,
         "mmse": mmse_latest,
         "mmse_change": (mmse_latest - mmse_prior) if (mmse_latest is not None and mmse_prior is not None) else None,
-        "ptau181": blood.get("pTau181") if isinstance(blood, dict) else None,
+        "adas_cog_13": record.get("adas_cog_13"),
+        "faq_total": record.get("faq_total"),
+        "apoe_e4": apoe,
+        "ptau217": blood.get("pTau217") if isinstance(blood, dict) else None,
         "abeta4240": blood.get("abeta4240") if isinstance(blood, dict) else None,
+        "nfl": blood.get("nfl") if isinstance(blood, dict) else None,
+        "gfap": blood.get("gfap") if isinstance(blood, dict) else None,
         "hippocampal_volume": imaging.get("hippocampalVolumeCm3") if isinstance(imaging, dict) else None,
+        "hippocampal_icv_ratio": imaging.get("hippocampalIcvRatio") if isinstance(imaging, dict) else None,
+        "centiloids": pet.get("centiloids") if isinstance(pet, dict) else None,
+        "tau_meta_temporal": pet.get("tauMetaTemporalSuvr") if isinstance(pet, dict) else None,
+        # ---- legacy slot names (synthetic cohort + progression models) -----
+        "ptau181": blood.get("pTau181") if isinstance(blood, dict) else None,
         "amyloid_positive": _positive(pet, "amyloid") if isinstance(pet, dict) else None,
         "tau_positive": _positive(pet, "tau") if isinstance(pet, dict) else None,
+        "icv_cm3": _num(imaging.get("icvCm3")) if isinstance(imaging, dict) else None,
     }
 
 

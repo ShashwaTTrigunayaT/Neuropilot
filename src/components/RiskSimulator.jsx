@@ -23,22 +23,39 @@ import {
 } from './widgets.jsx';
 
 /* ------------------------------------------------------------------ */
-/*  The 10 features the served v2 model actually uses (model_meta).    */
+/*  The 16 features the served ADNI model actually uses (model_meta).  */
 /*  Blood / MRI / PET inputs are only sent when the corresponding      */
-/*  stage is toggled "measured" — otherwise null (model default path). */
+/*  stage is toggled "measured" — otherwise null, so the score shows    */
+/*  the model's real behaviour on an un-ordered test.                  */
 /* ------------------------------------------------------------------ */
 
 const FACTOR_META = {
-  mmse: { stage: 'Cognitive', label: 'MMSE (latest)' },
-  mmse_change: { stage: 'Cognitive', label: 'MMSE change' },
   age: { stage: 'Demographic', label: 'Age' },
   sex: { stage: 'Demographic', label: 'Sex' },
   education_years: { stage: 'Demographic', label: 'Education' },
-  ptau181: { stage: 'Blood', label: 'p-tau181' },
+  apoe_e4: { stage: 'Demographic', label: 'APOE ε4' },
+  mmse: { stage: 'Cognitive', label: 'MMSE (latest)' },
+  mmse_change: { stage: 'Cognitive', label: 'MMSE change' },
+  adas_cog_13: { stage: 'Cognitive', label: 'ADAS-Cog 13' },
+  faq_total: { stage: 'Cognitive', label: 'Functional status (FAQ)' },
+  ptau217: { stage: 'Blood', label: 'p-tau217' },
   abeta4240: { stage: 'Blood', label: 'Aβ42/40' },
+  nfl: { stage: 'Blood', label: 'NfL' },
+  gfap: { stage: 'Blood', label: 'GFAP' },
   hippocampal_volume: { stage: 'MRI', label: 'Hippocampal volume' },
-  amyloid_positive: { stage: 'PET', label: 'Amyloid PET' },
-  tau_positive: { stage: 'PET', label: 'Tau PET' },
+  hippocampal_icv_ratio: { stage: 'MRI', label: 'Hippocampus / ICV' },
+  centiloids: { stage: 'PET', label: 'Amyloid PET (Centiloids)' },
+  tau_meta_temporal: { stage: 'PET', label: 'Tau PET (SUVR)' },
+};
+
+// Feature defaults mirror the real ADNI cohort medians (ingest_adni.py), so a
+// simulated patient starts from a realistic profile rather than a guess.
+const COHORT_MEDIAN = {
+  age: 73, sex: 'F', education_years: 16,
+  mmse: 28, mmse_change: 0, adas_cog_13: 13.7, faq_total: 1,
+  ptau217: 0.185, abeta4240: 0.083, nfl: 15.2, gfap: 127,
+  hippocampal_volume: 3.5, icv: 1520,
+  centiloids: 14, tau_meta_temporal: 1.21,
 };
 
 const STAGE_COLORS = {
@@ -55,23 +72,34 @@ function formatFactorValue(f) {
   switch (f.feature) {
     case 'sex':
       return v === 1 ? 'Male' : 'Female';
-    case 'amyloid_positive':
-    case 'tau_positive':
-      return v === 1 ? 'Positive' : 'Negative';
+    case 'apoe_e4':
+      return v === 1 ? 'ε4 carrier' : 'non-carrier';
     case 'age':
-      return `${Math.round(v)} yrs`;
     case 'education_years':
       return `${Math.round(v)} yrs`;
     case 'mmse':
       return `${Math.round(v)}/30`;
     case 'mmse_change':
       return `${v > 0 ? '+' : ''}${v} pts`;
-    case 'ptau181':
+    case 'adas_cog_13':
+      return `${Number(v).toFixed(1)} pts`;
+    case 'faq_total':
+      return `${Math.round(v)}/30`;
+    case 'ptau217':
+      return `${Number(v).toFixed(3)} pg/mL`;
+    case 'nfl':
+    case 'gfap':
       return `${Number(v).toFixed(1)} pg/mL`;
     case 'abeta4240':
       return Number(v).toFixed(3);
     case 'hippocampal_volume':
       return `${Number(v).toFixed(2)} cm³`;
+    case 'hippocampal_icv_ratio':
+      return Number(v).toFixed(5);
+    case 'centiloids':
+      return `${Number(v).toFixed(1)} CL`;
+    case 'tau_meta_temporal':
+      return `${Number(v).toFixed(3)} SUVR`;
     default:
       return typeof v === 'number' ? v.toFixed(2) : String(v);
   }
@@ -80,52 +108,70 @@ function formatFactorValue(f) {
 const PRESETS = [
   {
     name: 'High Risk (Suspected AD)',
-    desc: 'Rapid decline, amyloid + tau positive, severe atrophy',
+    desc: 'Rapid decline, advanced amyloid + tau burden, severe atrophy',
     features: {
       age: 78,
       sex: 'F',
       education_years: 12,
       mmse: 21,
       mmse_change: -4,
-      ptau181: 5.8,
-      abeta4240: 0.055,
-      hippocampal_volume: 1.9,
-      amyloid_positive: true,
-      tau_positive: true,
+      adas_cog_13: 30,
+      faq_total: 14,
+      apoe_e4: true,
+      ptau217: 0.75,
+      abeta4240: 0.058,
+      nfl: 38,
+      gfap: 320,
+      hippocampal_volume: 2.05,
+      icv: 1420,
+      centiloids: 95,
+      tau_meta_temporal: 1.72,
     },
     stages: { blood: true, mri: true, pet: true },
   },
   {
     name: 'Borderline (MCI Watch)',
-    desc: 'Mild decline, borderline blood panel, MRI/PET pending',
+    desc: 'Mild decline, borderline plasma panel, MRI/PET not yet ordered',
     features: {
       age: 72,
       sex: 'M',
       education_years: 16,
       mmse: 26,
       mmse_change: -1,
-      ptau181: 3.4,
-      abeta4240: 0.075,
-      hippocampal_volume: 2.4,
-      amyloid_positive: false,
-      tau_positive: false,
+      adas_cog_13: 14,
+      faq_total: 3,
+      apoe_e4: true,
+      ptau217: 0.28,
+      abeta4240: 0.078,
+      nfl: 26,
+      gfap: 230,
+      hippocampal_volume: 2.45,
+      icv: 1580,
+      centiloids: 30,
+      tau_meta_temporal: 1.28,
     },
     stages: { blood: true, mri: false, pet: false },
   },
   {
     name: 'Low Risk (Healthy Aging)',
-    desc: 'Normal cognition, clean blood panel, preserved volumes',
+    desc: 'Normal cognition, clean plasma panel, preserved volumes',
     features: {
       age: 67,
       sex: 'F',
       education_years: 18,
       mmse: 29,
       mmse_change: 0,
-      ptau181: 1.2,
-      abeta4240: 0.135,
-      hippocampal_volume: 3.8,
-      amyloid_positive: false,
-      tau_positive: false,
+      adas_cog_13: 5,
+      faq_total: 0,
+      apoe_e4: false,
+      ptau217: 0.09,
+      abeta4240: 0.105,
+      nfl: 11,
+      gfap: 95,
+      hippocampal_volume: 3.75,
+      icv: 1400,
+      centiloids: -5,
+      tau_meta_temporal: 1.1,
     },
     stages: { blood: true, mri: true, pet: false },
   },
@@ -136,20 +182,26 @@ function featuresFromPatient(p) {
   const blood = p.blood || {};
   const imaging = p.imaging || {};
   const pet = p.pet || {};
-  const latest = cog.latest ?? 25;
+  const latest = cog.latest ?? COHORT_MEDIAN.mmse;
   const prior = cog.prior ?? latest;
   return {
     features: {
-      age: p.age || 75,
-      sex: p.sex || 'F',
-      education_years: p.education_years || 14,
+      age: p.age || COHORT_MEDIAN.age,
+      sex: p.sex || COHORT_MEDIAN.sex,
+      education_years: p.education_years ?? COHORT_MEDIAN.education_years,
       mmse: latest,
       mmse_change: Math.round((latest - prior) * 10) / 10,
-      ptau181: blood.pTau181 ?? 2.5,
-      abeta4240: blood.abeta4240 ?? 0.12,
-      hippocampal_volume: imaging.hippocampalVolumeCm3 ?? 3.0,
-      amyloid_positive: pet.amyloid === 'positive',
-      tau_positive: pet.tau === 'positive',
+      adas_cog_13: p.adas_cog_13 ?? COHORT_MEDIAN.adas_cog_13,
+      faq_total: p.faq_total ?? COHORT_MEDIAN.faq_total,
+      apoe_e4: p.apoe_e4 === true,
+      ptau217: blood.pTau217 ?? COHORT_MEDIAN.ptau217,
+      abeta4240: blood.abeta4240 ?? COHORT_MEDIAN.abeta4240,
+      nfl: blood.nfl ?? COHORT_MEDIAN.nfl,
+      gfap: blood.gfap ?? COHORT_MEDIAN.gfap,
+      hippocampal_volume: imaging.hippocampalVolumeCm3 ?? COHORT_MEDIAN.hippocampal_volume,
+      icv: imaging.icvCm3 ?? COHORT_MEDIAN.icv,
+      centiloids: pet.centiloids ?? COHORT_MEDIAN.centiloids,
+      tau_meta_temporal: pet.tauMetaTemporalSuvr ?? COHORT_MEDIAN.tau_meta_temporal,
     },
     stages: {
       blood: blood.status === 'completed',
@@ -220,17 +272,28 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
     setScoring(true);
     setError('');
     try {
+      const f = feat.features;
+      // Stage-gated exactly like the pipeline: a stage that has not been ordered
+      // sends null, so XGBoost takes its native missing-value branch. The MRI
+      // ratio is derived from the two measured inputs rather than asked for
+      // twice (it is an exact function of them).
       const payload = {
-        age: feat.features.age,
-        sex: feat.features.sex === 'M' ? 1 : 0,
-        education_years: feat.features.education_years,
-        mmse: feat.features.mmse,
-        mmse_change: feat.features.mmse_change,
-        ptau181: feat.stages.blood ? feat.features.ptau181 : null,
-        abeta4240: feat.stages.blood ? feat.features.abeta4240 : null,
-        hippocampal_volume: feat.stages.mri ? feat.features.hippocampal_volume : null,
-        amyloid_positive: feat.stages.pet ? (feat.features.amyloid_positive ? 1 : 0) : null,
-        tau_positive: feat.stages.pet ? (feat.features.tau_positive ? 1 : 0) : null,
+        age: f.age,
+        sex: f.sex === 'M' ? 1 : 0,
+        education_years: f.education_years,
+        apoe_e4: f.apoe_e4 ? 1 : 0,
+        mmse: f.mmse,
+        mmse_change: f.mmse_change,
+        adas_cog_13: f.adas_cog_13,
+        faq_total: f.faq_total,
+        ptau217: feat.stages.blood ? f.ptau217 : null,
+        abeta4240: feat.stages.blood ? f.abeta4240 : null,
+        nfl: feat.stages.blood ? f.nfl : null,
+        gfap: feat.stages.blood ? f.gfap : null,
+        hippocampal_volume: feat.stages.mri ? f.hippocampal_volume : null,
+        hippocampal_icv_ratio: feat.stages.mri ? f.hippocampal_volume / f.icv : null,
+        centiloids: feat.stages.pet ? f.centiloids : null,
+        tau_meta_temporal: feat.stages.pet ? f.tau_meta_temporal : null,
       };
       const res = await api.scorePatient(payload);
       setResult(res);
@@ -268,13 +331,13 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
       return 'Stage 1 complete: Low risk. Schedule routine follow-up cognitive evaluation in 12 months.';
     }
     if (!stages.blood) {
-      return 'Order Stage 2: Blood biomarker panel (plasma p-tau181, Aβ42/40) to confirm pathology.';
+      return 'Order Stage 2: plasma panel (p-tau217, Aβ42/40, NfL, GFAP) to confirm pathology.';
     }
     if (!stages.mri) {
-      return 'Blood panel complete — order Stage 3: MRI volumetrics (hippocampal volume) to quantify neurodegeneration.';
+      return 'Blood panel complete — order Stage 3: MRI volumetrics (hippocampal volume, ICV-normalised) to quantify neurodegeneration.';
     }
     if (!stages.pet) {
-      return 'MRI complete — order Stage 4: PET (amyloid/tau) to confirm pathology before specialist referral.';
+      return 'MRI complete — order Stage 4: PET (Centiloids + tau SUVR) to quantify molecular burden before specialist referral.';
     }
     return 'Full 4-stage workup complete — refer to specialist memory clinic for diagnostic confirmation.';
   }, [tier, stages]);
@@ -292,7 +355,7 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
               Clinical Risk Simulator
             </h1>
             <p className="mt-1.5 text-[13px] text-muted dark:text-darkMuted flex flex-wrap items-center gap-x-2.5 gap-y-1">
-              <span>10-Feature Model Workbench</span>
+              <span>16-Feature ADNI Model Workbench</span>
               <span className="text-line dark:text-darkBorder font-light">/</span>
               <span>Staged Measurement (Cognition → Blood → MRI → PET)</span>
               <span className="text-line dark:text-darkBorder font-light">/</span>
@@ -402,6 +465,30 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
                   marks={['6y', '12y (HS)', '24y']}
                   onChange={(v) => updateField('education_years', v)}
                 />
+                <div>
+                  <span className="block text-xs font-medium text-ink dark:text-darkText">
+                    APOE genotype (ε4 allele)
+                  </span>
+                  <div className="mt-2 flex gap-2">
+                    {[
+                      [false, 'non-carrier'],
+                      [true, 'ε4 carrier'],
+                    ].map(([val, lab]) => (
+                      <button
+                        key={lab}
+                        type="button"
+                        onClick={() => updateField('apoe_e4', val)}
+                        className={`flex-1 rounded-lg border py-1.5 text-[11px] font-semibold transition ${
+                          features.apoe_e4 === val
+                            ? 'border-accent bg-accent text-white shadow-soft'
+                            : 'border-line dark:border-darkBorder bg-white dark:bg-darkCard text-ink dark:text-darkText'
+                        }`}
+                      >
+                        {lab}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -433,6 +520,25 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
                   marks={['-8 (Decline)', '0', '+3 (Stable)']}
                   onChange={(v) => updateField('mmse_change', v)}
                 />
+                <Slider
+                  label="ADAS-Cog 13"
+                  value={features.adas_cog_13}
+                  display={`${Number(features.adas_cog_13).toFixed(1)} / 85`}
+                  min={0}
+                  max={70}
+                  step={0.5}
+                  marks={['0 (Normal)', '13.7 (Cohort median)', '70 (Severe)']}
+                  onChange={(v) => updateField('adas_cog_13', v)}
+                />
+                <Slider
+                  label="Functional status (FAQ)"
+                  value={features.faq_total}
+                  display={`${Math.round(features.faq_total)} / 30`}
+                  min={0}
+                  max={30}
+                  marks={['0 (Independent)', '30 (Dependent)']}
+                  onChange={(v) => updateField('faq_total', v)}
+                />
               </div>
             </div>
 
@@ -449,15 +555,15 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
               </div>
               <div className="mt-5 grid gap-5 sm:grid-cols-2">
                 <Slider
-                  label="p-tau181 (plasma)"
-                  value={features.ptau181}
-                  display={`${Number(features.ptau181).toFixed(1)} pg/mL`}
-                  min={0.6}
-                  max={7.5}
-                  step={0.1}
-                  marks={['0.6 (Normal)', '4.0 (Cutoff)', '7.5 (High)']}
+                  label="p-tau217 (plasma)"
+                  value={features.ptau217}
+                  display={`${Number(features.ptau217).toFixed(3)} pg/mL`}
+                  min={0.03}
+                  max={1.5}
+                  step={0.005}
+                  marks={['0.09 (CN median)', '0.40 (Cutoff)', '1.5 (High)']}
                   disabled={!stages.blood}
-                  onChange={(v) => updateField('ptau181', v)}
+                  onChange={(v) => updateField('ptau217', v)}
                 />
                 <Slider
                   label="Aβ42/40 ratio"
@@ -466,9 +572,31 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
                   min={0.04}
                   max={0.16}
                   step={0.001}
-                  marks={['0.04 (Low)', '0.068 (Cutoff)', '0.16 (Normal)']}
+                  marks={['0.04 (Low)', '0.075 (Cutoff)', '0.16 (Normal)']}
                   disabled={!stages.blood}
                   onChange={(v) => updateField('abeta4240', v)}
+                />
+                <Slider
+                  label="NfL (neuroaxonal injury)"
+                  value={features.nfl}
+                  display={`${Number(features.nfl).toFixed(1)} pg/mL`}
+                  min={2}
+                  max={80}
+                  step={0.5}
+                  marks={['2', '24.4 (Cutoff)', '80 (High)']}
+                  disabled={!stages.blood}
+                  onChange={(v) => updateField('nfl', v)}
+                />
+                <Slider
+                  label="GFAP (astrocyte activation)"
+                  value={features.gfap}
+                  display={`${Number(features.gfap).toFixed(1)} pg/mL`}
+                  min={20}
+                  max={600}
+                  step={1}
+                  marks={['20', '217 (Cutoff)', '600 (High)']}
+                  disabled={!stages.blood}
+                  onChange={(v) => updateField('gfap', v)}
                 />
               </div>
             </div>
@@ -484,19 +612,39 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
                 </SectionLabel>
                 <StageToggle on={stages.mri} onClick={() => toggleStage('mri')} />
               </div>
-              <div className="mt-5">
+              <div className="mt-5 grid gap-5 sm:grid-cols-2">
                 <Slider
-                  label="Hippocampal Volume"
+                  label="Hippocampal volume (mean L/R)"
                   value={features.hippocampal_volume}
                   display={`${Number(features.hippocampal_volume).toFixed(2)} cm³`}
                   min={1.6}
                   max={4.3}
                   step={0.05}
-                  marks={['1.6 (Atrophy)', '2.25 (Cutoff)', '4.3 (Preserved)']}
+                  marks={['1.6 (Atrophy)', '2.5 (p5)', '4.3 (Preserved)']}
                   disabled={!stages.mri}
                   onChange={(v) => updateField('hippocampal_volume', v)}
                 />
+                <Slider
+                  label="Intracranial volume (head-size control)"
+                  value={features.icv}
+                  display={`${Math.round(features.icv)} cm³`}
+                  min={1000}
+                  max={2000}
+                  step={10}
+                  marks={['1000', '1520 (median)', '2000']}
+                  disabled={!stages.mri}
+                  onChange={(v) => updateField('icv', v)}
+                />
               </div>
+              <p className="mt-3 text-[11px] text-muted dark:text-darkMuted">
+                The model reads the ratio{' '}
+                <span style={MONO} className="font-semibold text-ink dark:text-darkText">
+                  {stages.mri
+                    ? (features.hippocampal_volume / features.icv).toFixed(5)
+                    : 'not measured'}
+                </span>{' '}
+                — normalising by head size removes a confound that raw volumes carry.
+              </p>
             </div>
 
             {/* PET — Stage 4, toggleable */}
@@ -511,33 +659,28 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
                 <StageToggle on={stages.pet} onClick={() => toggleStage('pet')} />
               </div>
               <div className={`mt-5 grid gap-5 sm:grid-cols-2 ${stages.pet ? '' : 'opacity-40 pointer-events-none'}`}>
-                {[
-                  ['amyloid_positive', 'Amyloid PET'],
-                  ['tau_positive', 'Tau PET'],
-                ].map(([key, label]) => (
-                  <div key={key}>
-                    <span className="block text-xs font-medium text-ink dark:text-darkText">{label}</span>
-                    <div className="mt-2 flex gap-2">
-                      {[
-                        [false, 'Negative'],
-                        [true, 'Positive'],
-                      ].map(([val, lab]) => (
-                        <button
-                          key={lab}
-                          type="button"
-                          onClick={() => updateField(key, val)}
-                          className={`flex-1 rounded-lg border py-1.5 text-xs font-semibold transition ${
-                            features[key] === val
-                              ? 'border-accent bg-accent text-white shadow-soft'
-                              : 'border-line dark:border-darkBorder bg-white dark:bg-darkCard text-ink dark:text-darkText'
-                          }`}
-                        >
-                          {lab}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+                <Slider
+                  label="Amyloid burden (Centiloids)"
+                  value={features.centiloids}
+                  display={`${Number(features.centiloids).toFixed(1)} CL`}
+                  min={-20}
+                  max={180}
+                  step={1}
+                  marks={['-20 (None)', '24 (Aβ+ cutoff)', '180 (High)']}
+                  disabled={!stages.pet}
+                  onChange={(v) => updateField('centiloids', v)}
+                />
+                <Slider
+                  label="Tau burden (temporal meta SUVR)"
+                  value={features.tau_meta_temporal}
+                  display={`${Number(features.tau_meta_temporal).toFixed(3)} SUVR`}
+                  min={0.9}
+                  max={2.4}
+                  step={0.01}
+                  marks={['0.9', '1.30 (tap cutoff)', '2.4 (High)']}
+                  disabled={!stages.pet}
+                  onChange={(v) => updateField('tau_meta_temporal', v)}
+                />
               </div>
             </div>
           </div>
