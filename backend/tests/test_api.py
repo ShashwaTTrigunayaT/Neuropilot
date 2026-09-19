@@ -174,6 +174,21 @@ def test_get_patient_detail():
     assert d["beyond_stage"] == any(s not in reached for s in d["slots_on_file"])
 
 
+def test_label_proximal_features_are_never_served_as_factors():
+    """FAQ/CDR leak the label; the served attributions must never name one.
+
+    Guards the store, not just the code: the cohort digest alone does not change
+    on a retrain, so a stale database can keep explaining scores with a feature
+    the current model dropped. The fingerprint now folds in the model identity,
+    and this test fails loudly if that ever regresses.
+    """
+    leaks = {"faq_total", "cdr_sb", "cdr_global", "diagnosis", "real_diagnosis"}
+    for item in _ITEMS[:40]:
+        d = client.get(f"/patients/{item['id']}").json()
+        served = {f["feature"] for f in d["factors"]}
+        assert not (served & leaks), f"{item['id']} serves leaky factors: {served & leaks}"
+
+
 def test_get_patient_404():
     assert client.get("/patients/NOPE").status_code == 404
 

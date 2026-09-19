@@ -54,6 +54,11 @@ def info() -> dict:
         "thresholds": {"high": HIGH_THRESHOLD, "medium": MEDIUM_THRESHOLD},
         "test_auc": meta.get("test_auc"),
         "cv_auc_mean": meta.get("cv_auc_mean"),
+        "cv_auc_std": meta.get("cv_auc_std"),
+        "test_auc_stage1_only": meta.get("test_auc_stage1_only"),
+        "test_auc_biomarker_measured": meta.get("test_auc_biomarker_measured"),
+        "baseline_accuracy": meta.get("baseline_accuracy"),
+        "n_train": meta.get("n_train"),
     }
 
 

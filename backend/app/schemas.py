@@ -262,6 +262,14 @@ class ModelInfoResponse(BaseModel):
     thresholds: Optional[dict] = None
     test_auc: Optional[float] = None
     cv_auc_mean: Optional[float] = None
+    cv_auc_std: Optional[float] = None
+    # Held-out AUC split by what was actually measured (Stage 1 only vs any
+    # biomarker), so the "does it work before any test is ordered?" question is
+    # answerable from the API rather than only from the training report.
+    test_auc_stage1_only: Optional[float] = None
+    test_auc_biomarker_measured: Optional[float] = None
+    baseline_accuracy: Optional[float] = None
+    n_train: Optional[int] = None
     global_importance: List[GlobalImportance] = []
 
 

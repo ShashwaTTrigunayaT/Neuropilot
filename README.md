@@ -40,7 +40,7 @@ stage test was completed.
 | Progression forecast served | Run & verified (local + Railway) | `GET /patients/{id}/progression` → trajectory, conversion probability with SHAP drivers, projected tier, stage-completion score checkpoints |
 | Backend API | Run & verified | FastAPI + Swagger at `/docs`; `/health` reports `data_source` (e.g. `real+postgres` on Railway); live scoring via `pipeline.joblib` |
 | Frontend dashboard | Run & verified (headless Chrome) | Zero mock data; ranked cohort, detail view, full-page progression view, risk simulator rebuilt on the model's real 15 features; production build clean, zero console errors |
-| PostgreSQL store | Run & verified (Railway) | Activated by `DATABASE_URL`; schema created + seeded on boot, persists workup history across restarts |
+| PostgreSQL store | Run & verified (Railway) | Activated by `DATABASE_URL`; schema created + seeded on boot, persists workup history across restarts, and **re-seeds when either the cohort or the served model changes** — a retrain can never leave stale attributions in the database |
 | Docker demo | Written | `docker compose up --build` (single-image Railway deploy is the exercised path) |
 | CI (GitHub Actions) | Not built | Deliberately excluded from scope |
 

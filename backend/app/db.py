@@ -7,6 +7,7 @@ unreachable the API logs and keeps serving from memory.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from typing import List, Optional
@@ -238,13 +239,34 @@ def _insert_children(s, record: dict) -> None:
         s.add(PipelineHistory(patient_id=record["id"], at=h["at"], text=h["text"]))
 
 
+def _model_signature() -> str:
+    """Short id of the SERVED model, so a retrain re-seeds the derived fields.
+
+    The cohort digest covers the inputs, not the model. Retraining (e.g. dropping
+    a leaked feature) leaves every input byte-identical, so a cohort-only
+    fingerprint would keep the previous run's risk factors in the database -- the
+    live app then explains a score using a feature the current model no longer
+    has. Folding the model's identity in makes the stored view self-invalidating.
+    """
+    try:
+        from .config import MODEL_META_PATH
+
+        meta = json.loads(MODEL_META_PATH.read_text(encoding="utf-8"))
+        feats = ",".join(meta.get("features", []))
+        blob = f"{meta.get('trained_at', '')}|{feats}".encode("utf-8")
+        return hashlib.sha1(blob).hexdigest()[:8]
+    except Exception:  # noqa: BLE001 -- a missing model card must not block seeding
+        return "nomodel"
+
+
 def seed_if_empty(records: List[dict], source: str = "") -> None:
     """Seed the database once per cohort identity.
 
     A DB seeded with one cohort (e.g. the 800-subject synthetic set) must NOT
     keep serving that data after the app switches to another (the real ADNI
-    cohort). The stored fingerprint is `source:count`, so a cohort change
-    re-seeds instead of silently showing the old patients.
+    cohort). The stored fingerprint is `source:count:cohort_version:model`, so
+    either a cohort change or a RETRAIN re-seeds instead of silently showing the
+    previous run's patients and attributions.
     """
     if not enabled():
         return
@@ -252,7 +274,7 @@ def seed_if_empty(records: List[dict], source: str = "") -> None:
     # ingesters). Without it, re-ingesting data with corrected values would keep
     # serving the previous stage/score values out of Postgres forever.
     version = str(records[0].get("cohort_version") or "") if records else ""
-    fingerprint = f"{source}:{len(records)}:{version}"
+    fingerprint = f"{source}:{len(records)}:{version}:{_model_signature()}"
     with _session() as s:
         meta = s.query(AppMeta).filter_by(key="cohort_fingerprint").first()
         current = meta.value if meta else None
