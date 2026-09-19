@@ -12,7 +12,7 @@ const DRIVER_LABELS = {
   education_years: 'Education',
   apoe_e4: 'APOE ε4',
   adas_cog_13: 'ADAS-Cog 13',
-  faq_total: 'Functional status (FAQ)',
+  // faq_total: REMOVED (label leakage)
   ptau181: 'p-tau181 (blood)',
   ptau217: 'p-tau217 (blood)',
   abeta4240: 'Aβ42/40 (blood)',

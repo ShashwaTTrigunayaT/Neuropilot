@@ -41,9 +41,9 @@ const FEATURE_INFO = {
   asf: { stage: 'MRI', label: 'Atlas scaling factor (MRI)', desc: 'Head-size scaling factor used to normalize volumetrics.' },
   amyloid_positive: { stage: 'PET', label: 'Amyloid PET status', desc: 'Amyloid PET positivity indicates cortical amyloid plaque burden.' },
   tau_positive: { stage: 'PET', label: 'Tau PET status', desc: 'Tau PET positivity indicates neurofibrillary tangle pathology.' },
-  // --- real ADNI 16-feature model ---
+  // --- real ADNI 15-feature model (FAQ removed 2026-09-19) ---
   adas_cog_13: { stage: 'Cognitive', label: 'ADAS-Cog 13 (cognitive scale)', desc: '85-point Alzheimer’s Disease Assessment Scale — wider dynamic range than MMSE, so it resolves early decline the MMSE ceiling hides.' },
-  faq_total: { stage: 'Cognitive', label: 'Functional status (FAQ, 0–30)', desc: 'Functional Activities Questionnaire — independence in finances, shopping, meals. Measures the everyday-impact dimension MMSE cannot see.' },
+  // faq_total: REMOVED — it is part of ADNI’s diagnostic derivation (same leakage as CDR); removed from model 2026-09-19
   apoe_e4: { stage: 'Demographic', label: 'APOE ε4 carrier', desc: 'The strongest common genetic risk factor for late-onset Alzheimer’s disease.' },
   ptau217: { stage: 'Blood', label: 'p-tau217 (plasma)', desc: 'Plasma phosphorylated-tau 217 — the strongest single plasma marker of Alzheimer pathology.' },
   nfl: { stage: 'Blood', label: 'NfL (plasma)', desc: 'Neurofilament light — a marker of active neuroaxonal injury, a different axis from amyloid/tau.' },

@@ -23,7 +23,7 @@ import {
 } from './widgets.jsx';
 
 /* ------------------------------------------------------------------ */
-/*  The 16 features the served ADNI model actually uses (model_meta).  */
+/*  The 15 features the served ADNI model actually uses (FAQ removed).  */
 /*  Blood / MRI / PET inputs are only sent when the corresponding      */
 /*  stage is toggled "measured" — otherwise null, so the score shows    */
 /*  the model's real behaviour on an un-ordered test.                  */
@@ -37,7 +37,7 @@ const FACTOR_META = {
   mmse: { stage: 'Cognitive', label: 'MMSE (latest)' },
   mmse_change: { stage: 'Cognitive', label: 'MMSE change' },
   adas_cog_13: { stage: 'Cognitive', label: 'ADAS-Cog 13' },
-  faq_total: { stage: 'Cognitive', label: 'Functional status (FAQ)' },
+  // faq_total: REMOVED (label leakage — part of ADNI diagnostic algorithm)
   ptau217: { stage: 'Blood', label: 'p-tau217' },
   abeta4240: { stage: 'Blood', label: 'Aβ42/40' },
   nfl: { stage: 'Blood', label: 'NfL' },
@@ -52,7 +52,8 @@ const FACTOR_META = {
 // simulated patient starts from a realistic profile rather than a guess.
 const COHORT_MEDIAN = {
   age: 73, sex: 'F', education_years: 16,
-  mmse: 28, mmse_change: 0, adas_cog_13: 13.7, faq_total: 1,
+  mmse: 28, mmse_change: 0, adas_cog_13: 13.7,
+  // faq_total: REMOVED
   ptau217: 0.185, abeta4240: 0.083, nfl: 15.2, gfap: 127,
   hippocampal_volume: 3.5, icv: 1520,
   centiloids: 14, tau_meta_temporal: 1.21,
@@ -83,8 +84,7 @@ function formatFactorValue(f) {
       return `${v > 0 ? '+' : ''}${v} pts`;
     case 'adas_cog_13':
       return `${Number(v).toFixed(1)} pts`;
-    case 'faq_total':
-      return `${Math.round(v)}/30`;
+    // faq_total: REMOVED
     case 'ptau217':
       return `${Number(v).toFixed(3)} pg/mL`;
     case 'nfl':
@@ -116,7 +116,7 @@ const PRESETS = [
       mmse: 21,
       mmse_change: -4,
       adas_cog_13: 30,
-      faq_total: 14,
+      // faq_total: REMOVED (label leakage)
       apoe_e4: true,
       ptau217: 0.75,
       abeta4240: 0.058,
@@ -139,7 +139,7 @@ const PRESETS = [
       mmse: 26,
       mmse_change: -1,
       adas_cog_13: 14,
-      faq_total: 3,
+      // faq_total: REMOVED (label leakage)
       apoe_e4: true,
       ptau217: 0.28,
       abeta4240: 0.078,
@@ -162,7 +162,7 @@ const PRESETS = [
       mmse: 29,
       mmse_change: 0,
       adas_cog_13: 5,
-      faq_total: 0,
+      // faq_total: REMOVED (label leakage)
       apoe_e4: false,
       ptau217: 0.09,
       abeta4240: 0.105,
@@ -192,7 +192,7 @@ function featuresFromPatient(p) {
       mmse: latest,
       mmse_change: Math.round((latest - prior) * 10) / 10,
       adas_cog_13: p.adas_cog_13 ?? COHORT_MEDIAN.adas_cog_13,
-      faq_total: p.faq_total ?? COHORT_MEDIAN.faq_total,
+      // faq_total: REMOVED (label leakage)
       apoe_e4: p.apoe_e4 === true,
       ptau217: blood.pTau217 ?? COHORT_MEDIAN.ptau217,
       abeta4240: blood.abeta4240 ?? COHORT_MEDIAN.abeta4240,
@@ -285,7 +285,7 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
         mmse: f.mmse,
         mmse_change: f.mmse_change,
         adas_cog_13: f.adas_cog_13,
-        faq_total: f.faq_total,
+        // faq_total: REMOVED (label leakage)
         ptau217: feat.stages.blood ? f.ptau217 : null,
         abeta4240: feat.stages.blood ? f.abeta4240 : null,
         nfl: feat.stages.blood ? f.nfl : null,
@@ -355,7 +355,7 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
               Clinical Risk Simulator
             </h1>
             <p className="mt-1.5 text-[13px] text-muted dark:text-darkMuted flex flex-wrap items-center gap-x-2.5 gap-y-1">
-              <span>16-Feature ADNI Model Workbench</span>
+              <span>15-Feature ADNI Model Workbench (FAQ removed)</span>
               <span className="text-line dark:text-darkBorder font-light">/</span>
               <span>Staged Measurement (Cognition → Blood → MRI → PET)</span>
               <span className="text-line dark:text-darkBorder font-light">/</span>
@@ -530,15 +530,7 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
                   marks={['0 (Normal)', '13.7 (Cohort median)', '70 (Severe)']}
                   onChange={(v) => updateField('adas_cog_13', v)}
                 />
-                <Slider
-                  label="Functional status (FAQ)"
-                  value={features.faq_total}
-                  display={`${Math.round(features.faq_total)} / 30`}
-                  min={0}
-                  max={30}
-                  marks={['0 (Independent)', '30 (Dependent)']}
-                  onChange={(v) => updateField('faq_total', v)}
-                />
+                {/* FAQ REMOVED: was Functional status (FAQ) slider — removed due to label leakage */}
               </div>
             </div>
 

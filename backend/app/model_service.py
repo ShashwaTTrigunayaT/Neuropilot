@@ -97,14 +97,14 @@ def record_to_features(record: dict) -> dict:
         apoe = 1.0 if bool(apoe) else 0.0
 
     return {
-        # ---- real-ADNI vector (16 features, scripts/ingest_adni.py) --------
+        # ---- real-ADNI vector (15 features, FAQ removed 2026-09-19) --------
         "age": record.get("age"),
         "education_years": record.get("education_years"),
         "sex": 1 if record.get("sex") == "M" else 0,
         "mmse": mmse_latest,
         "mmse_change": (mmse_latest - mmse_prior) if (mmse_latest is not None and mmse_prior is not None) else None,
         "adas_cog_13": record.get("adas_cog_13"),
-        "faq_total": record.get("faq_total"),
+        # "faq_total": REMOVED (label leakage — part of ADNI diagnostic algorithm)
         "apoe_e4": apoe,
         "ptau217": blood.get("pTau217") if isinstance(blood, dict) else None,
         "abeta4240": blood.get("abeta4240") if isinstance(blood, dict) else None,

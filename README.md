@@ -31,14 +31,15 @@ stage test was completed.
 | Real ADNI ingestion | Run & verified | `scripts/ingest_adni.py`: nearest-visit join (±183 d) across MMSE, plasma panel, FreeSurfer MRI, amyloid + tau PET, ADAS-Cog, FAQ, CDR, APOE — emits training matrix, visit table and serving records |
 | Legacy paths still work | Run & verified | OASIS-1 (373 visits / 150 subjects) and the 800-subject synthetic cohort remain available via `--data real|synthetic` / `PATIENT_DATA` |
 | 12-month follow-up labels | Simulated (synthetic cohort) | `scripts/simulate_followup.py` labels still drive the progression forecaster; real ADNI conversions are now available in `data/processed/adni_visits.csv` for the next retrain |
-| Risk model trained on real data | Run & verified | XGBoost, **16 features across all 4 stages**; 5-fold CV AUC **0.913 ± 0.009**, held-out test AUC **0.925**, accuracy 0.839 on 3,636 real ADNI subjects |
+| Risk model trained on real data | Run & verified | XGBoost, **15 features across all 4 stages**; 5-fold CV AUC **0.901 ± 0.011**, held-out test AUC **0.902**, accuracy 0.812 on 3,636 real ADNI subjects |
+| Leakage & robustness audit | Run & verified | FAQ (diagnosis-derived, like CDR) dropped from the feature set; early stopping moved off the test set; APOE encoding benchmarked; complete-case cross-check agrees (ρ = 0.82) — `artifacts/model_audit.txt` |
 | Progression forecaster trained | Run & verified (synthetic labels) | XGBRegressor + XGBClassifier; MMSE-delta MAE **0.611 pts** (R² 0.679), conversion ROC AUC **0.770** (PR AUC 0.465 ≈ 2.8× lift) |
 | Explainability | Run & verified | Global SHAP **with per-stage rollup** (`stage_importance.csv`) + full per-subject attribution; both an overall and a measured-only view, so a rarely-ordered test (PET) is not diluted to zero |
 | Escalation rule engine | 39 pytest cases | Deterministic stage gates; clinician-in-the-loop via `override: true`; results loop via `POST /results`; **ordering gaps handled** — the stage stops at the first missing test and already-measured later slots are carried forward, never overwritten |
 | Autonomous triage | Run & verified (browser E2E) | `POST /workup/next` / `/workup/run`: model picks subject → orders test → re-scores → re-ranks; live rank movements (e.g. `#12 → #2` after an abnormal blood panel) |
 | Progression forecast served | Run & verified (local + Railway) | `GET /patients/{id}/progression` → trajectory, conversion probability with SHAP drivers, projected tier, stage-completion score checkpoints |
 | Backend API | Run & verified | FastAPI + Swagger at `/docs`; `/health` reports `data_source` (e.g. `real+postgres` on Railway); live scoring via `pipeline.joblib` |
-| Frontend dashboard | Run & verified (headless Chrome) | Zero mock data; ranked cohort, detail view, full-page progression view, risk simulator rebuilt on the model's real 16 features; production build clean, zero console errors |
+| Frontend dashboard | Run & verified (headless Chrome) | Zero mock data; ranked cohort, detail view, full-page progression view, risk simulator rebuilt on the model's real 15 features; production build clean, zero console errors |
 | PostgreSQL store | Run & verified (Railway) | Activated by `DATABASE_URL`; schema created + seeded on boot, persists workup history across restarts |
 | Docker demo | Written | `docker compose up --build` (single-image Railway deploy is the exercised path) |
 | CI (GitHub Actions) | Not built | Deliberately excluded from scope |
@@ -133,8 +134,11 @@ they are needed for one-command deployment.
    is informative).
 3. **Training (risk).** XGBoost (RandomForest fallback) predicts the severity
    label. CDR is deliberately **not** a feature (clinician rating ≈ the label =
-   leakage). Subject-level stratified 80/20 split; 5-fold CV + held-out metrics
-   + majority-class baseline, all written to `artifacts/eval_report.txt`.
+   leakage) and neither is **FAQ** (part of ADNI's diagnostic algorithm).
+   Subject-level stratified 80/20 split, plus a validation fold carved from
+   *train only* for early stopping (the test set is never used for model
+   selection); 5-fold CV + held-out metrics + majority-class baseline, all
+   written to `artifacts/eval_report.txt`.
 4. **Training (progression).** `scripts/simulate_followup.py` derives a
    deterministic 12-month follow-up for every subject — MMSE drift driven by the
    *observed* biomarker profile (amyloid/tau positivity accelerates decline,
@@ -211,7 +215,7 @@ trajectory (−0.05) at 2%.
                                 ▼
 ┌───────────────────────────────────────────────────────────────────────┐
 │ TRAIN — train_model.py · train_progression_model.py (sklearn Pipeline)│
-│   RISK:  16 features (4 stages) → XGBoost (RF fallback) → SHAP        │
+│   RISK:  15 features (4 stages) → XGBoost (RF fallback) → SHAP        │
 │   PROG:  same baseline features → MMSE-delta regressor + conv. clf    │
 │   artifacts: pipeline.joblib · progression_*.joblib · model cards     │
 │              global_importance.csv · risk_scores.json · eval reports  │
@@ -237,7 +241,7 @@ trajectory (−0.05) at 2%.
 │           · audit trail · Progression Probability button              │
 │   Progression (full page): observed-vs-predicted trajectory chart     │
 │           with stage-score lane · conversion probability · drivers    │
-│   Simulator: what-if workbench on the model's real 16 features        │
+│   Simulator: what-if workbench on the model's real 15 features        │
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -330,13 +334,24 @@ cohort's own clinician assessment — `1 = MCI or Dementia`, `0 = CN` (2,168 /
 | Metric | Value |
 |---|---|
 | Model | XGBoost (`pipeline.joblib`), RandomForest fallback exported alongside |
-| Features (16, spanning all 4 stages) | `age`, `sex`, `education_years`, `apoe_e4`, `mmse`, `mmse_change`, `adas_cog_13`, `faq_total`, `ptau217`, `abeta4240`, `nfl`, `gfap`, `hippocampal_volume`, `hippocampal_icv_ratio`, `centiloids`, `tau_meta_temporal` |
-| 5-fold CV AUC | **0.913 ± 0.009** ← headline number |
-| Held-out test AUC | 0.925 (slightly optimistic — early stopping used the test set) |
-| Held-out accuracy @0.5 | 0.839 (confusion `[[243 51], [66 368]]`; Low n=294, High n=434) |
-| RF fallback test AUC | 0.925 |
+| Features (15, spanning all 4 stages) | `age`, `sex`, `education_years`, `apoe_e4`, `mmse`, `mmse_change`, `adas_cog_13`, `ptau217`, `abeta4240`, `nfl`, `gfap`, `hippocampal_volume`, `hippocampal_icv_ratio`, `centiloids`, `tau_meta_temporal` |
+| 5-fold CV AUC | **0.901 ± 0.011** ← headline number |
+| Held-out test AUC | 0.902 — honest: the early-stopping validation fold is carved from train, so the test set is never touched during model selection |
+| Held-out accuracy @0.5 | 0.812 (confusion `[[240 54], [83 351]]`) |
+| Stratified test AUC | Stage 1 only (no biomarkers) **0.845** (n = 216) · biomarker-measured **0.921** (n = 512) |
+| RF fallback test AUC | 0.903 |
 | Majority-class baseline | accuracy 0.596, AUC 0.500 |
 | Thresholds | High > 0.7 · Medium ≥ 0.4 (env-overridable) |
+
+**Label leakage — what is excluded and why.** ADNI derives its `DIAGNOSIS` from
+clinical staging, so any variable in that derivation leaks the label. Two are
+barred from the feature set: **CDR** (the diagnosis is literally a function of
+it) and **FAQ** (functional status, part of the same algorithm). Both are still
+loaded for provenance/concordance reporting, never as predictors. **MMSE** is
+retained — it overlaps with diagnosis through standard cutoffs but is not
+deterministic, and a dementia triage tool that could not see a cognitive score
+would be clinically useless; the caveat is carried in the model card and in
+`artifacts/model_audit.txt`.
 
 **Feature contribution (mean |SHAP|).** `overall` is cohort-wide; `measured`
 counts only subjects who actually have that test — the honest way to read a
@@ -344,35 +359,34 @@ partially-observed cohort.
 
 | Rank | Feature | Overall | Where measured | Measured | Stage |
 |---|---|---|---|---|---|
-| 1 | `faq_total` | 1.112 | 1.294 | 78.1% | Cognition (function) |
-| 2 | `adas_cog_13` | 0.777 | 0.931 | 77.9% | Cognition |
-| 3 | `mmse` | 0.761 | 0.761 | 100% | Cognition |
-| 4 | `tau_meta_temporal` | 0.233 | **0.614** | 19.7% | PET |
-| 5 | `centiloids` | 0.224 | **0.378** | 29.3% | PET |
-| 6 | `age` | 0.118 | 0.118 | 99.9% | Demographics |
-| 7 | `sex` | 0.111 | 0.111 | 99.9% | Demographics |
-| 8 | `hippocampal_volume` | 0.092 | 0.136 | 58.3% | MRI |
-| 9 | `nfl` | 0.080 | 0.279 | 16.9% | Blood |
-| 10 | `hippocampal_icv_ratio` | 0.076 | 0.115 | 58.3% | MRI |
-| 11 | `mmse_change` | 0.075 | 0.105 | 64.2% | Cognition (longitudinal) |
-| 12 | `gfap` | 0.043 | 0.141 | 16.9% | Blood |
-| 13 | `abeta4240` | 0.038 | 0.101 | 30.8% | Blood |
-| 14 | `ptau217` | 0.037 | 0.102 | 30.9% | Blood |
-| 15 | `education_years` | 0.028 | 0.028 | 99.9% | Demographics |
-| 16 | `apoe_e4` | 0.005 | 0.004 | 78.7% | Genetics |
+| 1 | `adas_cog_13` | 1.070 | 1.204 | 77.9% | Cognition |
+| 2 | `mmse` | 0.974 | 0.974 | 100% | Cognition |
+| 3 | `tau_meta_temporal` | 0.232 | **0.608** | 19.7% | PET |
+| 4 | `centiloids` | 0.249 | **0.433** | 29.3% | PET |
+| 5 | `ptau217` | 0.074 | **0.158** | 30.9% | Blood |
+| 6 | `hippocampal_icv_ratio` | 0.076 | 0.115 | 58.3% | MRI |
+| 7 | `nfl` | 0.033 | **0.113** | 16.9% | Blood |
+| 8 | `hippocampal_volume` | 0.074 | 0.103 | 58.3% | MRI |
+| 9 | `sex` | 0.089 | 0.089 | 99.9% | Demographics |
+| 10 | `age` | 0.083 | 0.083 | 99.9% | Demographics |
+| 11 | `mmse_change` | 0.064 | 0.077 | 64.2% | Cognition (longitudinal) |
+| 12 | `abeta4240` | 0.032 | 0.050 | 30.8% | Blood |
+| 13 | `gfap` | 0.012 | 0.047 | 16.9% | Blood |
+| 14 | `education_years` | 0.015 | 0.015 | 99.9% | Demographics |
+| 15 | `apoe_e4` | 0.017 | 0.014 | 78.7% | Genetics |
 
 **Contribution by pipeline stage** (`artifacts/stage_importance.csv`):
 
 | Stage | Summed mean \|SHAP\| | Share |
 |---|---|---|
-| 1 — cognitive / clinical | 2.986 | 78.4% |
-| 2 — blood biomarkers | 0.199 | 5.2% |
-| 3 — MRI volumetrics | 0.168 | 4.4% |
-| 4 — PET | 0.457 | **12.0%** |
+| 1 — cognitive / clinical | 2.313 | 74.7% |
+| 2 — blood biomarkers | 0.150 | 4.8% |
+| 3 — MRI volumetrics | 0.150 | 4.8% |
+| 4 — PET | 0.482 | **15.6%** |
 
 Read together, these tables answer the obvious challenge — *"isn't the model
 just MMSE?"* No: with cognition held out, **PET alone carries more weight than
-blood and MRI combined** (12.0% vs 5.2% + 4.4%). PET looks small in the
+blood and MRI combined** (15.6% vs 4.8% + 4.8%). PET looks small in the
 cohort-wide column only because just 20–29% of subjects have a scan; among
 subjects who *do* have one, tau SUVR is the fourth-strongest result in the
 model. Both views are exported so neither can be quoted misleadingly.
@@ -489,7 +503,7 @@ field**. Swagger at `/docs`. CORS allows the Vite dev server (+ `CORS_ORIGINS`).
 - **In-process model serving:** `POST /patients/score` predicts on an arbitrary
   feature vector with `pipeline.joblib` + a cached SHAP TreeExplainer (this
   powers the what-if **Risk Simulator** in the UI, whose controls mirror the
-  model's real 16 features, including per-stage "Measured / Not ordered"
+  model's real 15 features, including per-stage "Measured / Not ordered"
   toggles).
 - **Progression serving:** `GET /patients/{id}/progression` returns the full
   forecast (404 → 503-safe: `model_available: false` when artifacts are absent).
@@ -564,13 +578,13 @@ Example attribution factor (grouped by stage in the UI):
 - **Autonomous Triage** — header toggle drives the whole cohort: a step banner
   shows `SUBJECT · TEST outcome · 0.68 → 0.81 (high) ↑ #12 → #2`; auto-stops
   when every pathway is complete.
-- **Risk Simulator** — what-if workbench on the live model with its real 16
-  features: demographics + APOE ε4, MMSE + change + ADAS-Cog 13 + FAQ (always
+- **Risk Simulator** — what-if workbench on the live model with its real 15
+  features: demographics + APOE ε4, MMSE + change + ADAS-Cog 13 (always
   measured), p-tau217 / Aβ42/40 / NfL / GFAP (blood), hippocampal volume + ICV
   (MRI, the ratio is derived), Centiloids + tau SUVR (PET), with per-stage
   "Measured / Not ordered" switches that send `null` and route the model through
   its learned missing-value default — plus clinical presets and a live SHAP
-  waterfall.
+  waterfall. (FAQ is deliberately absent — it is a leakage variable, see §7.1.)
 - **Design** — product-grade: Inter type, ambient background, glass sticky
   header with live data-source pill, hairline cards, numbered stepper, sticky
   table headers, dark chart tooltips, skeletons, indigo focus accent, tier
@@ -642,7 +656,7 @@ npm install && npm run dev   # open :5173 → toggle Autonomous Triage;
 
 - **The risk model now trains on real ADNI, but the progression forecaster does
   not yet.** The served risk model uses real observed measures and real
-  clinician labels (`data_mode: adni`, 3,636 subjects, test AUC 0.925). The
+  clinician labels (`data_mode: adni`, 3,636 subjects, test AUC 0.902). The
   12-month forecaster still trains on simulated trajectories. Real follow-up
   labels are already extracted into `data/processed/adni_visits.csv` (2,389
   subjects with ≥2 scored visits, real MMSE deltas and diagnostic conversions),
@@ -668,8 +682,20 @@ npm install && npm run dev   # open :5173 → toggle Autonomous Triage;
 - **Fixed by the real data, kept for the record:** in the synthetic cohort the
   PET features had ≈0 SHAP weight (amyloid/tau status correlate in the
   generator). On real measures, tau SUVR and Centiloids rank 4th and 5th.
-- **Optimistic holdout**: early stopping used the test set (documented in
-  `eval_report.txt`); CV AUC is the honest estimate.
+- **The holdout is no longer optimistic**: early stopping now uses a validation
+  fold carved from *train only*, so the held-out test AUC (0.902) is honest. It
+  sits a hair below the 5-fold CV AUC (0.901 ± 0.011) — as expected, now that
+  the test set is genuinely unseen during model selection.
+- **APOE ε4 is a weak cross-sectional signal here.** Binary carrier, copy count
+  (0/1/2), an explicit APOE × age interaction, and dropping it entirely all land
+  within **0.0006 CV AUC** of each other (`artifacts/model_audit.txt`). Its
+  clinical value is in *progression*, not same-day prevalence: a single-visit
+  diagnosis is already visible in MMSE/ADAS, so APOE adds almost nothing on top.
+- **Complete-case cross-check.** On the 510 subjects with all four families
+  measured, a throwaway model trained with *no* missing values ranks features
+  almost identically to the served model (8/10 top-10 overlap, Spearman
+  ρ = 0.82) — evidence the NaN handling is not inventing structure the
+  complete-case data does not support.
 - **Simulated results**: ordering a test derives a plausible result from the
   subject's severity — a demo stand-in for a real LIS/RIS integration.
 - **Not a diagnostic device**: prioritization support only; final decisions

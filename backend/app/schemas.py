@@ -57,7 +57,7 @@ class PatientDetail(PatientSummary):
     # patient's real profile. The cohort's DIAGNOSIS / CDR-SB are intentionally
     # absent: this service never surfaces a diagnosis.
     adas_cog_13: Optional[float] = None
-    faq_total: Optional[float] = None
+    # faq_total: REMOVED from model (label leakage — part of ADNI diagnostic algorithm)
     apoe_genotype: Optional[str] = None
     apoe_e4: Optional[bool] = None
     visit_date: Optional[str] = None

@@ -1,7 +1,7 @@
 {
   "model_type": "xgb",
   "data_mode": "adni",
-  "data_source": "real ADNI (13-table drop, 17 Sep 2026) \u2014 16 features across all 4 stages",
+  "data_source": "real ADNI (13-table drop, FAQ excluded, 19 Sep 2026) \u2014 15 features across all 4 stages",
   "features": [
     "age",
     "sex",
@@ -9,7 +9,6 @@
     "mmse",
     "mmse_change",
     "adas_cog_13",
-    "faq_total",
     "apoe_e4",
     "ptau217",
     "abeta4240",
@@ -20,16 +19,18 @@
     "centiloids",
     "tau_meta_temporal"
   ],
-  "trained_at": "2026-09-19T19:15:33",
+  "trained_at": "2026-09-19T21:50:58",
   "thresholds": {
     "high": 0.7,
     "medium": 0.4
   },
-  "cv_auc_mean": 0.9127,
-  "cv_auc_std": 0.0091,
-  "test_auc": 0.9246,
-  "test_accuracy": 0.8393,
-  "rf_fallback_test_auc": 0.9248,
+  "cv_auc_mean": 0.9013,
+  "cv_auc_std": 0.0107,
+  "test_auc": 0.9022,
+  "test_accuracy": 0.8118,
+  "test_auc_stage1_only": 0.8453,
+  "test_auc_biomarker_measured": 0.9206,
+  "rf_fallback_test_auc": 0.903,
   "baseline_accuracy": 0.5962,
   "n_train": 3636,
   "n_scored": 3636,
@@ -40,7 +41,6 @@
     "mmse": 1,
     "mmse_change": 1,
     "adas_cog_13": 1,
-    "faq_total": 1,
     "apoe_e4": 1,
     "ptau217": 2,
     "abeta4240": 2,
@@ -54,41 +54,49 @@
   "stage_importance": {
     "1": {
       "name": "cognitive / clinical",
-      "mean_abs_shap": 2.9862,
-      "share_pct": 78.38
+      "mean_abs_shap_global": 2.3128,
+      "share_pct": 74.74
     },
     "2": {
       "name": "blood biomarkers",
-      "mean_abs_shap": 0.1985,
-      "share_pct": 5.21
+      "mean_abs_shap_global": 0.1501,
+      "share_pct": 4.85
     },
     "3": {
       "name": "MRI volumetrics",
-      "mean_abs_shap": 0.1677,
-      "share_pct": 4.4
+      "mean_abs_shap_global": 0.15,
+      "share_pct": 4.85
     },
     "4": {
       "name": "PET",
-      "mean_abs_shap": 0.4574,
-      "share_pct": 12.01
+      "mean_abs_shap_global": 0.4816,
+      "share_pct": 15.56
     }
   },
   "feature_coverage": {
-    "faq_total": 78.1,
     "adas_cog_13": 77.9,
     "mmse": 100.0,
     "tau_meta_temporal": 19.7,
     "centiloids": 29.3,
-    "age": 99.9,
-    "sex": 99.9,
-    "hippocampal_volume": 58.3,
-    "nfl": 16.9,
-    "hippocampal_icv_ratio": 58.3,
-    "mmse_change": 64.2,
-    "gfap": 16.9,
-    "abeta4240": 30.8,
     "ptau217": 30.9,
+    "hippocampal_icv_ratio": 58.3,
+    "nfl": 16.9,
+    "hippocampal_volume": 58.3,
+    "sex": 99.9,
+    "age": 99.9,
+    "mmse_change": 64.2,
+    "abeta4240": 30.8,
+    "gfap": 16.9,
     "education_years": 99.9,
     "apoe_e4": 78.7
-  }
+  },
+  "caveats": [
+    "FAQ_TOTAL removed from features (label leakage \u2014 part of ADNI diagnostic algorithm)",
+    "MMSE retained despite overlap with diagnosis (clinical necessity; standard cutoffs exist but ranges overlap, not deterministic like CDR/FAQ)",
+    "SHAP computed with feature_perturbation='tree_path_dependent' for correct missing-value attribution",
+    "Conditional importance reported to reflect true test value when measured (not diluted by unmeasured cases)",
+    "Performance validated on Stage 1 only vs biomarker-measured subgroups",
+    "APOE-e4 is near-nil for cross-sectional classification (binary vs copy-count vs APOE x age all within +/-0.0006 CV AUC of dropping it entirely); its clinical value is in progression, not prevalence \u2014 see artifacts/model_audit.txt",
+    "Early-stopping validation fold carved from TRAIN only; the held-out test set is never used for model selection"
+  ]
 }

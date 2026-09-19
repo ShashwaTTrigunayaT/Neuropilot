@@ -82,7 +82,7 @@ def get_patient(patient_id: str) -> Optional[dict]:
             # CDR-SB -- both are label-proximal clinical staging, and the product
             # contract is that this service never surfaces a diagnosis.
             "adas_cog_13": record.get("adas_cog_13"),
-            "faq_total": record.get("faq_total"),
+            # "faq_total": REMOVED from model (label leakage)
             "apoe_genotype": record.get("apoe_genotype"),
             "apoe_e4": record.get("apoe_e4"),
             "visit_date": record.get("visit_date"),

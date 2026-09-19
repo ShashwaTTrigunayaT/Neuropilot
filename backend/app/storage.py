@@ -43,9 +43,9 @@ HUMAN_FEATURES = {
     "hippocampal_volume": "Hippocampal volume (MRI)",
     "amyloid_positive": "Amyloid PET status",
     "tau_positive": "Tau PET status",
-    # --- real ADNI 16-feature vector (scripts/ingest_adni.py) ---
+    # --- real ADNI 15-feature vector (FAQ removed 2026-09-19) ---
     "adas_cog_13": "ADAS-Cog 13 (cognitive scale)",
-    "faq_total": "Functional status (FAQ, 0-30)",
+    # "faq_total": REMOVED (label leakage — part of ADNI diagnostic algorithm)
     "apoe_e4": "APOE ε4 carrier",
     "ptau217": "p-tau217 (plasma)",
     "nfl": "NfL (plasma, neuroaxonal injury)",
@@ -289,10 +289,14 @@ def load_global_importance() -> list[dict]:
             rows = []
             with GLOBAL_IMPORTANCE_PATH.open(encoding="utf-8", newline="") as fh:
                 for row in csv.DictReader(fh):
+                    # After FAQ removal (2026-09-19), the CSV has both global and conditional
+                    # importance. Use conditional (measured-only) for the radar as it shows
+                    # true test value when measured, not diluted by unmeasured cases.
+                    shap_val = row.get("mean_abs_shap_conditional") or row.get("mean_abs_shap_global") or row.get("mean_abs_shap") or "0.0"
                     rows.append(
                         {
                             "feature": row.get("feature", ""),
-                            "mean_abs_shap": float(row.get("mean_abs_shap", 0.0)),
+                            "mean_abs_shap": float(shap_val),
                         }
                     )
             if rows:

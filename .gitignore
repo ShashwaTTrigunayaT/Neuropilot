@@ -32,6 +32,7 @@ artifacts/*
 !artifacts/model_meta.json
 !artifacts/global_importance.csv
 !artifacts/eval_report.txt
+!artifacts/model_audit.txt
 !artifacts/progression_delta.joblib
 !artifacts/progression_conversion.joblib
 !artifacts/progression_meta.json

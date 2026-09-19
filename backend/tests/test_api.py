@@ -159,8 +159,12 @@ def test_get_patient_detail():
     # ADNI cohort's OWN label, which stays internal (training/audit only)
     for forbidden in ("diagnosis", "real_diagnosis", "diagnosis_code", "cdr_sb"):
         assert forbidden not in d
+    # Label-proximal measures are dropped from the model AND the payload: CDR
+    # (diagnosis is derived from it) and FAQ (part of ADNI's diagnostic
+    # algorithm) both leak the label, so neither is a served input.
+    assert "faq_total" not in d
     # ...while the model INPUTS a clinician needs are exposed for the workbench
-    for exposed in ("adas_cog_13", "faq_total", "apoe_e4", "n_visits", "slots_on_file"):
+    for exposed in ("adas_cog_13", "apoe_e4", "n_visits", "slots_on_file"):
         assert exposed in d, f"patient detail should expose {exposed}"
 
     # The stage must never claim a test that was not measured: any slot listed

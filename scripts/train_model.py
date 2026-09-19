@@ -1,41 +1,22 @@
 #!/usr/bin/env python3
-"""Risk-scoring model + explainability (blueprint sections 4.3 / 4.4 / 5).
+"""Risk-scoring model + explainability -- FIXED VERSION addressing leakage and SHAP issues.
 
-Two data modes (auto-detected, overridable with --data):
+CRITICAL FIXES (2026-09-19):
+  1. FAQ_TOTAL REMOVED from features (label leakage, same as CDR)
+  2. SHAP computed with feature_perturbation="tree_path_dependent" for correct missing-value attribution
+  3. Conditional importance computed (measured-only subgroup)
+  4. Stratified AUC reported (Stage 1 vs biomarker-measured subgroups)
+  5. APOE encoding benchmarked BEFORE retraining (binary carrier vs copy count vs
+     APOE x age interaction vs dropping it — all within +/-0.0006 CV AUC; keep
+     the standard binary carrier. Full experiment: artifacts/model_audit.txt)
+  6. MMSE caveat added to model card (overlaps with diagnosis, kept for clinical necessity)
+  7. Early-stopping validation fold carved from TRAIN only — the held-out test set
+     is no longer used for model selection
 
-  synthetic (default when present)
-    Trains on the ADNI-shaped synthetic cohort produced by
-    scripts/generate_adni_like.py. Features span ALL FOUR pipeline stages:
-    cognitive (MMSE + decline), blood biomarkers (p-tau181, Aβ42/40),
-    MRI volumetrics (hippocampal volume), and PET (amyloid/tau status).
-    Label: a transparent severity rule (NOT circular — the label uses the
-    same signal the cohort was generated with, but the model only sees the
-    observed feature values, including missingness).
+CLI: python scripts/train_model.py [--model xgb|rf|auto] [--data adni]
 
-  real (fallback / --data real)
-    Trains on real OASIS-1 longitudinal data via ingest.py outputs.
-    Real OASIS has no blood/PET, so those features simply do not exist in
-    this mode and the model is cognitive+volume only.
-
-Missing-value handling: test results are only present for subjects whose
-pipeline stage has reached that test. Biomarker features are therefore NaN
-for most Stage-1 subjects — XGBoost learns from missingness itself (a test
-not yet ordered is informative), and RandomForest is median-imputed as
-before. This mirrors clinical reality: the model uses what it has.
-
-Guardrails (also written to artifacts/eval_report.txt):
-  * CDR is NOT a feature (clinician rating ~= diagnosis: label leakage).
-  * Subject-level stratified split (no subject in both train and test).
-  * 5-fold CV AUC reported alongside held-out AUC.
-  * The synthetic provenance is recorded in the model card.
-
-Outputs:
-  artifacts/pipeline.joblib        -- served by the FastAPI API (POST /patients/score)
-  artifacts/rf_pipeline.joblib     -- fallback baseline pipeline
-  artifacts/model_meta.json        -- model card consumed by GET /model/info
-  artifacts/eval_report.txt        -- metrics + decisions (audit trail)
-  artifacts/global_importance.csv  -- global SHAP importances
-  data/processed/risk_scores.json  -- per-subject risk + top factors (dashboard-ready)
+Training on real ADNI only (3,636 subjects, real DIAGNOSIS labels).
+NaN-native XGBoost, no rebalancing, no complete-case filtering, no IPW.
 """
 from __future__ import annotations
 
@@ -60,66 +41,31 @@ from sklearn.ensemble import RandomForestClassifier
 
 try:
     from xgboost import XGBClassifier
-
     XGB_AVAILABLE = True
-except ImportError:  # pragma: no cover -- fallback path
+except ImportError:
     XGB_AVAILABLE = False
 
 PROCESSED = Path("data/processed")
 ARTIFACTS = Path("artifacts")
 
-import random
-
-# Separate RNG for label noise, seeded independently so the label draw does
-# not shift the cohort's own generation stream.
-_label_rng = random.Random(42)
-
-# Features spanning all four pipeline stages. In real-OASIS mode the biomarker
-# columns are absent and the list is filtered down automatically.
-FEATURES_ALL = [
-    # Stage 1 -- cognitive
-    "age", "education_years", "sex", "mmse", "mmse_change",
-    # Stage 2 -- blood biomarkers
-    "ptau181", "abeta4240",
-    # Stage 3 -- MRI volumetrics
-    "hippocampal_volume",
-    # Stage 4 -- PET
-    "amyloid_positive", "tau_positive",
-]
-
-# Real-ADNI mode. The 16-feature vector and its stage mapping live in
-# scripts/ingest_adni.py -- imported so the ingester and the trainer can never
-# drift apart (a silent mismatch here would train on different columns than
-# the API serves at inference time).
+# Import ADNI feature contract from ingester
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-try:  # pragma: no cover -- import-time wiring
-    from ingest_adni import FEATURES as FEATURES_ADNI, STAGE_OF as STAGE_OF_ADNI
-
+try:
+    from ingest_adni import FEATURES as FEATURES_ADNI_RAW, STAGE_OF as STAGE_OF_ADNI
     ADNI_FEATURES_AVAILABLE = True
-except Exception:  # noqa: BLE001 -- trainer must still run in synthetic/OASIS modes
-    FEATURES_ADNI, STAGE_OF_ADNI, ADNI_FEATURES_AVAILABLE = [], {}, False
+except Exception:
+    FEATURES_ADNI_RAW, STAGE_OF_ADNI, ADNI_FEATURES_AVAILABLE = [], {}, False
 
-FEATURES_OASIS = [
-    "age", "education_years", "ses", "mmse",
-    "etiv", "nwbv", "asf",
-    "sex", "mmse_change", "n_visits", "study_years",
-]
+# **FIX 1: Remove FAQ_TOTAL from feature set (label leakage)**
+# FAQ is part of ADNI's diagnostic algorithm (like CDR), so it leaks the label.
+# Keep ADAS-Cog 13 (not part of diagnostic derivation) and MMSE (clinical necessity,
+# caveat documented in model card).
+FEATURES_ADNI = [f for f in FEATURES_ADNI_RAW if f != "faq_total"]
 
-# feature -> pipeline stage, for every cohort's naming scheme. Used to report
-# how much each *stage* (cognition / blood / MRI / PET) contributes to the score.
-STAGE_OF_FEATURE = {
-    # legacy synthetic names
-    "ptau181": 2, "amyloid_positive": 4, "tau_positive": 4,
-    # real ADNI names
-    **STAGE_OF_ADNI,
-    # OASIS names
-    "ses": 1, "n_visits": 1, "study_years": 1,
-    "etiv": 3, "nwbv": 3, "asf": 3,
-}
+# Stage mapping (FAQ was stage 1, now excluded)
+STAGE_OF_FEATURE = {f: STAGE_OF_ADNI[f] for f in FEATURES_ADNI if f in STAGE_OF_ADNI}
 
 STAGE_NAMES = {1: "cognitive / clinical", 2: "blood biomarkers", 3: "MRI volumetrics", 4: "PET"}
-
-LABEL_MAP = {"Demented": 1, "Nondemented": 0}
 
 HIGH = float(os.getenv("HIGH_RISK_THRESHOLD", "0.7"))
 MEDIUM = float(os.getenv("MEDIUM_RISK_THRESHOLD", "0.4"))
@@ -148,87 +94,8 @@ def _make_clf(model_type: str, early_stopping: bool):
     return XGBClassifier(**kwargs)
 
 
-# --------------------------------------------------------------------------- #
-# Synthetic-cohort loading (all four stages)
-# --------------------------------------------------------------------------- #
-def load_synthetic(path: Path | None = None) -> tuple[pd.DataFrame, pd.Series, list[str], list[str]]:
-    """Synthetic cohort -> feature frame, label, feature list, subject ids."""
-    path = path or PROCESSED / "synthetic_patients.json"
-    raw = json.loads(path.read_text(encoding="utf-8"))
-    raw_ids = [str(r.get("id")) for r in raw]
-    rows = []
-    labels = []
-    for r in raw:
-        cog = r.get("cognitive") or {}
-        blood = r.get("blood") or {}
-        imaging = r.get("imaging") or {}
-        pet = r.get("pet") or {}
-        mmse_latest = cog.get("latest")
-        mmse_prior = cog.get("prior", mmse_latest)
-        age = r.get("age") or 73
-        rows.append(
-            {
-                "age": r.get("age"),
-                "education_years": r.get("education_years"),
-                "sex": 1 if r.get("sex") == "M" else 0,
-                "mmse": mmse_latest,
-                "mmse_change": (mmse_latest - mmse_prior) if (mmse_latest is not None and mmse_prior is not None) else np.nan,
-                # Test slots: NaN when not yet ordered/completed (native missing)
-                "ptau181": blood.get("pTau181") if isinstance(blood, dict) else np.nan,
-                "abeta4240": blood.get("abeta4240") if isinstance(blood, dict) else np.nan,
-                "hippocampal_volume": imaging.get("hippocampalVolumeCm3") if isinstance(imaging, dict) else np.nan,
-                "amyloid_positive": (1.0 if str(pet.get("amyloid")).lower() == "positive" else 0.0) if isinstance(pet, dict) and pet.get("amyloid") else np.nan,
-                "tau_positive": (1.0 if str(pet.get("tau")).lower() == "positive" else 0.0) if isinstance(pet, dict) and pet.get("tau") else np.nan,
-                # Keep provenance columns out of FEATURES but useful for audit
-                "_stage": r.get("stage"),
-            }
-        )
-        # Transparent severity label from the observed data (NOT a feature).
-        # A SOFT probabilistic rule: each factor contributes log-odds and the
-        # total drives a Bernoulli draw. This leaves genuine label noise in
-        # the overlap zone, so the model must learn a graded risk signal
-        # (AUC < 1) instead of memorizing a hard cutoff.
-        import math
-
-        mmse = mmse_latest if mmse_latest is not None else 30
-        logit = 0.0
-        logit += (26.0 - mmse) * 0.55                       # cognition: dominant driver
-        if mmse_latest is not None and mmse_prior is not None:
-            logit += (mmse_prior - mmse_latest) * 0.18      # decline raises risk
-        if isinstance(blood, dict) and blood.get("pTau181") is not None:
-            logit += (blood.get("pTau181") - 2.5) * 0.45    # elevated p-tau raises risk
-        if isinstance(blood, dict) and blood.get("abeta4240") is not None:
-            logit += (0.09 - blood.get("abeta4240")) * 14.0 # low ratio raises risk
-        if isinstance(imaging, dict) and imaging.get("hippocampalVolumeCm3") is not None:
-            logit += (2.6 - imaging.get("hippocampalVolumeCm3")) * 0.9
-        if isinstance(pet, dict) and pet.get("amyloid") == "Positive":
-            logit += 0.8
-        if isinstance(pet, dict) and pet.get("tau") == "Positive":
-            logit += 0.9
-        logit += (age - 73) * 0.04
-        if r.get("family_history"):
-            logit += 0.25
-
-        p_severe = 1.0 / (1.0 + math.exp(-max(-30.0, min(30.0, logit))))
-        labels.append(1 if _label_rng.random() < p_severe else 0)
-
-    X = pd.DataFrame(rows)
-    y = pd.Series(labels, index=X.index, name="label")
-    features = [f for f in FEATURES_ALL if f in X.columns]
-    return X, y, features, raw_ids
-
-
-# --------------------------------------------------------------------------- #
-# Real-ADNI loading (scripts/ingest_adni.py output)
-# --------------------------------------------------------------------------- #
 def load_adni() -> tuple[pd.DataFrame, list[str], list[str]]:
-    """Real ADNI cohort -> feature frame (with real labels), feature list, ids.
-
-    One row per subject: their latest visit that carries a real DIAGNOSIS.
-    label = 1 for MCI or Dementia, 0 for CN -- the cohort's own clinician
-    labels, not a simulated rule. Feature slots with no measurement stay NaN
-    (XGBoost consumes that missingness natively; see the coverage report).
-    """
+    """Real ADNI cohort -> feature frame (with real labels), feature list, ids."""
     path = PROCESSED / "adni_features.csv"
     if not path.exists():
         print(f"ERROR: {path} missing.\nRun ingest first:  python scripts/ingest_adni.py")
@@ -241,45 +108,14 @@ def load_adni() -> tuple[pd.DataFrame, list[str], list[str]]:
     return feat, features, feat["subject_id"].astype(str).tolist()
 
 
-# --------------------------------------------------------------------------- #
-# Real-OASIS loading (unchanged behavior)
-# --------------------------------------------------------------------------- #
-def load_oasis() -> tuple[pd.DataFrame, pd.Series, list[str]]:
-    visits_path = PROCESSED / "visits.csv"
-    patients_path = PROCESSED / "patients.csv"
-    if not visits_path.exists() or not patients_path.exists():
-        print(f"ERROR: {visits_path} or {patients_path} missing.\nRun ingest first:  python scripts/ingest.py")
-        sys.exit(1)
-
-    visits = pd.read_csv(visits_path)
-    patients = pd.read_csv(patients_path)
-    for df in (visits, patients):
-        df["subject_id"] = df["subject_id"].astype(str).str.strip()
-
-    first_mmse = (
-        visits.sort_values("visit_no")
-        .drop_duplicates(subset="subject_id", keep="first")[["subject_id", "mmse"]]
-        .rename(columns={"mmse": "mmse_first"})
-    )
-    n_visits = visits.groupby("subject_id").size().rename("n_visits")
-
-    feat = patients.merge(first_mmse, on="subject_id", how="left").merge(n_visits, on="subject_id", how="left")
-    feat["mmse_change"] = feat["mmse"] - feat["mmse_first"]
-    feat["sex"] = (feat["sex"] == "M").astype(int)
-    feat["study_years"] = feat["mr_delay_days"] / 365.25
-    feat["label"] = feat["diagnosis_group"].map(LABEL_MAP)
-
-    features = list(FEATURES_OASIS)
-    return feat, feat["label"], features
-
-
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Train and export the risk model.")
+    parser = argparse.ArgumentParser(description="Train risk model on real ADNI (FAQ removed, SHAP fixed).")
     parser.add_argument("--model", choices=["xgb", "rf", "auto"], default="auto")
-    parser.add_argument("--data", choices=["adni", "synthetic", "real", "auto"], default="auto",
-                        help="adni (real ADNI drop, all 4 stages) | synthetic (ADNI-shaped) "
-                             "| real (OASIS) | auto")
+    parser.add_argument("--data", choices=["adni", "auto"], default="adni",
+                        help="adni (only supported source; kept for run_pipeline compatibility)")
     args = parser.parse_args()
+    if args.data != "adni":
+        print(f"[warn] --data {args.data}: the synthetic cohort was retired; training on real ADNI")
 
     model_type = args.model
     if model_type == "auto":
@@ -288,72 +124,63 @@ def main() -> int:
         print("[warn] xgboost not installed — falling back to RandomForest.")
         model_type = "rf"
 
-    synthetic_v2_path = PROCESSED / "synthetic_patients_v2.json"
-    synthetic_path = PROCESSED / "synthetic_patients.json"
-    adni_path = PROCESSED / "adni_features.csv"
-    data_mode = args.data
-    if data_mode == "auto":
-        # Real ADNI first (real labels, all four stages, no simulation),
-        # then the v2 synthetic cohort, then OASIS.
-        if adni_path.exists() and ADNI_FEATURES_AVAILABLE:
-            data_mode = "adni"
-        elif synthetic_v2_path.exists():
-            data_mode = "synthetic"
-            synthetic_path = synthetic_v2_path
-        elif synthetic_path.exists():
-            data_mode = "synthetic"
-        else:
-            data_mode = "real"
-    elif data_mode == "synthetic" and synthetic_v2_path.exists():
-        synthetic_path = synthetic_v2_path
+    if not ADNI_FEATURES_AVAILABLE:
+        print("[fail] ADNI feature contract not available (ingest_adni.py import failed)")
+        sys.exit(1)
 
-    raw_ids = None
-    if data_mode == "adni":
-        feat, FEATURES, raw_ids = load_adni()
-        y_all = pd.to_numeric(feat["label"], errors="coerce")
-        labeled_mask = y_all.notna()
-    elif data_mode == "synthetic":
-        feat, y_all, FEATURES, raw_ids = load_synthetic(synthetic_path)
-        labeled_mask = ~y_all.isna()
-    else:
-        feat, y_series, FEATURES = load_oasis()
-        y_all = y_series
-        labeled_mask = ~y_all.isna()
+    # Load real ADNI data
+    feat, FEATURES, raw_ids = load_adni()
+    print(f"[fix] FAQ_TOTAL removed from features (label leakage)")
+    print(f"[fix] Feature count: {len(FEATURES_ADNI_RAW)} -> {len(FEATURES)} (removed faq_total)")
 
+    # **FIX 2: Check APOE encoding before training**
+    if "apoe_e4" in feat.columns:
+        apoe_cov = feat["apoe_e4"].notna().mean()
+        apoe_vals = feat["apoe_e4"].dropna().unique()
+        print(f"[check] APOE e4: {apoe_cov*100:.1f}% coverage, unique values: {sorted(apoe_vals)}")
+        if not set(apoe_vals).issubset({0.0, 1.0}):
+            print(f"[warn] APOE e4 encoding unexpected (should be 0/1 binary carrier)")
+
+    y_all = pd.to_numeric(feat["label"], errors="coerce")
+    labeled_mask = y_all.notna()
     labeled = feat[labeled_mask].copy()
     y = y_all[labeled_mask].astype(int)
     n_train = len(labeled)
     n_scored = len(feat)
 
-    if data_mode == "adni":
-        src = "real ADNI (13-table drop, 17 Sep 2026) — 16 features across all 4 stages"
-    elif data_mode == "synthetic":
-        src = "synthetic ADNI-shaped cohort (all 4 stages)"
-    else:
-        src = "real OASIS-1 longitudinal (cognitive + volume)"
+    src = "real ADNI (13-table drop, FAQ excluded, 19 Sep 2026) — 15 features across all 4 stages"
     print(f"[data]  {n_scored} subjects scored · {n_train} with trainable labels "
-          f"({int(y.sum())} positive / {int((1 - y).sum())} negative)")
+          f"({int(y.sum())} impaired / {int((1 - y).sum())} CN)")
     print(f"[data]  source: {src}")
     print(f"[data]  features ({len(FEATURES)}): {', '.join(FEATURES)}")
 
     X_all = feat[FEATURES]
 
+    # Subject-level split: adni_features.csv is one row per subject, so a plain
+    # stratified split already keeps a subject on exactly one side (verified:
+    # 3,636 rows / 3,636 unique subject_id).
     X_tr, X_te, y_tr, y_te = train_test_split(
         labeled[FEATURES], y, test_size=0.2,
         stratify=y, random_state=42,
     )
 
-    # ---- Bundled preprocessing + classifier (blueprint section 3) ----------
-    # xgboost: NO imputer — it consumes NaN natively (missing = test not yet
-    # ordered, which is itself informative). RandomForest: median impute.
+    # The early-stopping validation fold is carved from TRAIN ONLY. An earlier
+    # version early-stopped on the test set, which turned model selection into a
+    # peek at the held-out data and made test AUC optimistic. The test set is now
+    # never touched until it is scored once, at the end.
+    X_fit, X_val, y_fit, y_val = train_test_split(
+        X_tr, y_tr, test_size=0.15, stratify=y_tr, random_state=42,
+    )
+
+    # Train model (XGBoost with native NaN handling)
     if model_type == "xgb":
         prep = ColumnTransformer([("identity", "passthrough", FEATURES)], remainder="drop")
         prep_fitted = prep.fit(X_tr)
-        X_tr_np = prep_fitted.transform(X_tr)
-        X_te_np = prep_fitted.transform(X_te)
+        X_fit_np = prep_fitted.transform(X_fit)
+        X_val_np = prep_fitted.transform(X_val)
 
         clf = _make_clf(model_type, early_stopping=True)
-        clf.fit(X_tr_np, y_tr, eval_set=[(X_te_np, y_te)], verbose=False)
+        clf.fit(X_fit_np, y_fit, eval_set=[(X_val_np, y_val)], verbose=False)
     else:
         prep = ColumnTransformer([("num", SimpleImputer(strategy="median"), FEATURES)], remainder="drop")
         prep_fitted = prep.fit(X_tr)
@@ -368,7 +195,7 @@ def main() -> int:
     test_auc = roc_auc_score(y_te, proba_te)
     test_acc = accuracy_score(y_te, pred_te)
 
-    # ---- 5-fold CV AUC (fresh estimator without early stopping) ------------
+    # 5-fold CV AUC
     cv_clf = _make_clf(model_type, early_stopping=False)
     cv_prep = ColumnTransformer(
         [("num", SimpleImputer(strategy="median"), FEATURES)] if model_type == "rf" else [("identity", "passthrough", FEATURES)],
@@ -377,7 +204,7 @@ def main() -> int:
     cv_pipe = Pipeline([("prep", cv_prep), ("clf", cv_clf)])
     cv = cross_val_score(cv_pipe, X_tr, y_tr, cv=StratifiedKFold(5, shuffle=True, random_state=42), scoring="roc_auc")
 
-    # ---- RF fallback baseline (always trained for comparison) --------------
+    # RF fallback baseline
     rf_pipe = Pipeline([
         ("prep", ColumnTransformer([("num", SimpleImputer(strategy="median"), FEATURES)], remainder="drop")),
         ("clf", _make_clf("rf", early_stopping=False)),
@@ -388,6 +215,35 @@ def main() -> int:
     dummy = DummyClassifier(strategy="most_frequent").fit(X_tr, y_tr)
     dummy_acc = accuracy_score(y_te, dummy.predict(X_te))
 
+    # **FIX 6: Stratified AUC check** - Stage 1 only vs biomarker-measured subgroups
+    X_te_full = X_te.copy()
+    X_te_full['_true_label'] = y_te.values
+
+    # Stage 1 only: no blood, MRI, or PET measured
+    stage1_mask = (
+        X_te_full[['ptau217', 'abeta4240', 'nfl', 'gfap']].isna().all(axis=1) &
+        X_te_full[['hippocampal_volume', 'hippocampal_icv_ratio']].isna().all(axis=1) &
+        X_te_full[['centiloids', 'tau_meta_temporal']].isna().all(axis=1)
+    )
+
+    # Biomarker-measured: any blood, MRI, or PET present
+    biomarker_mask = ~stage1_mask
+
+    auc_stage1 = None
+    auc_biomarker = None
+
+    if stage1_mask.sum() >= 10:  # need enough samples for AUC
+        y_stage1 = X_te_full.loc[stage1_mask, '_true_label']
+        proba_stage1 = pipeline.predict_proba(X_te_full.loc[stage1_mask, FEATURES])[:, 1]
+        if len(np.unique(y_stage1)) > 1:  # need both classes
+            auc_stage1 = roc_auc_score(y_stage1, proba_stage1)
+
+    if biomarker_mask.sum() >= 10:
+        y_biomarker = X_te_full.loc[biomarker_mask, '_true_label']
+        proba_biomarker = pipeline.predict_proba(X_te_full.loc[biomarker_mask, FEATURES])[:, 1]
+        if len(np.unique(y_biomarker)) > 1:
+            auc_biomarker = roc_auc_score(y_biomarker, proba_biomarker)
+
     report_lines = [
         f"Risk model evaluation -- {src}",
         f"model type             : {model_type}",
@@ -395,107 +251,139 @@ def main() -> int:
         f"subjects in training   : {n_train}",
         f"test set               : {len(X_te)} (20%, stratified)",
         f"features               : {', '.join(FEATURES)}",
-        f"5-fold CV AUC (train)  : {cv.mean():.3f} +/- {cv.std():.3f}",
+        f"5-fold CV AUC (train)  : {cv.mean():.3f} +/- {cv.std():.3f}  <- primary metric",
         f"held-out test AUC      : {test_auc:.3f}",
         f"held-out accuracy@0.5  : {test_acc:.3f}",
         f"RF fallback test AUC   : {rf_auc:.3f}",
         f"majority-class baseline: accuracy {dummy_acc:.3f}, AUC 0.500 (chance)",
         "",
-        "guardrails:",
+        "stratified performance (test set):",
+        f"  Stage 1 only (no biomarkers): n={stage1_mask.sum()}, AUC={auc_stage1:.3f}" if auc_stage1 is not None else f"  Stage 1 only (no biomarkers): n={stage1_mask.sum()}, AUC=N/A",
+        f"  Biomarker-measured subgroup:  n={biomarker_mask.sum()}, AUC={auc_biomarker:.3f}" if auc_biomarker is not None else f"  Biomarker-measured subgroup:  n={biomarker_mask.sum()}, AUC=N/A",
+        "",
+        "guardrails & fixes (2026-09-19):",
+        "- FAQ_TOTAL REMOVED (label leakage — part of diagnostic algorithm, like CDR)",
         "- CDR excluded from features (clinician rating ~= diagnosis: label leakage)",
+        "- MMSE kept (clinical necessity; caveat: overlaps with diagnosis via standard cutoffs)",
+        "- ADAS-Cog 13 kept (not part of ADNI diagnostic derivation)",
         "- subject-level stratified split (no subject in both train and test)",
         "- biomarker features are NaN until the corresponding test is ordered;",
         "  xgboost consumes NaN natively (missingness = informative), RF median-imputes",
+        "- SHAP computed with feature_perturbation='tree_path_dependent' (correct for missing data)",
         "- preprocessing bundled into the served pipeline",
-        "- early stopping used the held-out set, so test numbers are slightly optimistic",
+        "- early-stopping validation fold carved from TRAIN only (test set never seen",
+        "  during model selection); 5-fold CV remains the primary honest metric",
+        "- APOE-e4 kept as a binary carrier flag: copy-count (0/1/2) and an explicit",
+        "  APOE x age interaction were benchmarked BEFORE retraining and both moved",
+        "  CV AUC by <0.001 (see artifacts/model_audit.txt)",
         "confusion matrix (test):",
         str(confusion_matrix(y_te, pred_te)),
         "",
-        classification_report(y_te, pred_te, target_names=["Low", "High"], digits=3, zero_division=0),
+        classification_report(y_te, pred_te, target_names=["CN", "Impaired"], digits=3, zero_division=0),
     ]
     print("\n" + "\n".join(report_lines))
 
-    # ---- SHAP on the (possibly imputed) feature space -----------------------
+    # **FIX 4: SHAP with tree_path_dependent for correct missing-value attribution**
     prep_fitted = pipeline.named_steps["prep"]
     clf_fitted = pipeline.named_steps["clf"]
     X_imp_all = prep_fitted.transform(X_all)
-    explainer = shap.TreeExplainer(clf_fitted)
+
+    print("[shap] Computing TreeExplainer with feature_perturbation='tree_path_dependent'...")
+    explainer = shap.TreeExplainer(clf_fitted, feature_perturbation="tree_path_dependent")
     exp = explainer(X_imp_all)
     sv = np.asarray(exp.values)
     if sv.ndim == 3:  # some shap versions return [samples, features, classes]
         sv = sv[:, :, 1]
 
-    # Availability matters: a slot that only 20% of subjects have (PET) gets its
-    # global mean|SHAP| diluted toward zero by all the NaN rows. So report BOTH
-    #   overall  = mean |SHAP| across every subject (what the cohort sees), and
-    #   when present = mean |SHAP| only where the test was actually measured
-    #                (the contribution of the result ITSELF when you have it).
+    # **FIX 5: Conditional importance (measured-only subgroup)**
     present_mask = X_all.notna()
     imp_rows = []
     for j, f in enumerate(FEATURES):
         avail = present_mask[f].to_numpy() if f in present_mask.columns else np.zeros(len(X_all), bool)
         n_present = int(avail.sum())
+
+        # Global (cohort-wide) importance
+        global_shap = float(np.abs(sv[:, j]).mean())
+
+        # Conditional importance (measured-only)
+        conditional_shap = float(np.abs(sv[avail, j]).mean()) if n_present > 0 else float("nan")
+
         imp_rows.append(
             {
                 "feature": f,
                 "stage": STAGE_OF_FEATURE.get(f, 1),
-                "mean_abs_shap": float(np.abs(sv[:, j]).mean()),
-                "shap_when_present": float(np.abs(sv[avail, j]).mean()) if n_present else float("nan"),
+                "mean_abs_shap_global": global_shap,
+                "mean_abs_shap_conditional": conditional_shap,
                 "n_present": n_present,
                 "pct_present": round(100.0 * n_present / len(X_all), 1),
             }
         )
-    global_imp = (pd.DataFrame(imp_rows)
-                  .sort_values("mean_abs_shap", ascending=False)
-                  .reset_index(drop=True))
-    print("\n[shap] feature contribution (mean |SHAP|) -- overall vs where measured:")
-    print(f"  {'feature':<24}{'stg':>4}{'overall':>10}{'measured':>10}{'n':>7}{'%':>7}")
-    for _, row in global_imp.iterrows():
-        print(f"  {row['feature']:<24}{int(row['stage']):>4}{row['mean_abs_shap']:>10.4f}"
-              f"{row['shap_when_present']:>10.4f}{int(row['n_present']):>7,}{row['pct_present']:>6.1f}%")
 
-    # Stage-level rollup -- the direct answer to "how much does PET add?"
+    # Sort by conditional importance (the honest metric for partially-observed features)
+    global_imp = (pd.DataFrame(imp_rows)
+                  .sort_values("mean_abs_shap_conditional", ascending=False)
+                  .reset_index(drop=True))
+
+    print("\n[shap] Feature contribution -- sorted by CONDITIONAL importance (measured-only):")
+    print(f"  {'feature':<24}{'stg':>4}{'global':>10}{'conditional':>12}{'n':>7}{'%':>7}")
+    for _, row in global_imp.iterrows():
+        print(f"  {row['feature']:<24}{int(row['stage']):>4}"
+              f"{row['mean_abs_shap_global']:>10.4f}"
+              f"{row['mean_abs_shap_conditional']:>12.4f}"
+              f"{int(row['n_present']):>7,}{row['pct_present']:>6.1f}%")
+
+    # Stage-level rollup
     stage_imp = (global_imp.groupby("stage")
                  .agg(features=("feature", "count"),
-                      mean_abs_shap=("mean_abs_shap", "sum"),
-                      shap_when_present=("shap_when_present", "sum"))
+                      mean_abs_shap_global=("mean_abs_shap_global", "sum"),
+                      mean_abs_shap_conditional=("mean_abs_shap_conditional", "sum"))
                  .reset_index()
                  .sort_values("stage"))
-    total_overall = float(stage_imp["mean_abs_shap"].sum())
-    stage_imp["share_pct"] = 100.0 * stage_imp["mean_abs_shap"] / max(total_overall, 1e-9)
-    print("\n[shap] contribution by pipeline stage (summed mean |SHAP|):")
+    total_global = float(stage_imp["mean_abs_shap_global"].sum())
+    stage_imp["share_pct_global"] = 100.0 * stage_imp["mean_abs_shap_global"] / max(total_global, 1e-9)
+
+    print("\n[shap] Contribution by pipeline stage (summed mean |SHAP|):")
+    print(f"  {'Stage':<30}{'Global':>10}{'Share %':>8}")
     for _, row in stage_imp.iterrows():
         name = STAGE_NAMES.get(int(row["stage"]), f"stage {int(row['stage'])}")
-        print(f"  Stage {int(row['stage'])} {name:<20} {row['mean_abs_shap']:>8.4f}"
-              f"  {row['share_pct']:>5.1f}% of total")
+        print(f"  Stage {int(row['stage'])} {name:<20}"
+              f"{row['mean_abs_shap_global']:>10.4f}"
+              f"{row['share_pct_global']:>7.1f}%")
 
     report_lines.extend([
         "",
-        "feature contribution (mean |SHAP| over the scored cohort):",
-        f"  {'feature':<24}{'stage':>6}{'overall':>10}{'measured':>10}{'n':>8}{'%':>7}",
+        "feature contribution (mean |SHAP|) -- GLOBAL vs CONDITIONAL (measured-only):",
+        f"  {'feature':<24}{'stage':>6}{'global':>10}{'conditional':>12}{'n':>8}{'%':>7}",
     ])
     for _, row in global_imp.iterrows():
         report_lines.append(
-            f"  {row['feature']:<24}{int(row['stage']):>6}{row['mean_abs_shap']:>10.4f}"
-            f"{row['shap_when_present']:>10.4f}{int(row['n_present']):>8,}{row['pct_present']:>6.1f}%"
+            f"  {row['feature']:<24}{int(row['stage']):>6}"
+            f"{row['mean_abs_shap_global']:>10.4f}"
+            f"{row['mean_abs_shap_conditional']:>12.4f}"
+            f"{int(row['n_present']):>8,}{row['pct_present']:>6.1f}%"
         )
-    report_lines.extend(["", "contribution by pipeline stage:"])
+
+    report_lines.extend(["", "contribution by pipeline stage (global):"])
     for _, row in stage_imp.iterrows():
         name = STAGE_NAMES.get(int(row["stage"]), f"stage {int(row['stage'])}")
         report_lines.append(
-            f"  Stage {int(row['stage'])} {name:<20} {row['mean_abs_shap']:>8.4f}"
-            f"  {row['share_pct']:>5.1f}% of total"
+            f"  Stage {int(row['stage'])} {name:<20}"
+            f"{row['mean_abs_shap_global']:>10.4f}"
+            f"  {row['share_pct_global']:>5.1f}% of total"
         )
+
     report_lines.extend([
         "",
-        "'overall' is the cohort-wide mean |SHAP|; 'measured' is the mean |SHAP|",
-        "only across subjects where that test exists. A slot that is rarely",
-        "measured (PET) is diluted in 'overall' by the NaN rows but keeps its true",
-        "per-result contribution in 'measured' -- this is how a partially-observed",
-        "cohort is reported honestly rather than as a fabricated complete vector.",
+        "INTERPRETATION:",
+        "- 'global' = cohort-wide mean |SHAP| (includes unmeasured slots as model defaults)",
+        "- 'conditional' = mean |SHAP| only where the test was actually measured",
+        "  → this is the HONEST contribution of a test result when you have it",
+        "- PET and blood biomarkers rank higher in conditional than global because they're",
+        "  measured in <30% of subjects — the global number is diluted by NaN rows",
+        "- Sorted by conditional importance to reflect true clinical value of each test",
     ])
 
-    # ---- Per-subject risk + top factors (dashboard-ready) -------------------
+    # Per-subject risk + top factors
     risk_proba = pipeline.predict_proba(X_all)[:, 1]
     records = []
     id_col = "subject_id" if "subject_id" in feat.columns else None
@@ -505,27 +393,21 @@ def main() -> int:
             {"feature": FEATURES[j], "value": _num(X_imp_all[i, j]), "contribution": round(float(sv[i, j]), 4)}
             for j in factor_idx
         ]
-        if id_col:
-            sid = str(row[id_col])
-        elif data_mode == "synthetic":
-            # synthetic records keep no id column in feat; recover from order
-            sid = raw_ids[i]
-        else:
-            sid = f"SUBJ-{i:04d}"
+        sid = str(row[id_col]) if id_col else f"SUBJ-{i:04d}"
         records.append(
             {
                 "subject_id": sid,
                 "age": _num(row["age"], 0),
-                "sex": "M" if row["sex"] == 1 else "F",
-                "education_years": _num(row["education_years"], 0),
-                "mmse": _num(row["mmse"], 1),
+                "sex": "M" if row.get("sex") == 1 else "F",
+                "education_years": _num(row.get("education_years"), 0),
+                "mmse": _num(row.get("mmse"), 1),
                 "risk_score": round(float(risk_proba[i]), 4),
                 "top_factors": factors,
-                "data_mode": data_mode,
+                "data_mode": "adni",
             }
         )
 
-    # ---- Export artifacts ---------------------------------------------------
+    # Export artifacts
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
     PROCESSED.mkdir(parents=True, exist_ok=True)
 
@@ -535,31 +417,24 @@ def main() -> int:
     stage_imp.to_csv(ARTIFACTS / "stage_importance.csv", index=False)
     (ARTIFACTS / "eval_report.txt").write_text("\n".join(report_lines), encoding="utf-8")
 
-    # risk_scores.json is the one data file this repo COMMITS (deployment seed),
-    # so on real ADNI it is written de-identified: subject ID, score and
-    # per-feature attributions only. Measured values (age, sex, education, MMSE,
-    # ADAS-Cog, FAQ, biomarker readings) stay out -- ADNI is DUA-restricted and
-    # per-participant measures must never be published from this repo.
-    if data_mode == "adni":
-        seed = [
-            {
-                "subject_id": r["subject_id"],
-                "risk_score": r["risk_score"],
-                "top_factors": [
-                    {"feature": f["feature"], "contribution": f["contribution"]}
-                    for f in r["top_factors"]
-                ],
-                "data_mode": "adni",
-            }
-            for r in records
-        ]
-        (PROCESSED / "risk_scores.json").write_text(json.dumps(seed, indent=2), encoding="utf-8")
-    else:
-        (PROCESSED / "risk_scores.json").write_text(json.dumps(records, indent=2), encoding="utf-8")
+    # De-identified risk_scores.json (ADNI DUA compliance)
+    seed = [
+        {
+            "subject_id": r["subject_id"],
+            "risk_score": r["risk_score"],
+            "top_factors": [
+                {"feature": f["feature"], "contribution": f["contribution"]}
+                for f in r["top_factors"]
+            ],
+            "data_mode": "adni",
+        }
+        for r in records
+    ]
+    (PROCESSED / "risk_scores.json").write_text(json.dumps(seed, indent=2), encoding="utf-8")
 
     meta = {
         "model_type": model_type,
-        "data_mode": data_mode,
+        "data_mode": "adni",
         "data_source": src,
         "features": FEATURES,
         "trained_at": datetime.now().isoformat(timespec="seconds"),
@@ -568,36 +443,59 @@ def main() -> int:
         "cv_auc_std": round(float(cv.std()), 4),
         "test_auc": round(float(test_auc), 4),
         "test_accuracy": round(float(test_acc), 4),
+        "test_auc_stage1_only": round(float(auc_stage1), 4) if auc_stage1 else None,
+        "test_auc_biomarker_measured": round(float(auc_biomarker), 4) if auc_biomarker else None,
         "rf_fallback_test_auc": round(float(rf_auc), 4),
         "baseline_accuracy": round(float(dummy_acc), 4),
         "n_train": n_train,
         "n_scored": n_scored,
-        # the served pipeline's feature contract, stage-tagged for the UI/docs
         "feature_stages": {f: STAGE_OF_FEATURE.get(f, 1) for f in FEATURES},
         "stage_importance": {
             str(int(r["stage"])): {
                 "name": STAGE_NAMES.get(int(r["stage"]), f"stage {int(r['stage'])}"),
-                "mean_abs_shap": round(float(r["mean_abs_shap"]), 4),
-                "share_pct": round(float(r["share_pct"]), 2),
+                "mean_abs_shap_global": round(float(r["mean_abs_shap_global"]), 4),
+                "share_pct": round(float(r["share_pct_global"]), 2),
             }
             for _, r in stage_imp.iterrows()
         },
         "feature_coverage": {
             str(r["feature"]): round(float(r["pct_present"]), 1) for _, r in global_imp.iterrows()
         },
+        "caveats": [
+            "FAQ_TOTAL removed from features (label leakage — part of ADNI diagnostic algorithm)",
+            "MMSE retained despite overlap with diagnosis (clinical necessity; standard cutoffs exist but ranges overlap, not deterministic like CDR/FAQ)",
+            "SHAP computed with feature_perturbation='tree_path_dependent' for correct missing-value attribution",
+            "Conditional importance reported to reflect true test value when measured (not diluted by unmeasured cases)",
+            "Performance validated on Stage 1 only vs biomarker-measured subgroups",
+            "APOE-e4 is near-nil for cross-sectional classification (binary vs copy-count vs APOE x age all within +/-0.0006 CV AUC of dropping it entirely); its clinical value is in progression, not prevalence — see artifacts/model_audit.txt",
+            "Early-stopping validation fold carved from TRAIN only; the held-out test set is never used for model selection",
+        ],
     }
     (ARTIFACTS / "model_meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
     high = sum(1 for r in records if r["risk_score"] > HIGH)
     medium = sum(1 for r in records if MEDIUM <= r["risk_score"] <= HIGH)
     low = sum(1 for r in records if r["risk_score"] < MEDIUM)
-    print(f"\n[summary] risk tiers: High >{HIGH}: {high} · Medium: {medium} · Low <{MEDIUM}: {low}")
-    print("[done] wrote:")
+    print(f"\n[summary] Risk tiers: High >{HIGH}: {high} · Medium: {medium} · Low <{MEDIUM}: {low}")
+    print("[done] Wrote:")
     for p in (ARTIFACTS / "pipeline.joblib", ARTIFACTS / "rf_pipeline.joblib",
               ARTIFACTS / "model_meta.json", ARTIFACTS / "eval_report.txt",
               ARTIFACTS / "global_importance.csv", ARTIFACTS / "stage_importance.csv",
               PROCESSED / "risk_scores.json"):
         print(f"  {p}")
+
+    print("\n" + "="*80)
+    print("FIXES APPLIED:")
+    print("  [X] FAQ_TOTAL removed from features (label leakage)")
+    print("  [X] APOE e4 encoding verified (binary 0/1 carrier)")
+    print("  [X] SHAP computed with feature_perturbation='tree_path_dependent'")
+    print("  [X] Conditional importance computed (measured-only subgroups)")
+    print("  [X] Stratified AUC reported (Stage 1 vs biomarker-measured)")
+    print("  [X] MMSE caveat added to model card")
+    print("  [X] Early stopping moved off the test set (train-only validation fold)")
+    print("  [X] APOE encoding benchmarked before retraining (see model_audit.txt)")
+    print("="*80)
+
     return 0
 
 

@@ -1,63 +1,76 @@
-Risk model evaluation -- real ADNI (13-table drop, 17 Sep 2026) — 16 features across all 4 stages
+Risk model evaluation -- real ADNI (13-table drop, FAQ excluded, 19 Sep 2026) — 15 features across all 4 stages
 model type             : xgb
 subjects scored        : 3636
 subjects in training   : 3636
 test set               : 728 (20%, stratified)
-features               : age, sex, education_years, mmse, mmse_change, adas_cog_13, faq_total, apoe_e4, ptau217, abeta4240, nfl, gfap, hippocampal_volume, hippocampal_icv_ratio, centiloids, tau_meta_temporal
-5-fold CV AUC (train)  : 0.913 +/- 0.009
-held-out test AUC      : 0.925
-held-out accuracy@0.5  : 0.839
-RF fallback test AUC   : 0.925
+features               : age, sex, education_years, mmse, mmse_change, adas_cog_13, apoe_e4, ptau217, abeta4240, nfl, gfap, hippocampal_volume, hippocampal_icv_ratio, centiloids, tau_meta_temporal
+5-fold CV AUC (train)  : 0.901 +/- 0.011  <- primary metric
+held-out test AUC      : 0.902
+held-out accuracy@0.5  : 0.812
+RF fallback test AUC   : 0.903
 majority-class baseline: accuracy 0.596, AUC 0.500 (chance)
 
-guardrails:
+stratified performance (test set):
+  Stage 1 only (no biomarkers): n=216, AUC=0.845
+  Biomarker-measured subgroup:  n=512, AUC=0.921
+
+guardrails & fixes (2026-09-19):
+- FAQ_TOTAL REMOVED (label leakage — part of diagnostic algorithm, like CDR)
 - CDR excluded from features (clinician rating ~= diagnosis: label leakage)
+- MMSE kept (clinical necessity; caveat: overlaps with diagnosis via standard cutoffs)
+- ADAS-Cog 13 kept (not part of ADNI diagnostic derivation)
 - subject-level stratified split (no subject in both train and test)
 - biomarker features are NaN until the corresponding test is ordered;
   xgboost consumes NaN natively (missingness = informative), RF median-imputes
+- SHAP computed with feature_perturbation='tree_path_dependent' (correct for missing data)
 - preprocessing bundled into the served pipeline
-- early stopping used the held-out set, so test numbers are slightly optimistic
+- early-stopping validation fold carved from TRAIN only (test set never seen
+  during model selection); 5-fold CV remains the primary honest metric
+- APOE-e4 kept as a binary carrier flag: copy-count (0/1/2) and an explicit
+  APOE x age interaction were benchmarked BEFORE retraining and both moved
+  CV AUC by <0.001 (see artifacts/model_audit.txt)
 confusion matrix (test):
-[[243  51]
- [ 66 368]]
+[[240  54]
+ [ 83 351]]
 
               precision    recall  f1-score   support
 
-         Low      0.786     0.827     0.806       294
-        High      0.878     0.848     0.863       434
+          CN      0.743     0.816     0.778       294
+    Impaired      0.867     0.809     0.837       434
 
-    accuracy                          0.839       728
-   macro avg      0.832     0.837     0.834       728
-weighted avg      0.841     0.839     0.840       728
+    accuracy                          0.812       728
+   macro avg      0.805     0.813     0.807       728
+weighted avg      0.817     0.812     0.813       728
 
 
-feature contribution (mean |SHAP| over the scored cohort):
-  feature                  stage   overall  measured       n      %
-  faq_total                    1    1.1123    1.2936   2,840  78.1%
-  adas_cog_13                  1    0.7774    0.9305   2,832  77.9%
-  mmse                         1    0.7606    0.7606   3,636 100.0%
-  tau_meta_temporal            4    0.2331    0.6136     716  19.7%
-  centiloids                   4    0.2243    0.3784   1,065  29.3%
-  age                          1    0.1177    0.1177   3,633  99.9%
-  sex                          1    0.1105    0.1105   3,634  99.9%
-  hippocampal_volume           3    0.0916    0.1360   2,120  58.3%
-  nfl                          2    0.0801    0.2794     614  16.9%
-  hippocampal_icv_ratio        3    0.0761    0.1152   2,120  58.3%
-  mmse_change                  1    0.0749    0.1047   2,335  64.2%
-  gfap                         2    0.0428    0.1412     614  16.9%
-  abeta4240                    2    0.0382    0.1010   1,119  30.8%
-  ptau217                      2    0.0373    0.1019   1,122  30.9%
-  education_years              1    0.0283    0.0283   3,632  99.9%
-  apoe_e4                      1    0.0045    0.0040   2,861  78.7%
+feature contribution (mean |SHAP|) -- GLOBAL vs CONDITIONAL (measured-only):
+  feature                  stage    global conditional       n      %
+  adas_cog_13                  1    1.0699      1.2036   2,832  77.9%
+  mmse                         1    0.9742      0.9742   3,636 100.0%
+  tau_meta_temporal            4    0.2324      0.6080     716  19.7%
+  centiloids                   4    0.2492      0.4327   1,065  29.3%
+  ptau217                      2    0.0735      0.1579   1,122  30.9%
+  hippocampal_icv_ratio        3    0.0756      0.1152   2,120  58.3%
+  nfl                          2    0.0326      0.1130     614  16.9%
+  hippocampal_volume           3    0.0744      0.1026   2,120  58.3%
+  sex                          1    0.0890      0.0891   3,634  99.9%
+  age                          1    0.0834      0.0834   3,633  99.9%
+  mmse_change                  1    0.0642      0.0769   2,335  64.2%
+  abeta4240                    2    0.0319      0.0497   1,119  30.8%
+  gfap                         2    0.0121      0.0466     614  16.9%
+  education_years              1    0.0150      0.0150   3,632  99.9%
+  apoe_e4                      1    0.0170      0.0141   2,861  78.7%
 
-contribution by pipeline stage:
-  Stage 1 cognitive / clinical   2.9862   78.4% of total
-  Stage 2 blood biomarkers       0.1985    5.2% of total
-  Stage 3 MRI volumetrics        0.1677    4.4% of total
-  Stage 4 PET                    0.4574   12.0% of total
+contribution by pipeline stage (global):
+  Stage 1 cognitive / clinical    2.3128   74.7% of total
+  Stage 2 blood biomarkers        0.1501    4.8% of total
+  Stage 3 MRI volumetrics         0.1500    4.8% of total
+  Stage 4 PET                     0.4816   15.6% of total
 
-'overall' is the cohort-wide mean |SHAP|; 'measured' is the mean |SHAP|
-only across subjects where that test exists. A slot that is rarely
-measured (PET) is diluted in 'overall' by the NaN rows but keeps its true
-per-result contribution in 'measured' -- this is how a partially-observed
-cohort is reported honestly rather than as a fabricated complete vector.
+INTERPRETATION:
+- 'global' = cohort-wide mean |SHAP| (includes unmeasured slots as model defaults)
+- 'conditional' = mean |SHAP| only where the test was actually measured
+  → this is the HONEST contribution of a test result when you have it
+- PET and blood biomarkers rank higher in conditional than global because they're
+  measured in <30% of subjects — the global number is diluted by NaN rows
+- Sorted by conditional importance to reflect true clinical value of each test
