@@ -70,7 +70,7 @@ const FEATURE_STAGE = {
   mmse: 1,
   mmse_change: 1,
   adas_cog_13: 1,
-  faq_total: 1,
+  // faq_total: 1,  REMOVED — label leakage
   n_visits: 1,
   study_years: 1,
   // stage 2 blood
@@ -488,6 +488,11 @@ function parseValues(text) {
 function ProfileSection({ patient, onRecordResult }) {
   const cog = patient.cognitive;
   const decline = cog && cog.prior != null && cog.latest != null ? cog.prior - cog.latest : 0;
+  // Results measured ahead of the ordered pathway (real-cohort ordering gaps):
+  // the stage stops at the first missing test, so these are "already on file".
+  const aheadOfPathway = ['blood', 'imaging', 'pet'].filter(
+    (slot) => patient[slot]?.status === 'completed' && SLOT_STAGE[slot] > (patient.stage ?? 1)
+  );
   const [openSlot, setOpenSlot] = useState(null);
   const [outcome, setOutcome] = useState('normal');
   const [valuesText, setValuesText] = useState('');
@@ -582,6 +587,22 @@ function ProfileSection({ patient, onRecordResult }) {
 
       <div className="mt-6 border-t border-line dark:border-darkBorder pt-6">
         <p className="text-xs font-bold uppercase tracking-wider text-muted dark:text-darkMuted">Diagnostic Tests</p>
+
+        {/* Real cohorts arrive with ordering gaps: a measured result can sit
+            ahead of the ordered pathway (an ADNI subject with an MRI and no
+            plasma panel). Say so explicitly, so "Stage 1 · MRI completed"
+            reads as the truth it is rather than looking self-contradictory. */}
+        {aheadOfPathway.length > 0 && (
+          <p className="mt-3 rounded-lg border border-line/70 dark:border-darkBorder/70 bg-tint/50 dark:bg-darkBorder/30 p-2.5 text-[11px] leading-relaxed text-muted dark:text-darkMuted">
+            <strong className="text-ink dark:text-darkText">
+              {aheadOfPathway.map((s) => SLOT_LABEL[s]).join(' + ')} already on file
+            </strong>{' '}
+            — measured outside the ordered workup, so the stage still reflects the pathway
+            (cognition → blood → MRI → PET).
+            {` `}The result feeds the model regardless; the pathway continues by ordering the
+            missing test below.
+          </p>
+        )}
         <div className="mt-3 divide-y divide-line/60 dark:divide-darkBorder/60">
           {['blood', 'imaging', 'pet'].map((slot) => {
             const value = patient[slot];
