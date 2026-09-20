@@ -1,14 +1,22 @@
-"""Progression forecaster serving (12-month horizon).
+"""Outlook serving -- trajectory and projected state for one patient.
 
-Loads artifacts/progression_delta.joblib (MMSE-delta regressor) and
-artifacts/progression_conversion.joblib (conversion classifier) into the API
-process, mirroring model_service.py.
+Loads artifacts/progression_delta.joblib (MMSE-change regressor) and
+artifacts/progression_conversion.joblib (the refined classifier) into the API
+process, mirroring model_service.py. The window and the feature list are read
+from artifacts/progression_meta.json, so they can be changed without touching
+this module.
 
-forecast(record) composes:
-  * expected MMSE change over 12 months (regressor) and the projected value
-  * probability of clinical progression (classifier) with top SHAP drivers
-  * the PROJECTED risk tier: the CURRENT risk model (model_service) re-scores
-    the projected future feature vector (age+1, forecast MMSE, carried-forward
+This module supplies what the score alone cannot: the observed-vs-projected
+cognition trajectory, the projected score and tier, and the point at which each
+completed test landed. The score itself comes from model_service (the refined
+model), so there is exactly one source of truth for risk.
+
+Labels are real clinician follow-up diagnoses (see scripts/ingest_adni.py).
+
+forecast(record) composes:  * expected MMSE change (regressor) and the projected value
+  * top SHAP drivers of the score
+  * the PROJECTED score and tier: the served model (model_service) re-scores the
+    projected future feature vector (older age, forecast MMSE, carried-forward
     biomarkers) -- one consistent model family end-to-end
   * a chart-ready trajectory series: observed past (prior visit -> now,
     annotated with the current workup stage) and predicted future with an
@@ -34,8 +42,10 @@ _SLOT_LABEL = {"blood": "Blood panel", "imaging": "MRI", "pet": "PET"}
 DELTA_PATH = PROJECT_ROOT / "artifacts" / "progression_delta.joblib"
 CONV_PATH = PROJECT_ROOT / "artifacts" / "progression_conversion.joblib"
 META_PATH = PROJECT_ROOT / "artifacts" / "progression_meta.json"
+IMPORTANCE_PATH = PROJECT_ROOT / "artifacts" / "progression_importance.csv"
 
-_cache: dict = {"delta": None, "conv": None, "meta": None, "explainer": None}
+_cache: dict = {"delta": None, "conv": None, "meta": None, "explainer": None,
+                "importance": []}
 # (patient_id, updated_at, stage) -> forecast payload; recomputed on any change
 _forecast_cache: dict = {}
 
@@ -57,7 +67,29 @@ def _load() -> bool:
         _cache["meta"] = {}
     clf = _cache["conv"].named_steps.get("clf")
     if clf is not None:
-        _cache["explainer"] = shap.TreeExplainer(clf)
+        # tree_path_dependent is REQUIRED, not stylistic: interventional mode
+        # raises NotImplementedError on XGBoost's categorical splits, and every
+        # feature here is legitimately NaN for patients who were never tested.
+        _cache["explainer"] = shap.TreeExplainer(
+            clf, feature_perturbation="tree_path_dependent"
+        )
+    # Feature attribution in the SAME shape the served model's card uses
+    # ({feature, mean_abs_shap}) so the UI renders both families through one
+    # component. Conditional (measured-only) values, matching the other card's
+    # convention -- a rarely ordered test must not be diluted to near-zero by
+    # the subjects who were never scanned.
+    try:
+        imp = pd.read_csv(IMPORTANCE_PATH)
+        col = ("mean_abs_shap_conditional" if "mean_abs_shap_conditional" in imp.columns
+               else "mean_abs_shap_global")
+        _cache["importance"] = [
+            {"feature": str(r["feature"]), "mean_abs_shap": float(r[col])}
+            for _, r in imp.sort_values(col, ascending=False).iterrows()
+        ]
+    except Exception:  # noqa: BLE001 -- attribution is optional, never fatal
+        _cache["importance"] = []
+
+    _forecast_cache.clear()
     return True
 
 
@@ -134,6 +166,9 @@ def _score_checkpoints(record: dict) -> list[dict]:
         for s2, st2 in _SLOT_STAGE:
             if st2 > stage:
                 masked[s2] = None
+        # Keep the stage consistent with the mask: record_to_features gates on it
+        # too (a slot beyond the ordered prefix is hidden from the score).
+        masked["stage"] = stage
         try:
             res = model_service.score_features(model_service.record_to_features(masked), top_n=None)
         except Exception:  # noqa: BLE001 -- annotation must never break the forecast
@@ -164,17 +199,23 @@ def _score_checkpoints(record: dict) -> list[dict]:
 
 
 def forecast(record: dict) -> Optional[dict]:
-    """Full 12-month progression forecast for one internal patient record."""
+    """Full outlook for one internal patient record."""
     if not _load():
         return None
     meta = _cache["meta"] or {}
 
-    cache_key = (record.get("id"), record.get("updated_at"), record.get("stage"))
+    # The model identity is part of the key: a retrain must never serve a
+    # forecast computed by the previous artifacts.
+    cache_key = (record.get("id"), record.get("updated_at"), record.get("stage"),
+                 meta.get("trained_at"))
     if _forecast_cache.get(cache_key) is not None:
         return _forecast_cache[cache_key]
 
+    horizon = int(meta.get("horizon_months") or 24)
+    horizon_years = round(horizon / 12)
+
     from . import model_service
-    from .config import risk_tier
+    from .config import has_biomarker_evidence, risk_tier
 
     names = meta.get("features") or []
     if not names:
@@ -197,23 +238,28 @@ def forecast(record: dict) -> Optional[dict]:
     rmse = float((meta.get("metrics") or {}).get("delta_rmse") or 0.75)
     band = round(1.44 * rmse, 1)  # ~75% interval for a roughly-normal residual
 
-    # ---- 2. Conversion probability ------------------------------------------
-    p_convert = float(_cache["conv"].predict_proba(row)[0, 1])
+    # ---- 2. Drivers --------------------------------------------------------
+    # The score itself is NOT recomputed here: the served model already produced
+    # it (model_service is the single source of truth), so the same model run
+    # twice would just yield the same number under a second label.
     drivers = _top_drivers(feats)
 
     # ---- 3. Projected risk tier: current risk model on the future vector ----
     mmse_prior = cog.get("prior")
     future_feats = dict(feats)
-    future_feats["age"] = (feats.get("age") or 74) + 1
+    future_feats["age"] = (feats.get("age") or 74) + horizon_years
     future_feats["mmse"] = mmse_future
     future_feats["mmse_change"] = (
         (mmse_future - mmse_prior) if mmse_prior is not None else None
     )
     projected = model_service.score_features(future_feats, top_n=None)
     score_future = projected["score"] if projected else record.get("score")
-    tier_future = risk_tier(score_future)
+    # Tier, not score, is evidence-gated -- and the projection is held to the same
+    # rule: a "nothing changes" future in which no biomarker was ever ordered is
+    # still cognition alone, so it cannot project High.
+    tier_future = risk_tier(score_future, has_biomarker_evidence(future_feats))
     score_now = record.get("score")
-    tier_now = risk_tier(score_now)
+    tier_now = risk_tier(score_now, has_biomarker_evidence(record))
 
     stage = record.get("stage", 1)
     stage_label = {
@@ -227,7 +273,7 @@ def forecast(record: dict) -> Optional[dict]:
         {"t": -6, "mmse": mmse_prior, "kind": "observed"},
         {"t": 0, "mmse": mmse_now, "kind": "observed", "stage": stage, "stage_label": stage_label},
         {
-            "t": 12,
+            "t": horizon,
             "mmse": mmse_future,
             "kind": "predicted",
             "lo": max(0, round(mmse_future - band)),
@@ -239,7 +285,6 @@ def forecast(record: dict) -> Optional[dict]:
 
     payload = {
         "id": record.get("id"),
-        "horizon_months": 12,
         "model_available": True,
         "current": {
             "mmse": mmse_now,
@@ -252,7 +297,6 @@ def forecast(record: dict) -> Optional[dict]:
             "mmse": mmse_future,
             "mmse_delta": round(delta, 2),
             "band": band,
-            "conversion_probability": round(p_convert, 4),
             "score": round(float(score_future), 4),
             "risk_tier": tier_future,
             "tier_shift": tier_now != tier_future,
@@ -261,8 +305,8 @@ def forecast(record: dict) -> Optional[dict]:
         "score_checkpoints": score_checkpoints,
         "drivers": drivers,
         "disclaimer": (
-            "Forecasts are model-derived decision support on simulated 12-month "
-            "trajectories — never a diagnosis or a guarantee of progression."
+            "Model-derived decision support, trained on real clinician follow-up "
+            "visits — never a diagnosis and never a guarantee of outcome."
         ),
     }
     _forecast_cache[cache_key] = payload

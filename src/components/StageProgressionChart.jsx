@@ -21,7 +21,7 @@ export default function StageProgressionChart({ patients = [] }) {
       const count = stagePatients.length;
       const pct = (count / total) * 100;
       const meanRisk =
-        count > 0 ? stagePatients.reduce((sum, p) => sum + p.score, 0) / count : 0;
+        count > 0 ? stagePatients.reduce((sum, p) => sum + (p.final_score ?? p.score), 0) / count : 0;
 
       const tiers = {
         high: stagePatients.filter((p) => p.risk_tier === 'high').length,

@@ -1,0 +1,27 @@
+Reduced-cohort experiment: drop 500 cognition-only subjects
+Original cohort: 3636 subjects
+Reduced cohort: 3136 subjects (-500)
+Training set: 3136 subjects
+
+CV AUC: 0.907 ± 0.008
+Test AUC: 0.902
+Full model CV AUC: 0.9013 ± 0.0107
+Delta: +0.0057
+
+Conditional importance (sorted):
+  feature                  stage conditional    global      %
+  adas_cog_13                  1      1.3244    1.1967  82.2%
+  mmse                         1      0.9888    0.9888 100.0%
+  tau_meta_temporal            4      0.6391    0.2725  22.8%
+  centiloids                   4      0.3920    0.2701  34.0%
+  ptau217                      2      0.1862    0.0790  35.8%
+  mmse_change                  1      0.1683    0.1407  66.0%
+  hippocampal_volume           3      0.1556    0.1212  67.6%
+  abeta4240                    2      0.1431    0.0785  35.7%
+  nfl                          2      0.1397    0.0425  19.6%
+  hippocampal_icv_ratio        3      0.1397    0.1197  67.6%
+  gfap                         2      0.0822    0.0336  19.6%
+  age                          1      0.0773    0.0773  99.9%
+  sex                          1      0.0564    0.0564 100.0%
+  apoe_e4                      1      0.0563    0.0549  82.5%
+  education_years              1      0.0247    0.0248  99.9%

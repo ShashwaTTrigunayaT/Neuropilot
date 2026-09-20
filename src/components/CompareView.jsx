@@ -111,21 +111,22 @@ export default function CompareView({ compare, loading, error, onExit, onOpenPat
                   {p.age ?? '—'}y {p.sex ?? ''} · {p.stage_name} · MMSE {p.mmse ?? '—'}
                 </p>
                 <div className="mt-4 flex items-center gap-2">
-                  <span style={MONO} className="text-[22px] font-black text-ink dark:text-darkText">{fmtScore(p.score)}</span>
+                  <span style={MONO} className="text-[22px] font-black text-ink dark:text-darkText">{fmtScore(p.final_score ?? p.score)}</span>
                   <TierTag tier={p.risk_tier} />
                 </div>
                 <div className="mt-2 flex items-end gap-3">
-                  <ScoreDots score={p.score} />
+                  <ScoreDots score={p.final_score ?? p.score} />
                   <div className="pb-[2px] text-[10px] leading-tight text-muted dark:text-darkMuted">
-                    full precision<br />{p.score.toFixed(4)}
+                    final priority<br />{(p.final_score ?? p.score).toFixed(4)}
                   </div>
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 border-t border-line/60 dark:border-darkBorder/60 pt-3 text-[11px]">
                   {[
-                    ['12-mo conversion', p.forecast_available ? `${Math.round(p.conversion_probability * 100)}%` : 'n/a'],
-                    ['Projected MMSE', p.projected_mmse_12mo != null ? `${p.mmse ?? '—'}→${p.projected_mmse_12mo}` : '—'],
-                    ['Projected score', p.projected_score_12mo != null ? fmtScore(p.projected_score_12mo) : '—'],
-                    ['Projected tier', p.projected_tier_12mo ? <TierTag key={p.id} tier={p.projected_tier_12mo} /> : '—'],
+                    ['Official score', p.official_score != null ? fmtScore(p.official_score) : '—'],
+                    ['Confidence', p.estimate_confidence != null ? `${Math.round(p.estimate_confidence * 100)}%` : '—'],
+                    ['Projected MMSE', p.projected_mmse != null ? `${p.mmse ?? '—'}→${p.projected_mmse}` : '—'],
+                    ['Projected score', p.projected_score != null ? fmtScore(p.projected_score) : '—'],
+                    ['Projected tier', p.projected_tier ? <TierTag key={p.id} tier={p.projected_tier} /> : '—'],
                   ].map(([k, v]) => (
                     <div key={k} className="flex items-center justify-between gap-2">
                       <span className="text-muted dark:text-darkMuted">{k}</span>

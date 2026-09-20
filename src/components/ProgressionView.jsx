@@ -45,9 +45,9 @@ export default function ProgressionView({ patient, progression, onOpenDetail, on
   if (!progression || !progression.model_available) {
     return (
       <div className="mx-auto max-w-md py-24 text-center animate-fade-up">
-        <p className="text-sm font-semibold text-tierHigh">Progression model unavailable.</p>
+        <p className="text-sm font-semibold text-tierHigh">Refined model unavailable.</p>
         <p className="mt-2 text-xs leading-relaxed text-muted dark:text-darkMuted">
-          The 12-month forecaster artifacts are not loaded by the API. Run
+          The refined-model artifacts are not loaded by the API. Run
           <code className="mx-1 rounded bg-tint dark:bg-darkBorder px-1 py-0.5">python scripts/train_progression_model.py</code>
           and restart the backend.
         </p>
@@ -63,13 +63,11 @@ export default function ProgressionView({ patient, progression, onOpenDetail, on
   }
 
   const { current, projected, drivers } = progression;
-  const pPct = Math.round(projected.conversion_probability * 100);
+  // The headline number IS the patient's refined-model score -- the same value
+  // shown on every other screen. It is not recomputed here.
+  const pPct = Math.round(current.score * 100);
   const convColor =
-    projected.conversion_probability >= 0.6
-      ? TIER_HEX.high
-      : projected.conversion_probability >= 0.3
-        ? TIER_HEX.medium
-        : TIER_HEX.low;
+    current.score >= 0.6 ? TIER_HEX.high : current.score >= 0.3 ? TIER_HEX.medium : TIER_HEX.low;
 
   return (
     <div className="space-y-8 animate-fade-up">
@@ -81,12 +79,12 @@ export default function ProgressionView({ patient, progression, onOpenDetail, on
           </div>
           <div>
             <h1 className="text-[28px] sm:text-[32px] font-black tracking-tight text-ink dark:text-darkText leading-none">
-              Progression Probability
+              Refined Risk Profile
             </h1>
             <p className="mt-1.5 text-[13px] text-muted dark:text-darkMuted flex flex-wrap items-center gap-x-2.5 gap-y-1">
               <span style={MONO} className="font-bold text-accent">{patient.id}</span>
               <span className="text-line dark:text-darkBorder font-light">/</span>
-              <span>12-month trajectory forecast</span>
+              <span>Observed and projected trajectory</span>
               <span className="text-line dark:text-darkBorder font-light">/</span>
               <span>{current.stage_label}</span>
             </p>
@@ -130,7 +128,7 @@ export default function ProgressionView({ patient, progression, onOpenDetail, on
                 </span>
               </div>
               <p style={MONO} className="mt-1 text-[10.5px] text-muted dark:text-darkMuted">
-                today {fmtPercent(current.score)} · 12 mo {fmtPercent(projected.score)}
+                today {fmtPercent(current.score)} · projected {fmtPercent(projected.score)}
                 {projected.tier_shift ? ' · tier shift' : ' · tier stable'}
               </p>
             </div>
@@ -139,15 +137,16 @@ export default function ProgressionView({ patient, progression, onOpenDetail, on
 
         {/* Right: headline numbers */}
         <div className="space-y-6 lg:col-span-3">
-          {/* Conversion probability — the headline number */}
+          {/* Refined score — the headline number */}
           <div className="rounded-2xl border border-line/70 dark:border-darkBorder/70 bg-white/60 dark:bg-darkCard/60 p-6">
-            <SectionLabel size="sm">Probability of clinical progression</SectionLabel>
+            <SectionLabel size="sm">Refined risk score</SectionLabel>
             <div className="mt-3 flex items-baseline justify-between">
-              <span style={MONO} className="text-4xl font-black" style={{ color: convColor }}
-              >
+              <span style={{ ...MONO, color: convColor }} className="text-4xl font-black">
                 {pPct}%
               </span>
-              <span className="text-[11px] text-muted dark:text-darkMuted">within 12 months</span>
+              <span className="text-[11px] text-muted dark:text-darkMuted">
+                {current.risk_tier} · projected {projected.risk_tier}
+              </span>
             </div>
             <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-line/50 dark:bg-darkBorder/60">
               <div

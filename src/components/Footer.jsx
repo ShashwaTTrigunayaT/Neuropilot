@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   Moon,
   PieChart,
+  Plug,
   RefreshCw,
   ShieldCheck,
   SlidersHorizontal,
@@ -26,8 +27,8 @@ import { MONO } from './widgets.jsx';
 /* ------------------------------------------------------------------ */
 const FEATURE_INFO = {
   mmse: { stage: 'Cognitive', label: 'MMSE (cognitive score)', desc: 'Latest Mini-Mental State Examination score — lower scores indicate worse cognition.' },
-  mmse_change: { stage: 'Cognitive', label: 'MMSE change over time', desc: 'Decline since the first visit. A falling trajectory is one of the strongest progression signals.' },
-  age: { stage: 'Demographic', label: 'Age', desc: 'Advancing age remains an independent risk factor for Alzheimer progression.' },
+  mmse_change: { stage: 'Cognitive', label: 'MMSE change over time', desc: 'Decline since the first visit. A falling trajectory is one of the strongest signals of deterioration.' },
+  age: { stage: 'Demographic', label: 'Age', desc: 'Advancing age remains an independent risk factor for Alzheimer\u2019s.' },
   sex: { stage: 'Demographic', label: 'Biological sex', desc: 'Sex-associated risk differences reported in the underlying cohort.' },
   education_years: { stage: 'Demographic', label: 'Education (years)', desc: 'Higher education is associated with lower observed risk (cognitive reserve).' },
   ses: { stage: 'Demographic', label: 'Socioeconomic status', desc: 'Socioeconomic context from the screening intake.' },
@@ -320,6 +321,22 @@ export default function Footer({
                     Live Risk Simulator
                   </button>
                 </li>
+                <li>
+                  <button
+                    onClick={() => {
+                      onViewChange('interop');
+                      scrollToTop();
+                    }}
+                    className={`inline-flex items-center gap-2 transition hover:text-accent ${
+                      currentView === 'interop'
+                        ? 'font-bold text-accent'
+                        : 'text-ink dark:text-darkText'
+                    }`}
+                  >
+                    <Plug className="h-3.5 w-3.5 opacity-70" />
+                    Interoperability (FHIR R4)
+                  </button>
+                </li>
               </ul>
             </div>
 
@@ -448,9 +465,17 @@ export default function Footer({
             </p>
             <div className="rounded-xl border border-line dark:border-darkBorder bg-tint/50 dark:bg-darkBorder/30 p-3 space-y-1.5">
               <div className="flex justify-between">
+                <span className="text-muted dark:text-darkMuted">Served model:</span>
+                <span style={MONO} className="font-semibold text-accent">
+                  {modelInfo?.label || 'Refined model'}
+                </span>
+              </div>
+              <div className="flex justify-between">
                 <span className="text-muted dark:text-darkMuted">Primary Classifier:</span>
                 <span style={MONO} className="font-semibold text-accent">
-                  {modelInfo?.model_type === 'xgb' ? 'XGBoost (tree_method=hist)' : 'RandomForestClassifier'}
+                  {(modelInfo?.model_type || '').toLowerCase().includes('xgb')
+                    ? 'XGBoost (tree_method=hist)'
+                    : 'RandomForestClassifier'}
                 </span>
               </div>
               <div className="flex justify-between">
@@ -692,6 +717,7 @@ export default function Footer({
               { key: 'D', desc: 'Jump to Dashboard Overview' },
               { key: 'P', desc: 'Jump to Patient Cohort view' },
               { key: 'S', desc: 'Jump to Live Risk Simulator' },
+              { key: 'F', desc: 'Jump to Interoperability (FHIR R4)' },
               { key: 'T', desc: 'Toggle Light / Dark mode' },
               { key: '?', desc: 'Open this keyboard shortcuts reference' },
             ].map((shortcut) => (

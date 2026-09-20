@@ -353,6 +353,102 @@ def add_stage(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # --------------------------------------------------------------------------- #
+# Progression index -- the FORWARD-LOOKING label set.
+#
+# The cross-sectional label answers "is this person impaired today?". The
+# progression index answers the question a prioritisation tool is actually for:
+# "this person is CN or MCI today -- will they cross into a worse diagnostic
+# category, and how much cognition will they lose?" Real follow-up visits supply
+# the outcome; nothing is simulated.
+# --------------------------------------------------------------------------- #
+PROGRESSION_HORIZON_MONTHS = 24
+MMSE_DELTA_TOLERANCE_MONTHS = 6
+
+
+def build_progression_index(visits: pd.DataFrame,
+                            horizon_months: int = PROGRESSION_HORIZON_MONTHS) -> pd.DataFrame:
+    """One row per subject: baseline visit -> 24-month progression outcome.
+
+    Definition choices, each deliberate:
+
+      * BASELINE = the subject's FIRST labeled visit whose diagnosis is CN (1)
+        or MCI (2). Subjects whose first labeled visit is already Dementia are
+        excluded -- Dementia is the top of the CN -> MCI -> Dementia ladder, so
+        there is no transition left to predict. This is why the index is
+        smaller than the 3,636-subject cross-sectional cohort.
+      * CONVERSION = a later visit INSIDE the window carries a strictly worse
+        diagnosis code. Both bounds matter -- an unbounded "ever worsened" rule
+        labels a month-40 transition as a month-24 outcome.
+      * Only subjects whose follow-up actually COVERS the window are kept.
+        Otherwise the outcome is unknown rather than negative, and the model
+        would be taught that "stopped attending" means "stayed stable".
+      * MMSE delta = the visit nearest baseline + horizon, within +/- 6 months.
+        NaN when no visit lands in that band; XGBoost consumes the NaN natively.
+
+    One row per subject, so a plain stratified split is already subject-level.
+    """
+    dx = visits[visits["diagnosis"].notna()].sort_values(["RID", "date"])
+    window = horizon_months * 30.44
+    tol_days = MMSE_DELTA_TOLERANCE_MONTHS * 30.44
+
+    # MMSE outcome lookup: RID -> (dates, values), for the horizon-nearest visit
+    cog = visits[["RID", "date", "mmse"]].dropna(subset=["mmse"]).sort_values(["RID", "date"])
+    mmse_by_rid = {rid: (g["date"].to_numpy(), g["mmse"].to_numpy()) for rid, g in cog.groupby("RID")}
+
+    rows = []
+    for rid, g in dx.groupby("RID"):
+        g = g.reset_index(drop=True)
+        base_idx = None
+        for i in range(len(g)):
+            if g["diagnosis"].iat[i] in (1, 2):
+                base_idx = i
+                break
+        if base_idx is None:
+            continue
+        base = g.iloc[base_idx]
+        follow_days = int((g["date"].iat[-1] - base["date"]).days)
+        if follow_days < window:
+            continue
+
+        after = g[(g["date"] > base["date"]) & ((g["date"] - base["date"]).dt.days <= window)]
+        worse = after[after["diagnosis"] > base["diagnosis"]]
+        converted = len(worse) > 0
+        months_to_conv = ((worse["date"].iat[0] - base["date"]).days / 30.44) if converted else np.nan
+
+        mmse_fut, mmse_days = np.nan, np.nan
+        dates, vals = mmse_by_rid.get(rid, (None, None))
+        if dates is not None and len(dates):
+            target = base["date"] + pd.Timedelta(days=window)
+            gaps = np.abs((pd.DatetimeIndex(dates) - target).days)
+            j = int(np.argmin(gaps))
+            if gaps[j] <= tol_days:
+                mmse_fut = float(vals[j])
+                mmse_days = int((pd.Timestamp(dates[j]) - base["date"]).days)
+
+        row = {
+            "subject_rid": int(rid),
+            "subject_id": f"ADNI-{int(rid):04d}",
+            "baseline_date": base["date"],
+            "baseline_diag": int(base["diagnosis"]),
+            "horizon_months": horizon_months,
+            "stage": int(base["stage"]),
+            "follow_days": follow_days,
+            "converted": int(converted),
+            "months_to_conversion": round(months_to_conv, 2) if converted else np.nan,
+            "mmse_baseline": float(base["mmse"]),
+            "mmse_future": mmse_fut,
+            "mmse_delta": (mmse_fut - float(base["mmse"])) if pd.notna(mmse_fut) else np.nan,
+            "mmse_outcome_days": mmse_days,
+        }
+        for f in FEATURES:
+            col = "sex_m" if f == "sex" else f
+            row[f] = base[col] if col in g.columns else np.nan
+        rows.append(row)
+
+    return pd.DataFrame(rows)
+
+
+# --------------------------------------------------------------------------- #
 # Serving record (internal API shape -- see backend/app/storage.py)
 # --------------------------------------------------------------------------- #
 def _f(v, digits: int = 3):
@@ -438,6 +534,7 @@ def to_record(row: pd.Series) -> dict:
     if pd.notna(row.get("centiloids")) or pd.notna(row.get("tau_meta_temporal")):
         pet = {
             "status": "completed",
+            "outcome": _pet_outcome(row),
             "amyloid": None if pd.isna(row.get("amyloid_status"))
                        else ("Positive" if row["amyloid_status"] >= 1 else "Negative"),
             "tau": _tau_status(row.get("tau_meta_temporal")),
@@ -490,6 +587,7 @@ NFL_HIGH = 24.4
 GFAP_HIGH = 217.0
 HIPPO_ICV_LOW = 0.0020
 TAU_SUVR_POS = 1.30
+CENTILOIDS_POS = 24.4   # standard amyloid-positivity line on the Centiloid scale
 
 
 def _blood_outcome(row: pd.Series) -> str:
@@ -525,6 +623,27 @@ def _tau_status(suvr) -> str | None:
     # META_TEMPORAL_SUVR: cohort median 1.21 (CN 1.18 / Dementia 1.65),
     # 1.30 = upper quartile -> tau-positive call
     return "Positive" if float(suvr) >= TAU_SUVR_POS else "Negative"
+
+
+def _pet_outcome(row: pd.Series) -> str:
+    """Amyloid/tau PET call, in the APP's outcome vocabulary (see _imaging_outcome).
+
+    Every other completed slot carries an `outcome`, and downstream code (the
+    escalation path, the trajectory score markers) reads it unconditionally.
+    A PET payload without one raised KeyError the moment a patient's ordered
+    pathway reached a scan that was ALREADY on file -- which is the common case
+    in a real cohort with ordering gaps.
+    """
+    amyloid_pos = (
+        (pd.notna(row.get("amyloid_status")) and row["amyloid_status"] >= 1)
+        or (pd.notna(row.get("centiloids")) and row["centiloids"] >= CENTILOIDS_POS)
+    )
+    tau_pos = _tau_status(row.get("tau_meta_temporal")) == "Positive"
+    if amyloid_pos and tau_pos:
+        return "abnormal"
+    if amyloid_pos or tau_pos:
+        return "inconclusive"
+    return "normal"
 
 
 def _pet_note(row: pd.Series) -> str:
@@ -594,6 +713,23 @@ def main() -> int:
     print(f"[longitudinal] subjects with >=2 scored visits: "
           f"{int((visits.groupby('RID').size() >= 2).sum()):,}")
 
+    # ---- progression index (the forward-looking label) ---------------------- #
+    prog = build_progression_index(visits)
+    print(f"\n[progression] horizon {PROGRESSION_HORIZON_MONTHS} months")
+    print(f"  eligible subjects   : {len(prog):,} "
+          f"(CN or MCI baseline AND follow-up covering the window)")
+    if len(prog):
+        n_conv = int(prog["converted"].sum())
+        print(f"  conversions         : {n_conv:,}  ({100 * n_conv / len(prog):.1f}%)")
+        for code, name in [(1, "CN"), (2, "MCI")]:
+            sub = prog[prog["baseline_diag"] == code]
+            if len(sub):
+                print(f"    from {name:<4}: {len(sub):>5,} subjects · "
+                      f"{100 * sub['converted'].mean():5.1f}% progressed")
+        print(f"  MMSE delta on file  : {int(prog['mmse_delta'].notna().sum()):,} "
+              f"(mean {prog['mmse_delta'].mean():+.2f} points)")
+        print(f"  median follow-up    : {int(prog['follow_days'].median()):,} days")
+
     # ---- write ------------------------------------------------------------- #
     PROCESSED.mkdir(parents=True, exist_ok=True)
     visit_cols = ["RID", "date", "VISCODE", "mmse", "mmse_prior", "mmse_change",
@@ -634,9 +770,12 @@ def main() -> int:
     print(f"\n[version] cohort_version={digest}")
 
     print("\n[done] wrote:")
-    for p in ("adni_visits.csv", "adni_features.csv", "adni_cohort.json"):
+    prog.to_csv(PROCESSED / "adni_progression.csv", index=False)
+
+    for p in ("adni_visits.csv", "adni_features.csv", "adni_cohort.json", "adni_progression.csv"):
         print(f"  data/processed/{p}")
     print("\nNext:  python scripts/train_model.py --data adni")
+    print("       python scripts/train_progression_model.py --data adni")
     return 0
 
 

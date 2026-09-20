@@ -37,9 +37,27 @@ function ScoreSection({ patient }) {
             </span>
           </div>
           <p className="mt-2.5 text-xs leading-relaxed text-muted dark:text-darkMuted">
-            Longitudinal risk estimation for progression along the early diagnostic pathway.
-            Operates as decision support for triage prioritization — never a diagnosis.
+            Official measured risk used for the evidence-gated tier. Operates as decision support for triage prioritization — never a diagnosis.
           </p>
+          <div className="mt-3 grid grid-cols-3 gap-2 rounded-xl border border-line/70 dark:border-darkBorder/70 bg-tint/40 dark:bg-darkBorder/30 p-2.5 text-center">
+            <div>
+              <p className="text-[9px] font-bold uppercase tracking-wider text-muted dark:text-darkMuted">Official</p>
+              <p style={MONO} className="mt-1 text-sm font-bold text-ink dark:text-darkText">{fmtScore(patient.official_score ?? patient.score)}</p>
+            </div>
+            <div>
+              <p className="text-[9px] font-bold uppercase tracking-wider text-muted dark:text-darkMuted">Provisional</p>
+              <p style={MONO} className="mt-1 text-sm font-bold text-ink dark:text-darkText">{fmtScore(patient.provisional_score ?? patient.score)}</p>
+            </div>
+            <div>
+              <p className="text-[9px] font-bold uppercase tracking-wider text-muted dark:text-darkMuted">Priority</p>
+              <p style={MONO} className="mt-1 text-sm font-bold text-accent">{fmtScore(patient.final_score ?? patient.score)}</p>
+            </div>
+          </div>
+          {(patient.estimate_confidence ?? 0) < 1 && (
+            <p className="mt-2 text-[10px] text-muted dark:text-darkMuted">
+              Priority estimate confidence: {Math.round((patient.estimate_confidence ?? 0) * 100)}% · estimated stages are not treated as measured evidence.
+            </p>
+          )}
           <div className="mt-5 flex flex-wrap items-center justify-center sm:justify-start gap-4 text-[11px]">
             {[
               ['low', 'Low', '< 0.40'],
@@ -55,6 +73,11 @@ function ScoreSection({ patient }) {
               </div>
             ))}
           </div>
+          <p className="mt-2 text-[10.5px] leading-relaxed text-muted dark:text-darkMuted">
+            Score thresholds band the risk; <strong>High additionally requires a biomarker result on file</strong> —
+            a cognitive score alone caps at Medium (<em>awaiting confirmation</em>), since cognition is the
+            assessment the referral was already based on.
+          </p>
         </div>
       </div>
     </section>
@@ -109,7 +132,7 @@ function ReasoningSection({ patient }) {
   const factorByFeature = Object.fromEntries((patient.factors || []).map((f) => [f.feature, f]));
   const maxAbs = Math.max(...(patient.factors || []).map((f) => Math.abs(f.effect)), 0.0001);
 
-  const factorRow = (f, i, dim = false) => {
+  const factorRow = (f, i, dim = false, estimated = false) => {
     const up = f.effect > 0;
     const width = Math.max(6, (Math.abs(f.effect) / maxAbs) * 100);
     const hex = up ? TIER_HEX.high : TIER_HEX.low;
@@ -131,7 +154,7 @@ function ReasoningSection({ patient }) {
             )}
             {dim && (
               <span className="ml-1.5 rounded-md bg-[#EAE7DF] dark:bg-darkBorder px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-muted dark:text-darkMuted">
-                model default
+                {estimated ? 'predicted stage' : 'model default'}
               </span>
             )}
           </span>
@@ -173,8 +196,8 @@ function ReasoningSection({ patient }) {
         Clinical Risk Attribution Factors
       </SectionLabel>
       <p className="mt-1.5 text-[11px] leading-relaxed text-muted dark:text-darkMuted">
-        SHAP contribution of every model input, grouped by pipeline stage. Tests that haven&rsquo;t
-        been ordered yet show their neutral placeholder; results re-score the model live.
+        SHAP contribution of every model input, grouped by pipeline stage. Missing stages show
+        a model estimate separately; real results replace estimates and re-score the model live.
       </p>
 
       <div className="mt-5 space-y-4">
@@ -182,6 +205,7 @@ function ReasoningSection({ patient }) {
           const slotData = slot ? patient[slot] : null;
           const hasResults = Boolean(slotData && slotData.status === 'completed');
           const isOrdered = Boolean(slotData);
+          const hasEstimate = Boolean(slot && patient.estimated_values?.[slot]);
           // Cognition group folds in demographics/baseline (stage 0) as context
           const rows = stage === 1 ? [...byStage(1), ...byStage(0)] : byStage(stage);
 
@@ -198,8 +222,8 @@ function ReasoningSection({ patient }) {
                   {label}
                 </span>
                 {!hasResults && slot && (
-                  <span className="text-[10px] font-medium text-dust dark:text-darkMuted">
-                    {isOrdered ? 'results pending' : 'not yet measured'}
+                  <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${hasEstimate ? 'bg-accent/10 text-accent' : 'text-dust dark:text-darkMuted'}`}>
+                    {hasEstimate ? 'predicted stage · not measured' : isOrdered ? 'add real result' : 'not yet measured'}
                   </span>
                 )}
               </div>
@@ -211,7 +235,7 @@ function ReasoningSection({ patient }) {
                     : 'Order this test to see its influence on the risk score.'}
                 </p>
               ) : (
-                <div className="mt-3 space-y-2.5">{rows.map((f, i) => factorRow(f, i, stage > 1 && !hasResults))}</div>
+                <div className="mt-3 space-y-2.5">{rows.map((f, i) => factorRow(f, i, stage > 1 && !hasResults, hasEstimate))}</div>
               )}
             </div>
           );
@@ -219,10 +243,9 @@ function ReasoningSection({ patient }) {
       </div>
 
       <p className="mt-4 text-[10.5px] leading-relaxed text-muted dark:text-darkMuted">
-        Rows tagged <span className="font-semibold">model default</span> are tests that haven&rsquo;t been
-        performed: the model handles missing values natively, so an unordered test carries a small learned
-        placeholder contribution (e.g. +0.06) rather than zero. It is replaced by the measured value&rsquo;s
-        actual contribution the moment results land and the model re-scores.
+        Rows tagged <span className="font-semibold">predicted stage</span> are model estimates, not measured
+        clinical results. They support priority ranking only. Add the real result when available; its measured
+        contribution then replaces the estimate and the model re-scores.
       </p>
     </section>
   );
@@ -599,16 +622,18 @@ function ProfileSection({ patient, onRecordResult }) {
             </strong>{' '}
             — measured outside the ordered workup, so the stage still reflects the pathway
             (cognition → blood → MRI → PET).
-            {` `}The result feeds the model regardless; the pathway continues by ordering the
-            missing test below.
+            {` `}The model sees it only once the pathway reaches its stage, so ordering the
+            missing test below is what brings it in.
           </p>
         )}
         <div className="mt-3 divide-y divide-line/60 dark:divide-darkBorder/60">
           {['blood', 'imaging', 'pet'].map((slot) => {
             const value = patient[slot];
+            const estimate = patient.estimated_values?.[slot] || null;
             const stageAt = SLOT_STAGE[slot];
             const meta = value?.outcome ? OUTCOME_META[value.outcome] : null;
-            const dotHex = meta ? meta.hex : value?.status === 'pending' ? TIER_HEX.medium : '#C7C4BC';
+            const awaitingResult = value?.status === 'pending' || value?.status === 'ordered';
+            const dotHex = meta ? meta.hex : awaitingResult ? TIER_HEX.medium : '#C7C4BC';
 
             return (
               <div key={slot} className="py-3">
@@ -619,17 +644,47 @@ function ProfileSection({ patient, onRecordResult }) {
                   </span>
                   <span className="text-right">
                     {!value ? (
-                      <span className="text-[11px] text-dust dark:text-darkMuted">Not ordered (Stage {stageAt})</span>
-                    ) : value.status === 'pending' ? (
-                      <span className="flex items-center gap-2">
-                        <span className="text-[11px] font-semibold text-tierMedium">Results pending</span>
+                      <div className="space-y-2">
+                        {estimate ? (
+                          <div className="rounded-lg border border-dashed border-accent/40 bg-accent/5 px-2.5 py-2 text-left">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-accent">Model estimate · not measured</p>
+                            <div className="mt-1 space-y-0.5 text-[10.5px] text-muted dark:text-darkMuted">
+                              {Object.entries(estimate).map(([key, estimated]) => (
+                                <div key={key} className="flex justify-between gap-3"><span>{key}</span><span style={MONO} className="font-semibold text-ink dark:text-darkText">{estimated}</span></div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-[11px] text-dust dark:text-darkMuted">No estimate available (Stage {stageAt})</span>
+                        )}
                         <button
-                          onClick={() => openForm(slot)}
+                          onClick={() => onAdvance?.(false)}
                           className="rounded-lg border border-line dark:border-darkBorder bg-white dark:bg-darkCard px-2.5 py-1 text-[11px] font-semibold text-accent hover:bg-accent/10 transition"
                         >
-                          + Record result
+                          Order test / add real result later
                         </button>
-                      </span>
+                      </div>
+                    ) : awaitingResult ? (
+                      <div className="space-y-2">
+                        {estimate && (
+                          <div className="rounded-lg border border-dashed border-accent/40 bg-accent/5 px-2.5 py-2 text-left">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-accent">Model estimate · not measured</p>
+                            <div className="mt-1 space-y-0.5 text-[10.5px] text-muted dark:text-darkMuted">
+                              {Object.entries(estimate).map(([key, estimated]) => (
+                                <div key={key} className="flex justify-between gap-3"><span>{key}</span><span style={MONO} className="font-semibold text-ink dark:text-darkText">{estimated}</span></div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        <span className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => openForm(slot)}
+                            className="rounded-lg border border-line dark:border-darkBorder bg-white dark:bg-darkCard px-2.5 py-1 text-[11px] font-semibold text-accent hover:bg-accent/10 transition"
+                          >
+                            + Add real result
+                          </button>
+                        </span>
+                      </div>
                     ) : (
                       <div>
                         {meta && (
@@ -848,10 +903,10 @@ export default function PatientDetail({
             <button
               onClick={onOpenProgression}
               className="inline-flex items-center gap-2 rounded-xl border border-accent/40 bg-accent/10 px-3.5 py-1.5 text-xs font-semibold text-accent hover:bg-accent/20 shadow-soft transition"
-              title="Open the full 12-month progression forecast"
+              title="Open the refined model analysis"
             >
               <TrendingUp className="h-3.5 w-3.5" />
-              <span>Progression Probability</span>
+              <span>Refined Risk Profile</span>
             </button>
           )}
           <button

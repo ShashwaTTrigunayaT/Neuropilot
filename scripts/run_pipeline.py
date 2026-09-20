@@ -58,6 +58,10 @@ def main() -> int:
         # pin --data adni unless the caller chose a mode explicitly
         train_args = args if data_mode is not None else ["--data", "adni", *args]
         run(ROOT / "scripts" / "train_model.py", *train_args)
+        # The 24-month progression forecaster trains off the same ingestion
+        # (data/processed/adni_progression.csv). Keeping it in the pipeline is
+        # what stops the served forecast from silently drifting behind a retrain.
+        run(ROOT / "scripts" / "train_progression_model.py", "--data", "adni")
         served = "adni"
     else:
         print("[run_pipeline] no ADNI drop — falling back to the OASIS-1 path")
@@ -75,6 +79,8 @@ def main() -> int:
                 return 1
         run(ROOT / "scripts" / "ingest.py")
         run(ROOT / "scripts" / "train_model.py", *args)
+        print("[run_pipeline] skipping the progression forecaster: it needs the real "
+              "ADNI follow-up index (data/processed/adni_progression.csv)")
         served = "real (OASIS)"
 
     print(

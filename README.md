@@ -35,12 +35,14 @@ stage test was completed.
 | Leakage & robustness audit | Run & verified | FAQ (diagnosis-derived, like CDR) dropped from the feature set; early stopping moved off the test set; APOE encoding benchmarked; complete-case cross-check agrees (ρ = 0.82) — `artifacts/model_audit.txt` |
 | Progression forecaster trained | Run & verified (synthetic labels) | XGBRegressor + XGBClassifier; MMSE-delta MAE **0.611 pts** (R² 0.679), conversion ROC AUC **0.770** (PR AUC 0.465 ≈ 2.8× lift) |
 | Explainability | Run & verified | Global SHAP **with per-stage rollup** (`stage_importance.csv`) + full per-subject attribution; both an overall and a measured-only view, so a rarely-ordered test (PET) is not diluted to zero |
-| Escalation rule engine | 39 pytest cases | Deterministic stage gates; clinician-in-the-loop via `override: true`; results loop via `POST /results`; **ordering gaps handled** — the stage stops at the first missing test and already-measured later slots are carried forward, never overwritten |
+| Escalation rule engine | 42 pytest cases | Deterministic stage gates; **evidence-gated High tier** (blocked, not just advised, by `has_biomarker_evidence`); clinician-in-the-loop via `override: true`; results loop via `POST /results`; **ordering gaps handled** — the stage stops at the first missing test and already-measured later slots are carried forward, never overwritten |
 | Autonomous triage | Run & verified (browser E2E) | `POST /workup/next` / `/workup/run`: model picks subject → orders test → re-scores → re-ranks; live rank movements (e.g. `#12 → #2` after an abnormal blood panel) |
 | Progression forecast served | Run & verified (local + Railway) | `GET /patients/{id}/progression` → trajectory, conversion probability with SHAP drivers, projected tier, stage-completion score checkpoints |
 | Backend API | Run & verified | FastAPI + Swagger at `/docs`; `/health` reports `data_source` (e.g. `real+postgres` on Railway); live scoring via `pipeline.joblib` |
 | Frontend dashboard | Run & verified (headless Chrome) | Zero mock data; ranked cohort, detail view, full-page progression view, risk simulator rebuilt on the model's real 15 features; production build clean, zero console errors |
 | PostgreSQL store | Run & verified (Railway) | Activated by `DATABASE_URL`; schema created + seeded on boot, persists workup history across restarts, and **re-seeds when either the cohort or the served model changes** — a retrain can never leave stale attributions in the database |
+| FHIR R4 integration | Run & verified (144 pytest cases) | **Four phases live:** export (`/fhir/Patient/{id}/$everything`, LOINC-coded Observations, `RiskAssessment`), inbound ingestion (`POST /fhir/Bundle`, accepting `transaction`/`collection`/**`document`** bundles — the NRCES shape — with the **ABHA address as the preferred subject identifier** and a crosswalk that keeps one human one patient, plus idempotency on ABHA + observation date so a retried document writes nothing; atomic — 422 `OperationOutcome` on any unmappable resource or wrong UCUM unit), bidirectional (`ServiceRequest` orders → `DiagnosticReport`/`Observation` results → re-score through the served model; one-transaction push to an outbound server), and SMART on FHIR launch (authorization-code + PKCE, patient-scoped context, token held server-side). No `Condition` is ever emitted, on either direction |
+| ABDM (India) consent flow | Run & verified (28 pytest cases) | **HIU side of ABDM, Phases 4-5:** consent request → GRANTED/DENIED callback → health-information request (only the HIU's *public* ephemeral key travels) → HIP pushes Fidelius-encrypted FHIR → decrypted, mapped and re-scored through the served model. Fidelius is implemented on BouncyCastle Curve25519 (**short-Weierstrass, not X25519** — the trap that produces `ABDM-9999`), HKDF-SHA256 + AES-256-GCM with the tag verified, and is checked **byte-for-byte against the published `fidelius-cli` reference ciphertext**. Runs with no ABDM account against an in-process mock HIE-CM + mock HIP at `/mock-abdm`. See `ABDM_INTEGRATION.md` |
 | Docker demo | Written | `docker compose up --build` (single-image Railway deploy is the exercised path) |
 | CI (GitHub Actions) | Not built | Deliberately excluded from scope |
 
@@ -253,6 +255,9 @@ trajectory (−0.05) at 2%.
 .
 ├── Info.md                      # design blueprint this project implements
 ├── README.md                    # this document
+├── FHIR_INTEGRATION.md          # HL7 FHIR R4 integration: phases, limits, demo commands
+├── ABDM_INTEGRATION.md          # ABDM consent flow + Fidelius: procedure, limits, commands
+├── FHIR plan.md                 # phase-by-phase ABDM plan (status tracked inline)
 ├── .env.example                 # every supported env var, documented
 ├── Dockerfile                   # single-image deploy: builds UI → serves via FastAPI (Railway)
 ├── docker-compose.yml           # one-command local demo: Postgres + API + web
@@ -287,7 +292,7 @@ trajectory (−0.05) at 2%.
 │
 ├── backend/                     # FastAPI service
 │   ├── requirements.txt · requirements-dev.txt · pytest.ini · Dockerfile
-│   ├── tests/                   #   24 pytest cases (API + DB seed FK integrity)
+│   ├── tests/                   #   144 pytest cases (API · DB seed · FHIR · SMART · ABDM)
 │   └── app/
 │       ├── config.py            #   thresholds (env) + artifact paths
 │       ├── schemas.py           #   Pydantic contracts (no diagnosis field)
@@ -298,6 +303,13 @@ trajectory (−0.05) at 2%.
 │       ├── escalation.py        #   deterministic rule engine
 │       ├── progression.py       #   12-month forecast + stage-score checkpoints
 │       ├── service.py           #   business logic (advance, results, workups)
+│       ├── fhir.py              #   FHIR R4 resources (Patient/Observation/RiskAssessment…)
+│       ├── fhir_ingest.py       #   inbound FHIR mapper (pure) — atomic, unit-checked
+│       ├── fhir_client.py       #   outbound push + server reachability probe
+│       ├── smart.py             #   SMART on FHIR (OAuth2 + PKCE), tokens server-side
+│       ├── fidelius.py          #   ABDM Fidelius crypto (BouncyCastle Curve25519, AES-GCM)
+│       ├── abdm.py              #   ABDM HIU consent-flow client + session state machine
+│       ├── abdm_mock.py         #   mock HIE-CM + mock HIP (simulator, mounted at /mock-abdm)
 │       ├── api.py / main.py     #   router + app (also serves the built SPA)
 │
 ├── src/                         # React dashboard (pure API client)
@@ -312,6 +324,8 @@ trajectory (−0.05) at 2%.
 │       ├── TrajectoryChart.jsx  #   observed-vs-predicted MMSE + stage-score lane
 │       ├── RiskSimulator.jsx    #   what-if scoring on the model's 16 real features
 │       ├── FeatureRadarChart.jsx · RiskDistributionChart.jsx · StageProgressionChart.jsx
+│       ├── Interoperability.jsx #   FHIR R4 exchange surface (F shortcut)
+│       ├── AbdmPanel.jsx        #   live ABDM consent → encrypted pull panel
 │       ├── Footer.jsx           #   telemetry + "How risk is determined" explainer
 │       ├── TierTag.jsx · BrandLogo.jsx · widgets.jsx
 │
@@ -341,7 +355,7 @@ cohort's own clinician assessment — `1 = MCI or Dementia`, `0 = CN` (2,168 /
 | Stratified test AUC | Stage 1 only (no biomarkers) **0.845** (n = 216) · biomarker-measured **0.921** (n = 512) |
 | RF fallback test AUC | 0.903 |
 | Majority-class baseline | accuracy 0.596, AUC 0.500 |
-| Thresholds | High > 0.7 · Medium ≥ 0.4 (env-overridable) |
+| Thresholds | Score bands High > 0.7 · Medium ≥ 0.4 (env-overridable) — **High additionally requires a biomarker result on file** (see §7.1) |
 
 **Label leakage — what is excluded and why.** ADNI derives its `DIAGNOSIS` from
 clinical staging, so any variable in that derivation leaks the label. Two are
@@ -398,6 +412,42 @@ the UI). Once a test completes, its measured contribution replaces the default
 and the subject is re-scored instantly. The cohort demonstrates this
 structurally: **2,514 subjects sit at Stage 1 · 332 at Stage 2 · 231 at Stage 3 ·
 559 at Stage 4**.
+
+### Risk tiers require corroborating evidence
+
+The score answers *"how much does this look like the thing we are looking for?"*
+The tier answers *"do we have enough to act on?"* — and those are not the same
+question. Cognition is the assessment the referral was already based on, so a
+high cognitive score on its own cannot corroborate itself: it is exactly the
+situation that exists *before* the pipeline has done its job.
+
+So the tier is gated. `risk_tier(score, evidence)` (one function, `config.py`,
+that every path — API, escalation, progression, FHIR export, simulator — routes
+through):
+
+| Tier | Requires |
+|---|---|
+| **High** | score > 0.70 **and** ≥ 1 biomarker result on file (blood, MRI or PET) |
+| **Medium** | score ≥ 0.40 — includes cognition-only patients flagged *awaiting confirmation* |
+| **Low** | score < 0.40 |
+
+Measured effect on the real ADNI cohort: **452 of 1,055 cognition-only patients
+move High → Medium** (they score 0.70–0.996 on cognition alone, at a mean MMSE of
+22.2 — genuinely impaired, but with no biomarker saying *what* pathology). Cohort
+tiers go `1628 / 687 / 1321` → `~1173 / ~1135 / ~1328`.
+
+Two things this deliberately does **not** do:
+
+- **It does not weaken triage.** At Stage 1 both Medium and High order the blood
+  panel, so the autonomous loop behaves identically — a cognition-only patient is
+  still the *first* to be tested. They simply cannot be labelled High until the
+  result lands, at which point they are promoted automatically.
+- **It does not touch the model's attribution.** ADAS-Cog 13 and MMSE stay the
+  top two SHAP features because they measurably are (single-feature AUC 0.885 and
+  0.836). Rebalancing those bars to look more even would misrepresent the model —
+  the honest lever was the tier rule, not the training data. (Removing 70% of
+  cognition-only *subjects* from training was tried and does nothing: cognition's
+  stage share moved 60.2% → 60.7%.)
 
 ### Ordering gaps — and why the stage stops at the first missing test
 
@@ -524,6 +574,23 @@ field**. Swagger at `/docs`. CORS allows the Vite dev server (+ `CORS_ORIGINS`).
 | `POST /workup/run` | Body `{"max_steps": 25}` → runs up to N autonomous steps; `{steps_run, done, remaining, total}` |
 | `POST /patients/score` | Body `{"features": {...}}` → `{score, risk_tier, factors, model_type}`. 503 if no model artifact |
 | `GET /model/info` | Model card: type, features, trained_at, thresholds, CV/test AUC, global SHAP importance |
+| `GET /fhir/metadata` | FHIR R4 `CapabilityStatement` — resources, `transaction` interaction, SMART security block |
+| `GET /fhir/Patient` · `/fhir/Patient/{id}` · `/fhir/Patient/{id}/$everything` | Cohort searchset (ranked), single read, and the complete interoperable record as one `collection` Bundle |
+| `GET /fhir/Observation?patient=` · `/fhir/RiskAssessment?patient=` | LOINC-coded measurements (MMSE 72106-8 …) and the score + tier + SHAP basis as a `RiskAssessment` |
+| `GET /fhir/ServiceRequest?patient=&status=` | **Placed orders.** `status=active` = the hospital still owes a result; `completed` = a real value is on file |
+| `GET /fhir/DiagnosticReport?patient=` | Completed panels: `conclusion` + `conclusionCode` describe *the test*, never the model's output |
+| `POST /fhir/Bundle` | **Inbound ingestion.** `transaction` / `collection` / `document` (NRCES: Composition header + `#local` / `urn:uuid:` references) → mapped → re-scored by the same served model. Prefers the **ABHA address** as the subject identifier and binds it as a crosswalk; **idempotent on ABHA + observation date** (a retried document is reported as a duplicate, writes nothing and does not re-score). Atomic: any unmappable resource, dangling reference or wrong unit rejects the whole bundle with a 422 `OperationOutcome` naming every offender. Unrecognised codes are reported, not dropped |
+| `POST /fhir/push/{id}` | Push the record (orders + results + `RiskAssessment` + `AuditEvent` trail) to `FHIR_BASE_URL` as one atomic FHIR *transaction* |
+| `GET /fhir/status` | Integration status: which phases are live, outbound-server reachability, SMART session, exchange-surface counts |
+| `GET /fhir/smart/launch` | Begin a SMART launch → 302 to the EHR authorize URL (PKCE S256, single-use `state`); `format=json` returns the URL instead |
+| `GET /fhir/smart/callback` | Exchange the code, hold the token server-side, redirect the browser to the dashboard with `?smart=connected&patient=…` |
+| `GET /fhir/smart/status` · `/fhir/smart/context` · `POST /fhir/smart/refresh` · `POST /fhir/smart/logout` | Registration facts, bound patient context, token renewal, disconnect (never returns token material) |
+| `POST /abdm/consent` · `GET /abdm/consent/{id}` | **ABDM:** open a consent request for an ABHA address (the *only* identifier that leaves), then poll it — consent arrives as a callback, so nothing blocks |
+| `POST /abdm/consent/{id}/records` | Ask the Consent Manager for the records; the HIU's ephemeral DH **public** key + nonce travel here, never the private half |
+| `POST /abdm/consents/notify` · `/abdm/health-information/on-request` | The two **Consent-Manager-driven callbacks**. Shaped by ABDM, and they acknowledge rather than error on an unknown id — a retrying CM must not be able to wedge |
+| `POST /abdm/health-information/transfer` | The HIP's Fidelius-encrypted push. Checks the bearer, the transaction, and the MD5 before decrypting; verifies the GCM tag; refuses a replay (409); then decrypted records go through `service.ingest_record` — the same scoring path as a result typed in the UI |
+| `GET /abdm/status` · `POST /abdm/reset` | ABDM config, CM reachability, Fidelius parameters, session counts · clear sessions (demo reset) |
+| `POST /ingest/fhir` | Direct FHIR ingestion for a HIP that pushes without a consent exchange (same mapper and scoring path as `POST /fhir/Bundle`) |
 
 Example list item:
 
@@ -585,6 +652,18 @@ Example attribution factor (grouped by stage in the UI):
   "Measured / Not ordered" switches that send `null` and route the model through
   its learned missing-value default — plus clinical presets and a live SHAP
   waterfall. (FAQ is deliberately absent — it is a leakage variable, see §7.1.)
+- **Interoperability (FHIR R4 + ABDM)** — a dedicated view (`F` shortcut) that
+  makes the integration inspectable rather than claimed: the four FHIR phases
+  with live/planned state, outbound-server reachability, the bound SMART session
+  (patient in context, issuer, expiry, scopes) with launch/renew/disconnect, an
+  export-and-push panel showing the `$everything` bundle shape and the patient's
+  orders as real `ServiceRequest` resources, and an inbound-bundle tester that
+  surfaces the 422 `OperationOutcome` verbatim when a bundle is refused.
+  Below it, the **ABDM consent flow** panel runs the HIU exchange live: type an
+  ABHA address, request consent, watch the grant arrive as a callback, pull the
+  Fidelius-encrypted records, and see the post-ingest stage, tier and scores for
+  the patients the pull touched — with the exchange timeline and the crypto
+  parameters shown alongside it.
 - **Design** — product-grade: Inter type, ambient background, glass sticky
   header with live data-source pill, hairline cards, numbered stepper, sticky
   table headers, dark chart tooltips, skeletons, indigo focus accent, tier
@@ -606,6 +685,22 @@ All env vars (see `.env.example`):
 | `RISK_SCORES_PATH` / `MODEL_PATH` / `MODEL_META_PATH` / `GLOBAL_IMPORTANCE_PATH` | `data/processed/…`, `artifacts/…` | Artifact locations |
 | `VITE_API_URL` | `http://127.0.0.1:8000` | API base URL for the frontend |
 | `CORS_ORIGINS` | unset | Comma-separated extra allowed origins |
+| `FHIR_BASE_URL` | unset | Outbound hospital FHIR server (e.g. `http://localhost:8090/fhir`). Unset = not configured, and every outbound call says so |
+| `FHIR_PUSH_ORDERS` | `false` | Push each newly placed order as a `ServiceRequest`, best-effort (never blocks the triage loop; failures go to the audit trail) |
+| `FHIR_AUTH_TOKEN` / `FHIR_TIMEOUT_SECONDS` | unset / `8` | Static bearer token for a non-SMART server; outbound timeout |
+| `SMART_CLIENT_ID` / `SMART_CLIENT_SECRET` | `neuropilot-demo` / unset | SMART app registration (issued by the EHR sandbox; public clients have no secret) |
+| `SMART_REDIRECT_URI` | `http://localhost:8000/fhir/smart/callback` | Must match the registered redirect URI byte-for-byte |
+| `SMART_SCOPES` | minimum-necessary set | Requested scopes (`launch/patient` + read Patient/Observation/DiagnosticReport/RiskAssessment + write RiskAssessment) |
+| `FRONTEND_BASE_URL` | `http://localhost:5173` | Where the SMART callback hands the browser back to |
+| `ABDM_CM_BASE_URL` | unset | Real ABDM Consent Manager (e.g. `https://dev.abdm.gov.in/cm`). Unset = use the in-process mock gateway |
+| `ABDM_HIU_ID` / `ABDM_CM_ID` / `ABDM_CM_TOKEN` | `neuropilot-demo-hiu` / `sbx` / `mock-cm-token` | Our HIU identity and the bearer presented to the CM (a real HIU signs each request instead — `ABDM_INTEGRATION.md` L11) |
+| `ABDM_CALLBACK_BASE_URL` | `http://127.0.0.1:8000` | Where the CM calls back and where the HIP pushes records. **Must be publicly reachable** for a real sandbox |
+| `ABDM_USE_MOCK_GATEWAY` | `true` | Mount the mock HIE-CM + mock HIP at `/mock-abdm` (ignored once `ABDM_CM_BASE_URL` is set) |
+| `ABDM_REQUESTER_NAME` / `ABDM_REQUESTER_REGNO` | demo values | Requester identity carried in the consent request |
+
+Integration docs: `FHIR_INTEGRATION.md` (HL7 FHIR R4, SMART on FHIR) and
+`ABDM_INTEGRATION.md` (ABDM HIU consent flow, Fidelius encryption, and what is
+verified versus what needs a sandbox account).
 
 PostgreSQL (optional): with `DATABASE_URL` set, `db.py` creates the blueprint
 schema (`patients`, `cognitive_assessments`, `comorbidities`, `lab_results`,
@@ -643,7 +738,16 @@ curl -X POST http://127.0.0.1:8000/patients/ADNI-0001/advance-stage \
 #    expect: order + auto result + rescored; a low-tier subject 409s
 
 # 3. API tests
-cd backend && pip install -r requirements-dev.txt && pytest    # 24 tests
+cd backend && pip install -r requirements-dev.txt && pytest    # 144 tests
+
+# 3b. ABDM consent flow (no ABDM account needed — the mock CM+HIP run in-process)
+BASE=http://127.0.0.1:8000
+S=$(curl -s -X POST $BASE/abdm/consent -H 'Content-Type: application/json' \
+    -d '{"abha_address":"ADNI-0006@sbx"}' \
+    | python -c "import sys,json;print(json.load(sys.stdin)['session_id'])")
+curl -s $BASE/abdm/consent/$S      # GRANTED arrives as a callback
+curl -s -X POST $BASE/abdm/consent/$S/records
+curl -s $BASE/abdm/consent/$S      # RECEIVED + the post-ingest scores
 
 # 4. Dashboard
 npm install && npm run dev   # open :5173 → toggle Autonomous Triage;
@@ -682,6 +786,14 @@ npm install && npm run dev   # open :5173 → toggle Autonomous Triage;
 - **Fixed by the real data, kept for the record:** in the synthetic cohort the
   PET features had ≈0 SHAP weight (amyloid/tau status correlate in the
   generator). On real measures, tau SUVR and Centiloids rank 4th and 5th.
+- **ABDM has never touched the real sandbox.** The HIU consent flow and the
+  Fidelius crypto are verified against published reference vectors and an
+  in-process mock HIE-CM + mock HIP, over real HTTP — but not against a live
+  Consent Manager (that needs sandbox approval). Requests are signed with an
+  ABDM key pair in real life; here they carry a static bearer token; consent
+  sessions live in memory; and the mock gateway grants consent automatically,
+  resolves ABHA → subject locally, and tags every value it synthesises as
+  simulator output. Full list, with the Fidelius-version caveat: `ABDM_INTEGRATION.md` §7.
 - **The holdout is no longer optimistic**: early stopping now uses a validation
   fold carved from *train only*, so the held-out test AUC (0.902) is honest. It
   sits a hair below the 5-fold CV AUC (0.901 ± 0.011) — as expected, now that
@@ -696,8 +808,30 @@ npm install && npm run dev   # open :5173 → toggle Autonomous Triage;
   almost identically to the served model (8/10 top-10 overlap, Spearman
   ρ = 0.82) — evidence the NaN handling is not inventing structure the
   complete-case data does not support.
-- **Simulated results**: ordering a test derives a plausible result from the
-  subject's severity — a demo stand-in for a real LIS/RIS integration.
+- **FHIR is integrated, but no real hospital network has been exercised.**
+  Export, inbound ingestion, orders (`ServiceRequest`), results
+  (`DiagnosticReport`) and the SMART launch flow are all implemented and covered
+  by 103 tests — but the SMART flow is verified against a **mock** SMART server,
+  and the outbound push needs `FHIR_BASE_URL` pointed at a HAPI reference
+  server. The remaining external step is registering the client id with an EHR
+  sandbox (Epic App Orchard / Cerner code console).
+- **The outbound push has no outbox.** `POST /fhir/push/{id}` is a synchronous
+  transaction; `FHIR_PUSH_ORDERS` is best-effort. A hospital that is down when
+  an order is placed receives nothing and nothing retries — the failure is
+  recorded in the patient's audit trail rather than lost silently, but
+  guaranteed delivery would need a durable outbox (every write is a `PUT`
+  against a deterministic id, so retrying is already safe).
+- **SMART sessions are in-process.** One session per process, unencrypted, lost
+  on restart and not shared across replicas — correct for a sandbox demo, and
+  explicitly not production authentication.
+- **Ordering a test with no result on file places the order and leaves the
+  official score unchanged** (slots stay `ordered` until a real value arrives via
+  `POST /fhir/Bundle` or `POST /patients/{id}/results`). No simulated result is
+  ever fabricated — the previous stand-in was removed deliberately.
+- **A `DiagnosticReport` never completes a slot.** A report arriving from a
+  hospital is applied as a *conclusion* to a slot that already holds real
+  values, or stored as a report — so a document cannot unlock the
+  biomarker-gated High tier.
 - **Not a diagnostic device**: prioritization support only; final decisions
   rest with the clinician.
 

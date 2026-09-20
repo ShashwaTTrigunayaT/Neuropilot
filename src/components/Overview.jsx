@@ -11,10 +11,10 @@ import {
 } from './widgets.jsx';
 
 const SHORTLIST_SIZE = 8;
+const TIER_RANK = { high: 0, medium: 1, low: 2 };
 
 export default function Overview({
   patients,
-  globalImportance = [],
   modelInfo = null,
   onSelect,
   onShowAll,
@@ -29,17 +29,30 @@ export default function Overview({
   }, [patients]);
 
   const meanRisk = useMemo(
-    () => (patients.length ? patients.reduce((a, p) => a + p.score, 0) / patients.length : 0),
+    () => (patients.length ? patients.reduce((a, p) => a + (p.final_score ?? p.score), 0) / patients.length : 0),
     [patients]
   );
 
+  // Priority list: tier FIRST, then score inside a tier. A patient whose score is
+  // high but whose tier is capped (no biomarker on file yet — "awaiting
+  // confirmation") must not lead a list labelled "Top Priority", or the ordering
+  // contradicts the tier printed next to it.
   const shortlist = useMemo(
-    () => [...patients].sort((a, b) => b.score - a.score).slice(0, SHORTLIST_SIZE),
+    () => [...patients]
+      .sort((a, b) => (
+        (TIER_RANK[a.risk_tier] ?? 3) - (TIER_RANK[b.risk_tier] ?? 3) || (b.final_score ?? b.score) - (a.final_score ?? a.score)
+      ))
+      .slice(0, SHORTLIST_SIZE),
     [patients]
   );
 
   const highCount = counts.high;
   const total = patients.length;
+
+  // Attribution of the model the API actually serves, read straight from its
+  // card -- so this panel can never describe a different model family than the
+  // one producing the scores on the page.
+  const servedImportance = modelInfo?.global_importance || [];
 
   return (
     <div className="space-y-12 animate-fade-up">
@@ -55,7 +68,7 @@ export default function Overview({
                 Cohort Overview
               </h1>
               <p className="mt-1.5 text-[13px] text-muted dark:text-darkMuted flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                <span>Multi-stage progression tracking</span>
+                <span>Multi-stage diagnostic tracking</span>
                 <span className="text-line dark:text-darkBorder font-light">/</span>
                 <span><strong style={MONO} className="font-semibold text-ink dark:text-darkText">{total}</strong> longitudinal subjects</span>
                 <span className="text-line dark:text-darkBorder font-light">/</span>
@@ -83,15 +96,12 @@ export default function Overview({
         </div>
       </div>
 
-      {globalImportance.length > 0 && (
+      {servedImportance.length > 0 && (
         <div className="border-t border-line dark:border-darkBorder pt-8">
           <div className="flex items-baseline justify-between gap-2 mb-3">
-            <SectionLabel>
-              Cohort Feature Importance
-            </SectionLabel>
-            
+            <SectionLabel>{modelInfo?.label || 'Refined model'} — feature attribution</SectionLabel>
           </div>
-          <FeatureRadarChart data={globalImportance} />
+          <FeatureRadarChart data={servedImportance} />
         </div>
       )}
       
@@ -118,7 +128,7 @@ export default function Overview({
           </button>
         </div>
         <p className="mt-1 text-xs text-muted dark:text-darkMuted">
-          Top {Math.min(SHORTLIST_SIZE, shortlist.length)} ranked by progression probability {highCount > SHORTLIST_SIZE ? `(${highCount} total in High tier)` : ''}
+          Top {Math.min(SHORTLIST_SIZE, shortlist.length)} by tier, then refined score {highCount > SHORTLIST_SIZE ? `(${highCount} total in High tier)` : ''}
         </p>
         <div className="mt-4 rounded-2xl border border-line dark:border-darkBorder bg-white/70 dark:bg-darkCard/70 overflow-hidden">
           {shortlist.length === 0 ? (

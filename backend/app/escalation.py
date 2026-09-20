@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Optional, TypedDict
 
-from .config import risk_tier
+from .config import has_biomarker_evidence, risk_tier
 
 STAGES_SHORT = ["Cognitive", "Blood", "MRI", "PET"]
 STAGES_FULL = ["Cognitive screening", "Blood biomarkers", "MRI volumetrics", "PET imaging"]
@@ -25,7 +25,7 @@ class Action(TypedDict):
 
 def next_action_for(patient: dict) -> Optional[Action]:
     """(stage, risk tier) -> recommended next step; None when the pipeline is complete."""
-    tier = risk_tier(patient["score"])
+    tier = risk_tier(patient["score"], has_biomarker_evidence(patient))
     stage = patient["stage"]
 
     if stage == 1:

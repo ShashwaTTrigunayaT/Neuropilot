@@ -176,17 +176,27 @@ def test_fhir_everything_bundle_shape():
 def test_fhir_never_emits_condition():
     """The contract: model output never becomes a diagnosis, in ANY bundle.
 
-    Scans Patient/$everything for a full page of the cohort -- there is no
-    Condition resource and no DiagnosticReport.conclusion anywhere."""
-    codes = set()
+    Scans Patient/$everything for a full page of the cohort. No `Condition` is
+    ever emitted. A `DiagnosticReport` may appear (Phase 3: it is the report on
+    an ordered panel), but its conclusion may only describe THAT TEST --
+    normal/abnormal/inconclusive -- and never the model's risk output or a
+    disease name. That is the line that keeps decision support from silently
+    becoming a diagnosis once it syncs into an EHR.
+    """
+    forbidden = ("alzheimer", "dementia", "neuropilot risk", "priority tier")
     for pid in _IDS[:25]:
         b = client.get(f"/fhir/Patient/{pid}/$everything").json()
         for e in b["entry"]:
             res = e["resource"]
             assert res["resourceType"] != "Condition", "no-diagnosis contract violated!"
-            if res["resourceType"] == "DiagnosticReport":
-                codes.add(res.get("conclusionCode"))
-    assert all(c in (None, set()) for c in codes)
+            if res["resourceType"] != "DiagnosticReport":
+                continue
+            conclusion = str(res.get("conclusion") or "").lower()
+            assert not any(word in conclusion for word in forbidden), conclusion
+            # The conclusion is the panel's own read, nothing more.
+            assert conclusion.split(":")[-1].strip() in ("normal", "abnormal", "inconclusive")
+            for coding in res.get("conclusionCode") or []:
+                assert coding["coding"][0]["system"].endswith("v3-ObservationInterpretation")
 
 
 def test_fhir_everything_unknown_patient():

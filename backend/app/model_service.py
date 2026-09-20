@@ -1,12 +1,18 @@
 """Model serving (blueprint section 3 / 4.3).
 
-Loads the trained preprocessing + classifier pipeline (artifacts/pipeline.joblib)
-directly into the API process -- no separate model server needed at this scale.
-Scores arbitrary feature vectors via POST /patients/score and explains them with
-a cached SHAP TreeExplainer.
+Serves whichever model family config.PRIMARY_MODEL names -- the refined model in
+production, the cross-sectional model retained behind a switch. Both are loaded
+directly into the API process (no separate model server at this scale) and share
+one contract: predict_proba over a feature vector, plus SHAP attributions from a
+cached TreeExplainer.
+
+This module is the single place a feature vector becomes a score, so changing the
+served model is a configuration change: the API, dashboard, ranking, escalation
+engine, simulator and FHIR export all follow automatically.
 """
 from __future__ import annotations
 
+import csv
 import json
 from typing import Optional
 
@@ -15,51 +21,131 @@ import numpy as np
 import pandas as pd
 import shap
 
-from .config import MODEL_META_PATH, MODEL_PATH, HIGH_THRESHOLD, MEDIUM_THRESHOLD
+from .config import (MODEL_VARIANTS, PRIMARY_MODEL, HIGH_THRESHOLD, MEDIUM_THRESHOLD,
+                     has_biomarker_evidence, risk_tier, slot_visible)
 
-_cache: dict = {"pipeline": None, "meta": None, "explainer": None}
+# variant name -> loaded artifacts. The non-served family is still loadable so it
+# can be inspected (GET /model/info -> legacy) without being scored against.
+_loaded: dict[str, dict] = {}
+
+
+def _read_importance(path) -> list[dict]:
+    """Attribution CSV -> [{feature, mean_abs_shap}], measured-only values.
+
+    Both families publish the same two columns after the leakage removal, so one
+    reader serves either card.
+    """
+    if path is None or not path.exists():
+        return []
+    try:
+        with path.open(encoding="utf-8", newline="") as fh:
+            rows = []
+            for row in csv.DictReader(fh):
+                raw = (row.get("mean_abs_shap_conditional")
+                       or row.get("mean_abs_shap_global")
+                       or row.get("mean_abs_shap") or "0")
+                try:
+                    rows.append({"feature": row.get("feature", ""),
+                                 "mean_abs_shap": float(raw)})
+                except (TypeError, ValueError):
+                    continue
+        return sorted((r for r in rows if r["feature"]),
+                      key=lambda r: r["mean_abs_shap"], reverse=True)
+    except Exception:  # noqa: BLE001 -- attribution is never fatal
+        return []
+
+
+def _variant(name: str) -> dict:
+    """Load (once per process) the artifacts of one model family."""
+    if name in _loaded:
+        return _loaded[name]
+    spec = MODEL_VARIANTS.get(name) or MODEL_VARIANTS["cross_sectional"]
+    entry: dict = {"spec": spec, "pipeline": None, "meta": {}, "explainer": None,
+                   "importance": []}
+    if spec["model_path"].exists() and spec["meta_path"].exists():
+        entry["pipeline"] = joblib.load(spec["model_path"])
+        try:
+            entry["meta"] = json.loads(spec["meta_path"].read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            entry["meta"] = {}
+        steps = entry["pipeline"].named_steps
+        clf = steps.get("clf") or (list(steps.values())[-1] if steps else None)
+        if clf is not None:
+            # tree_path_dependent is REQUIRED, not stylistic: interventional mode
+            # raises on categorical splits, and every feature here is legitimately
+            # NaN for patients who were never tested.
+            entry["explainer"] = shap.TreeExplainer(clf, feature_perturbation="tree_path_dependent")
+        entry["importance"] = _read_importance(spec["importance_path"])
+    _loaded[name] = entry
+    return entry
+
+
+def _active() -> dict:
+    return _variant(PRIMARY_MODEL)
 
 
 def available() -> bool:
-    return MODEL_PATH.exists() and MODEL_META_PATH.exists()
+    return _active()["pipeline"] is not None
 
 
-def _load() -> bool:
-    if _cache["pipeline"] is not None:
-        return True
-    if not available():
-        return False
-    _cache["pipeline"] = joblib.load(MODEL_PATH)
-    try:
-        _cache["meta"] = json.loads(MODEL_META_PATH.read_text(encoding="utf-8"))
-    except Exception:  # noqa: BLE001
-        _cache["meta"] = {}
-    clf = _cache["pipeline"].named_steps.get("clf")
-    if clf is not None:
-        _cache["explainer"] = shap.TreeExplainer(clf)
-    return True
+def metrics_for(entry: dict) -> dict:
+    """Both cards keep their metrics under different keys; normalise the four
+    numbers the API and UI display."""
+    meta = entry["meta"] or {}
+    m = meta.get("metrics") or {}
+    return {
+        "test_auc": meta.get("test_auc", m.get("conversion_auc")),
+        "cv_auc_mean": meta.get("cv_auc_mean", m.get("conversion_cv_auc_mean")),
+        "cv_auc_std": meta.get("cv_auc_std", m.get("conversion_cv_auc_std")),
+        "baseline_accuracy": meta.get("baseline_accuracy", m.get("conversion_baseline_accuracy")),
+        "test_auc_stage1_only": meta.get("test_auc_stage1_only", m.get("conversion_auc_stage1")),
+        "test_auc_biomarker_measured": meta.get(
+            "test_auc_biomarker_measured", m.get("conversion_auc_blood_measured")
+        ),
+    }
 
 
-def info() -> dict:
-    meta = _cache["meta"] if _cache["meta"] is not None else {}
-    if not available():
-        return {"available": False, "model_type": None, "features": [], "trained_at": None}
-    _load()
-    meta = _cache["meta"]
+def card(name: str) -> dict:
+    """Model card for one family -- used for the served model AND the retained one."""
+    entry = _variant(name)
+    meta = entry["meta"] or {}
+    if entry["pipeline"] is None:
+        return {"available": False, "name": name,
+                "label": entry["spec"].get("label", name), "model_type": None,
+                "features": [], "trained_at": None, "global_importance": []}
+    m = metrics_for(entry)
     return {
         "available": True,
+        "name": name,
+        "label": entry["spec"].get("label", name),
         "model_type": meta.get("model_type"),
         "features": meta.get("features", []),
         "trained_at": meta.get("trained_at"),
         "thresholds": {"high": HIGH_THRESHOLD, "medium": MEDIUM_THRESHOLD},
-        "test_auc": meta.get("test_auc"),
-        "cv_auc_mean": meta.get("cv_auc_mean"),
-        "cv_auc_std": meta.get("cv_auc_std"),
-        "test_auc_stage1_only": meta.get("test_auc_stage1_only"),
-        "test_auc_biomarker_measured": meta.get("test_auc_biomarker_measured"),
-        "baseline_accuracy": meta.get("baseline_accuracy"),
         "n_train": meta.get("n_train"),
+        "global_importance": entry["importance"],
+        "n_subgroup": meta.get("n_subgroup") or {},
+        "stage_importance": meta.get("stage_importance") or {},
+        "ablations": meta.get("ablations") or [],
+        "caveats": meta.get("caveats") or [],
+        **m,
     }
+
+
+def info() -> dict:
+    """Card for the model actually being served."""
+    return card(PRIMARY_MODEL)
+
+
+def legacy() -> dict:
+    """Card for the family NOT being served (retained for reference/switching)."""
+    other = "cross_sectional" if PRIMARY_MODEL == "refined" else "refined"
+    return card(other)
+
+
+def load_importance() -> list[dict]:
+    """Attribution rows for the served model."""
+    return _active()["importance"]
 
 
 def record_to_features(record: dict) -> dict:
@@ -78,6 +164,20 @@ def record_to_features(record: dict) -> dict:
     blood = record.get("blood") or {}
     imaging = record.get("imaging") or {}
     pet = record.get("pet") or {}
+
+    # GATE: only slots inside the patient's ORDERED pathway contribute. A real
+    # cohort can hold an MRI at Stage 1 because ADNI modalities arrive out of
+    # order; scoring it there would mean a "cognitive-only" score that secretly
+    # knows the scan -- and ordering the blood panel that stands between them
+    # could then never change anything. Gated slots read as unmeasured (NaN),
+    # which is the same missingness shape the model was trained under.
+    if not slot_visible(record, "blood"):
+        blood = {}
+    if not slot_visible(record, "imaging"):
+        imaging = {}
+    if not slot_visible(record, "pet"):
+        pet = {}
+
     mmse_latest = cog.get("latest")
     mmse_prior = cog.get("prior", mmse_latest)
 
@@ -133,9 +233,10 @@ def score_features(features: dict, top_n: Optional[int] = 3) -> Optional[dict]:
     top_n limits the returned factors (default 3, matching the score endpoint
     contract); pass None to receive every feature's contribution.
     """
-    if not _load():
+    entry = _active()
+    if entry["pipeline"] is None:
         return None
-    meta = _cache["meta"]
+    meta = entry["meta"] or {}
     feature_names = meta.get("features", [])
     if not feature_names:
         return None
@@ -162,12 +263,12 @@ def score_features(features: dict, top_n: Optional[int] = 3) -> Optional[dict]:
     row = {f: clean.get(f, np.nan) for f in feature_names}
     X = pd.DataFrame([row], columns=feature_names)
 
-    pipeline = _cache["pipeline"]
+    pipeline = entry["pipeline"]
     proba = float(pipeline.predict_proba(X)[0, 1])
 
     prep = pipeline.named_steps.get("prep")
     X_imp = prep.transform(X) if prep is not None else X.to_numpy()
-    explainer = _cache["explainer"]
+    explainer = entry["explainer"]
     sv = np.asarray(explainer.shap_values(X_imp))
     if sv.ndim == 3:  # some shap versions return [samples, features, classes]
         sv = sv[:, :, 1]
@@ -186,10 +287,48 @@ def score_features(features: dict, top_n: Optional[int] = 3) -> Optional[dict]:
     ]
     return {
         "score": round(proba, 4),
-        "risk_tier": "high" if proba > HIGH_THRESHOLD else ("medium" if proba >= MEDIUM_THRESHOLD else "low"),
+        "risk_tier": risk_tier(proba, has_biomarker_evidence(features)),
         "factors": factors,
         "model_type": meta.get("model_type"),
     }
+
+
+def active_feature_names() -> list[str]:
+    """Feature names for the model currently served."""
+    return list((_active().get("meta") or {}).get("features", []))
+
+
+def predict_scores(rows: list[dict]) -> list[float]:
+    """Fast probability-only batch prediction without SHAP explanations.
+
+    Used for provisional scenario scoring, where one patient may need dozens of
+    plausible missing-stage completions. Official scores still use score_batch()
+    so the normal attribution contract is unchanged.
+    """
+    entry = _active()
+    if entry["pipeline"] is None or not rows:
+        return []
+    names = active_feature_names()
+    if not names:
+        return []
+
+    def clean(v):
+        if v is None or v == "" or (isinstance(v, float) and np.isnan(v)):
+            return np.nan
+        if isinstance(v, str) and v.strip().upper() in {"M", "MALE"}:
+            return 1.0
+        if isinstance(v, str) and v.strip().upper() in {"F", "FEMALE"}:
+            return 0.0
+        try:
+            return float(v)
+        except (ValueError, TypeError):
+            return np.nan
+
+    X = pd.DataFrame(
+        [{name: clean(row.get(name)) for name in names} for row in rows],
+        columns=names,
+    )
+    return [float(p) for p in entry["pipeline"].predict_proba(X)[:, 1]]
 
 
 def score_batch(rows: list[dict]) -> list[Optional[dict]]:
@@ -199,9 +338,10 @@ def score_batch(rows: list[dict]) -> list[Optional[dict]]:
     model in one pass (one predict_proba + one shap_values call). Rows missing
     features are NaN-imputed exactly like score_features.
     """
-    if not _load() or not rows:
+    entry = _active()
+    if entry["pipeline"] is None or not rows:
         return [None] * len(rows)
-    meta = _cache["meta"]
+    meta = entry["meta"] or {}
     feature_names = meta.get("features", [])
     if not feature_names:
         return [None] * len(rows)
@@ -230,12 +370,12 @@ def score_batch(rows: list[dict]) -> list[Optional[dict]]:
         data.append({f: clean.get(f, np.nan) for f in feature_names})
 
     X = pd.DataFrame(data, columns=feature_names)
-    pipeline = _cache["pipeline"]
+    pipeline = entry["pipeline"]
     probas = pipeline.predict_proba(X)[:, 1]
 
     prep = pipeline.named_steps.get("prep")
     X_imp = prep.transform(X) if prep is not None else X.to_numpy()
-    explainer = _cache["explainer"]
+    explainer = entry["explainer"]
     sv = np.asarray(explainer.shap_values(X_imp))
     if sv.ndim == 3:
         sv = sv[:, :, 1]
@@ -255,7 +395,7 @@ def score_batch(rows: list[dict]) -> list[Optional[dict]]:
         out.append(
             {
                 "score": round(p, 4),
-                "risk_tier": "high" if p > HIGH_THRESHOLD else ("medium" if p >= MEDIUM_THRESHOLD else "low"),
+                "risk_tier": risk_tier(p, has_biomarker_evidence(rows[i])),
                 "factors": factors,
                 "model_type": meta.get("model_type"),
             }

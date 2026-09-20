@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Pre/post-training audits for the real-ADNI risk model (2026-09-19 review).
 
-Two independent checks, both written to artifacts/model_audit.txt so a reviewer
-can re-run them instead of taking the model card's word for it:
+Three checks, all written to artifacts/model_audit.txt so a reviewer can re-run
+them instead of taking the model card's word for it:
 
   A. APOE-e4 encoding benchmark -- run BEFORE retraining (the review's point 2).
      Compares, at identical CV folds:
@@ -233,10 +233,68 @@ def audit_completecase(feat: pd.DataFrame, feats: list[str], out: list[str]) -> 
         out.append("            inventing structure the complete-case subset does not support.")
 
 
+def audit_incremental(feat: pd.DataFrame, feats: list[str], out: list[str]) -> None:
+    """What each stage actually ADDS -- the counterweight to the SHAP table.
+
+    A SHAP share is not incremental value: cognition can own 60% of attribution
+    and still be almost entirely redundant with a single cognitive scale. These
+    ablations answer "isn't it just MMSE?" with numbers rather than a ranking.
+    """
+    from sklearn.metrics import roc_auc_score
+
+    y = feat["label"].astype(int)
+    out.append("")
+    out.append("C. INCREMENTAL VALUE BY FEATURE / STAGE (identical 5-fold CV folds)")
+
+    out.append("   single-feature AUC (rows where measured):")
+    for c in ("adas_cog_13", "mmse", "tau_meta_temporal", "centiloids", "mmse_change"):
+        if c not in feat.columns:
+            continue
+        m = feat[c].notna()
+        if m.sum() > 50 and feat.loc[m, "label"].nunique() == 2:
+            auc = roc_auc_score(feat.loc[m, "label"].astype(int), feat.loc[m, c])
+            out.append(f"     {c:<22}{max(auc, 1 - auc):.3f}   (n={int(m.sum())})")
+
+    cog = [c for c in ("mmse", "mmse_change", "adas_cog_13") if c in feats]
+    demo = [c for c in ("age", "sex", "education_years") if c in feats]
+    bio = [c for c in feats if c not in cog + demo]
+    arms = [
+        ("full model", feats),
+        ("minus adas_cog_13", [c for c in feats if c != "adas_cog_13"]),
+        ("minus mmse", [c for c in feats if c != "mmse"]),
+        ("cognition + demographics only", cog + demo),
+        ("biomarkers only (no cognition)", bio + demo),
+    ]
+    out.append("")
+    out.append(f"   {'arm':<34}{'n_feat':>7}{'CV AUC':>9}{'±':>8}{'delta':>9}")
+    base = None
+    for arm, cols in arms:
+        m, s = _cv_auc(feat[cols], y)
+        if base is None:
+            base = m
+            delta = ""
+        else:
+            delta = f"{m - base:+.4f}"
+        out.append(f"   {arm:<34}{len(cols):>7}{m:>9.4f}{s:>8.4f}{delta:>9}")
+
+    cog_only_auc = _cv_auc(feat[cog + demo], y)[0]
+    bio_only_auc = _cv_auc(feat[bio + demo], y)[0]
+    out.append("")
+    out.append(f"   all biomarker families combined (blood + MRI + PET) add {base - cog_only_auc:+.4f} CV AUC")
+    out.append(f"   over cognition + demographics alone ({base:.4f} vs {cog_only_auc:.4f}).")
+    out.append(f"   Dropping cognition entirely costs {cog_only_auc - bio_only_auc:+.4f} "
+               f"({cog_only_auc:.4f} -> {bio_only_auc:.4f}).")
+    out.append("   Cognition carries this model for cross-sectional diagnosis. That is why the")
+    out.append("   High TIER is evidence-gated rather than the training data rebalanced:")
+    out.append("   resampling subjects cannot change how predictive a feature is.")
+
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Audit the real-ADNI model: APOE encoding + complete-case cross-check.")
     ap.add_argument("--skip-apoe", action="store_true")
     ap.add_argument("--skip-completecase", action="store_true")
+    ap.add_argument("--skip-incremental", action="store_true")
     args = ap.parse_args()
 
     feat, feats = _load()
@@ -251,6 +309,8 @@ def main() -> int:
         audit_apoe(feat, feats, out)
     if not args.skip_completecase:
         audit_completecase(feat, feats, out)
+    if not args.skip_incremental:
+        audit_incremental(feat, feats, out)
 
     text = "\n".join(out)
     print(text)

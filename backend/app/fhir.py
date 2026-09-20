@@ -42,8 +42,27 @@ NP_SYSTEM = "urn:neuropilot:codes"
 ID_SYSTEM = "urn:neuropilot:subject-id"
 SHAP_EXT = "urn:neuropilot:fhir:shap-factor"
 AGE_EXT = "urn:neuropilot:fhir:age-years"
+SMART_OAUTH_EXT = "http://fhir-registry.smarthealthit.org/StructureDefinition/oauth-uris"
 
 _TIER_TO_V3 = {"high": "H", "medium": "M", "low": "L"}
+
+# The three orderable tests, as the code a ServiceRequest/DiagnosticReport
+# carries. No verified LOINC panel code exists for a plasma AD panel bundle or
+# for an MRI volumetrics study, so these are urn:neuropilot:codes -- the same
+# honesty rule the Observation layer follows (limitation L1).
+SLOT_PANEL = {
+    "blood": ("panel-blood-plasma-ad", "Blood biomarker panel (plasma p-tau, Aβ42/40, NfL, GFAP)"),
+    "imaging": ("panel-mri-volumetrics", "MRI hippocampal volumetrics"),
+    "pet": ("panel-amyloid-tau-pet", "Amyloid / tau PET"),
+}
+
+# ServiceRequest.status for each internal slot status. An order placed with no
+# result on file is `active` (the hospital still owes a result); a slot holding
+# a real measured value is `completed`. That is the whole bidirectional
+# contract, and it is derived from the record -- never invented here.
+_ORDER_STATUS = {"ordered": "active", "completed": "completed"}
+
+_DR_OUTCOME = {"normal": "normal", "abnormal": "abnormal", "inconclusive": "inconclusive"}
 
 
 # --------------------------------------------------------------------------- #
@@ -194,6 +213,8 @@ def observation_resources(record: dict) -> list[dict]:
                     "coding": [
                         {"system": LOINC, "code": "41027-4",
                          "display": "Tau protein/Amyloid beta 42 peptide [Ratio]"},
+                        {"system": NP_SYSTEM, "code": "abeta4240-ratio",
+                         "display": "Aβ42/40 ratio, plasma"},
                     ],
                     "text": "Aβ42/40 ratio (41027-4 reused by convention from CSF)",
                 },
@@ -201,22 +222,53 @@ def observation_resources(record: dict) -> list[dict]:
                 "laboratory",
                 outcome=blood.get("outcome"),
             )
+        # The remaining plasma panel the refined model actually consumes. No
+        # verified LOINC mass-concentration codes exist for these yet (L1), so
+        # they travel as urn:neuropilot:codes -- the same codes the inbound
+        # mapper accepts, which is what makes the round-trip work.
+        for slot_id, key, label, unit in (
+            ("ptau217", "pTau217", "p-tau217 (plasma)", "pg/mL"),
+            ("nfl", "nfl", "Neurofilament light (plasma)", "pg/mL"),
+            ("gfap", "gfap", "GFAP (plasma)", "pg/mL"),
+        ):
+            if blood.get(key) is None:
+                continue
+            _obs(
+                slot_id,
+                {"coding": [{"system": NP_SYSTEM, "code": f"{slot_id}-plasma",
+                             "display": label}], "text": label},
+                _quantity(blood[key], unit, unit),
+                "laboratory",
+                note=blood.get("note"),
+                outcome=blood.get("outcome"),
+            )
 
     # ---- imaging stage (no standard LOINC for hippocampal volume -> custom)
     imaging = record.get("imaging") or {}
-    if isinstance(imaging, dict) and imaging.get("hippocampalVolumeCm3") is not None:
-        _obs(
-            "hippocampal-volume",
-            {
-                "coding": [{"system": NP_SYSTEM, "code": "hippocampal-volume",
-                            "display": "Hippocampal volume, MRI-derived (cm3)"}],
-                "text": imaging.get("note", "Hippocampal volume (MRI)"),
-            },
-            _quantity(imaging["hippocampalVolumeCm3"], "cm3", "cm3"),
-            "imaging",
-            note=imaging.get("note"),
-            outcome=imaging.get("outcome"),
-        )
+    if isinstance(imaging, dict):
+        if imaging.get("hippocampalVolumeCm3") is not None:
+            _obs(
+                "hippocampal-volume",
+                {
+                    "coding": [{"system": NP_SYSTEM, "code": "hippocampal-volume",
+                                "display": "Hippocampal volume, MRI-derived (cm3)"}],
+                    "text": imaging.get("note", "Hippocampal volume (MRI)"),
+                },
+                _quantity(imaging["hippocampalVolumeCm3"], "cm3", "cm3"),
+                "imaging",
+                note=imaging.get("note"),
+                outcome=imaging.get("outcome"),
+            )
+        if imaging.get("hippocampalIcvRatio") is not None:
+            _obs(
+                "hippocampal-icv-ratio",
+                {"coding": [{"system": NP_SYSTEM, "code": "hippocampal-icv-ratio",
+                             "display": "Hippocampal volume / ICV ratio"}],
+                 "text": "Hippocampal/ICV ratio (MRI)"},
+                _quantity(imaging["hippocampalIcvRatio"], "ratio", "1"),
+                "imaging",
+                outcome=imaging.get("outcome"),
+            )
 
     # ---- PET stage (SNOMED positive/negative; SUVR custom)
     pet = record.get("pet") or {}
@@ -242,14 +294,28 @@ def observation_resources(record: dict) -> list[dict]:
             obs[-1].pop("valueQuantity")
             obs[-1]["valueCodeableConcept"] = {"coding": coding, "text": str(raw)}
 
-        if pet.get("amyloidSUVr") is not None:
+        for slot_id, key, label in (
+            ("amyloid-suvr", "amyloidSUVr", "Neocortical amyloid SUVR"),
+            ("tau-meta-temporal-suvr", "tauMetaTemporalSuvr", "Tau meta-temporal SUVR"),
+        ):
+            if pet.get(key) is None:
+                continue
             _obs(
-                "amyloid-suvr",
-                {"coding": [{"system": NP_SYSTEM, "code": "amyloid-suvr",
-                             "display": "Neocortical amyloid SUVR"}],
-                 "text": "Amyloid PET SUVR"},
-                _quantity(pet["amyloidSUVr"], "SUVR", "{SUVR}"),
+                slot_id,
+                {"coding": [{"system": NP_SYSTEM, "code": slot_id, "display": label}],
+                 "text": label},
+                _quantity(pet[key], "SUVR", "{SUVR}"),
                 "imaging",
+            )
+        if pet.get("centiloids") is not None:
+            _obs(
+                "centiloids",
+                {"coding": [{"system": NP_SYSTEM, "code": "centiloids",
+                             "display": "Amyloid PET Centiloids"}],
+                 "text": "Amyloid PET (Centiloids)"},
+                _quantity(pet["centiloids"], "Centiloid", "1"),
+                "imaging",
+                outcome=pet.get("outcome"),
             )
 
     return obs
@@ -262,7 +328,11 @@ def risk_assessment_resource(record: dict) -> dict:
     decision support BY DEFINITION -- we never emit a Condition (the
     no-diagnosis contract survives the standard, limitation L4)."""
     pid = record["id"]
-    tier = record.get("risk_tier") or service.risk_tier(record["score"])
+    # Evidence-gated, like the served tier: a High RiskAssessment asserts an
+    # actionable finding, so it needs a biomarker result behind it.
+    tier = record.get("risk_tier") or service.risk_tier(
+        record["score"], service.has_biomarker_evidence(record)
+    )
     factors = sorted(
         record.get("factors", []), key=lambda f: abs(f.get("effect", 0.0)), reverse=True
     )[:3]
@@ -328,6 +398,107 @@ def audit_event_resources(record: dict, limit: int = 20) -> list[dict]:
     return out
 
 
+def service_request_resources(record: dict) -> list[dict]:
+    """Placed orders as ServiceRequest (Phase 3, outbound order entry).
+
+    Derived from the record's slot payloads rather than a parallel order table,
+    so an order can never exist in FHIR but not in the pathway (or the reverse).
+    A slot that only says `ordered` is `active` -- the hospital still owes a
+    result; a slot carrying a real measured value is `completed`. Ordering with
+    no result on file therefore exports a genuine open order, which is exactly
+    the state the dashboard shows.
+    """
+    pid = record["id"]
+    out: list[dict] = []
+    for slot, (code, label) in SLOT_PANEL.items():
+        payload = record.get(slot)
+        if not isinstance(payload, dict):
+            continue
+        status = _ORDER_STATUS.get(str(payload.get("status")))
+        if status is None:
+            continue
+        authored = _iso(payload.get("ordered_at") or record.get("updated_at"))
+        res: dict[str, Any] = {
+            "resourceType": "ServiceRequest",
+            "id": f"order-{pid}-{slot}",
+            "status": status,
+            "intent": "order",
+            "priority": "routine",
+            "category": [{"coding": [{"system": "http://snomed.info/sct",
+                                      "code": "108252007",
+                                      "display": "Laboratory procedure"}]}],
+            "code": {"coding": [{"system": NP_SYSTEM, "code": code, "display": label}],
+                     "text": label},
+            "subject": {"reference": f"Patient/{pid}"},
+            "requester": {"display": "NeuroPilot autonomous triage loop"},
+            "reasonReference": [{"reference": f"RiskAssessment/risk-{pid}"}],
+            "note": [{
+                "text": (
+                    "Placed by NeuroPilot priority decision support. The patient's "
+                    "result is recorded through POST /fhir/Bundle (Observation or "
+                    "DiagnosticReport) and re-scored by the served model."
+                )
+            }],
+        }
+        if authored:
+            res["authoredOn"] = authored
+        if payload.get("outcome"):
+            res["note"].append({"text": f"Result outcome: {payload['outcome']}"})
+        out.append(res)
+    return out
+
+
+def diagnostic_report_resources(record: dict) -> list[dict]:
+    """Completed panels as DiagnosticReport (Phase 3, outbound results).
+
+    The report's `conclusion` carries NeuroPilot's normal/abnormal/inconclusive
+    read of the panel; its `result` references point at the Observations the
+    export already emits. A DiagnosticReport is a report about a test -- never a
+    diagnosis of Alzheimer's, so the no-Condition rule holds here too.
+    """
+    pid = record["id"]
+    observations = {o["id"]: o for o in observation_resources(record)}
+    slot_prefix = {
+        "blood": ("ptau181", "abeta4240", "ptau217", "nfl", "gfap"),
+        "imaging": ("hippocampal-volume", "hippocampal-icv-ratio"),
+        "pet": ("amyloid-pet", "tau-pet", "amyloid-suvr", "tau-meta-temporal-suvr", "centiloids"),
+    }
+    out: list[dict] = []
+    for slot, (code, label) in SLOT_PANEL.items():
+        payload = record.get(slot)
+        if not isinstance(payload, dict) or payload.get("status") != "completed":
+            continue
+        result_refs = [
+            {"reference": f"Observation/{observations[f'obs-{pid}-{name}']['id']}"}
+            for name in slot_prefix.get(slot, ())
+            if f"obs-{pid}-{name}" in observations
+        ]
+        res: dict[str, Any] = {
+            "resourceType": "DiagnosticReport",
+            "id": f"report-{pid}-{slot}",
+            "status": "final",
+            "category": [{"coding": [{"system": "http://terminology.hl7.org/CodeSystem/v2-0074",
+                                      "code": "LAB" if slot == "blood" else "RAD"}]}],
+            "code": {"coding": [{"system": NP_SYSTEM, "code": code, "display": label}],
+                     "text": label},
+            "subject": {"reference": f"Patient/{pid}"},
+            "result": result_refs,
+        }
+        issued = _iso(payload.get("ordered_at") or record.get("updated_at"))
+        if issued:
+            res["issued"] = issued
+        outcome = _DR_OUTCOME.get(str(payload.get("outcome")))
+        if outcome:
+            res["conclusion"] = f"{label}: {outcome}"
+            interpretation = _interpretation(outcome)
+            if interpretation:
+                res["conclusionCode"] = interpretation
+        if payload.get("note"):
+            res["note"] = [{"text": str(payload["note"])}]
+        out.append(res)
+    return out
+
+
 def everything_bundle(record: dict) -> dict:
     """Patient/$everything: one collection Bundle with the complete export."""
     pid = record["id"]
@@ -335,6 +506,8 @@ def everything_bundle(record: dict) -> dict:
         [patient_resource(record)]
         + observation_resources(record)
         + [risk_assessment_resource(record)]
+        + service_request_resources(record)
+        + diagnostic_report_resources(record)
         + audit_event_resources(record)
     )
     return {
@@ -349,24 +522,56 @@ def everything_bundle(record: dict) -> dict:
 
 
 def capability_statement() -> dict:
-    """Static conformance statement for the Phase 1 export surface."""
+    """Conformance statement for the full surface (Phases 1-4)."""
+    from . import config
+
+    security: dict[str, Any] = {
+        "cors": True,
+        "service": [{"coding": [{"system": "http://terminology.hl7.org/CodeSystem/restful-security-service",
+                                 "code": "SMART-on-FHIR", "display": "SMART-on-FHIR"}]}],
+        "description": (
+            "SMART on FHIR (OAuth 2.0, authorization-code + PKCE) with a "
+            "minimum-necessary scope set. Launches are handled by "
+            "GET /fhir/smart/launch; tokens are held server-side, never in the browser."
+        ),
+    }
+    if config.SMART_CLIENT_ID:
+        security["extension"] = [{
+            "url": SMART_OAUTH_EXT,
+            "extension": [
+                {"url": "authorize",
+                 "valueUri": config.SMART_REDIRECT_URI or "/fhir/smart/launch"},
+            ],
+        }]
+
     return {
         "resourceType": "CapabilityStatement",
         "status": "active",
         "date": datetime.now().strftime("%Y-%m-%d"),
         "kind": "instance",
-        "software": {"name": "NeuroPilot", "version": "0.1.0"},
-        "implementation": {"description": "NeuroPilot FHIR R4 export (Phase 1: read-only)"},
+        "software": {"name": "NeuroPilot", "version": "0.2.0"},
+        "implementation": {
+            "description": (
+                "NeuroPilot FHIR R4 — export (Phase 1), inbound ingestion (Phase 2), "
+                "bidirectional orders/results (Phase 3), SMART on FHIR launch (Phase 4)"
+            )
+        },
         "fhirVersion": "4.0.1",
         "format": ["json", FHIR_JSON],
         "rest": [
             {
                 "mode": "server",
+                "interaction": [{"code": "transaction"}],
+                "security": security,
                 "documentation": (
-                    "Read-only export of priority decision support. Model output is "
-                    "carried as RiskAssessment, never as Condition or diagnosis. "
-                    "SMART on FHIR (OAuth 2.0) is the Phase 4 auth layer; this surface "
-                    "serves synthetic cohort data for interoperability demonstration."
+                    "Export of priority decision support plus inbound ingestion "
+                    "(POST /fhir/Bundle, transaction). Orders leave as ServiceRequest "
+                    "(intent=order) and completed panels as DiagnosticReport; a "
+                    "hospital result returns as Observation/DiagnosticReport and is "
+                    "re-scored by the served model. Model output is carried as "
+                    "RiskAssessment, never as Condition or diagnosis, in both "
+                    "directions. This instance serves a synthetic cohort for "
+                    "interoperability demonstration — not real PHI."
                 ),
                 "resource": [
                     {
@@ -386,6 +591,23 @@ def capability_statement() -> dict:
                         "type": "RiskAssessment",
                         "interaction": [{"code": "search-type"}],
                         "searchParam": [{"name": "patient", "type": "reference"}],
+                    },
+                    {
+                        "type": "ServiceRequest",
+                        "interaction": [{"code": "read"}, {"code": "search-type"}],
+                        "searchParam": [
+                            {"name": "patient", "type": "reference"},
+                            {"name": "status", "type": "token"},
+                        ],
+                    },
+                    {
+                        "type": "DiagnosticReport",
+                        "interaction": [{"code": "read"}, {"code": "search-type"}],
+                        "searchParam": [{"name": "patient", "type": "reference"}],
+                    },
+                    {
+                        "type": "AuditEvent",
+                        "interaction": [{"code": "search-type"}],
                     },
                 ],
             }
@@ -425,6 +647,90 @@ def search_observations(patient_id: Optional[str] = None, count: int = 200) -> d
         "type": "searchset",
         "total": len(flat),
         "entry": [{"fullUrl": f"Observation/{o['id']}", "resource": o} for o in flat],
+    }
+
+
+def transaction_bundle(record: dict, orders_only: bool = False) -> dict:
+    """The export shaped as a FHIR *transaction* (Phase 3 outbound push).
+
+    A `collection` Bundle is a document; a transaction is a set of writes, and
+    only a transaction may carry `request` entries. The server applies it
+    atomically, so a hospital either receives the whole updated record or
+    nothing -- a half-written clinical record is the failure mode worth
+    designing against.
+
+    Patient/Observation/RiskAssessment/ServiceRequest/DiagnosticReport use PUT
+    against a deterministic id, which makes the push idempotent (re-pushing the
+    same patient updates rather than duplicates). AuditEvents use POST because
+    the audit trail is append-only by definition.
+    """
+    records = [record]
+    entries: list[dict] = []
+
+    def _add(resource: dict, method: str, url: str) -> None:
+        entries.append({
+            "fullUrl": f"{resource['resourceType']}/{resource['id']}",
+            "resource": resource,
+            "request": {"method": method, "url": url},
+        })
+
+    for r in records:
+        pid = r["id"]
+        _add(patient_resource(r), "PUT", f"Patient/{pid}")
+        if not orders_only:
+            for obs in observation_resources(r):
+                _add(obs, "PUT", f"Observation/{obs['id']}")
+            _add(risk_assessment_resource(r), "PUT", f"RiskAssessment/risk-{pid}")
+        for order in service_request_resources(r):
+            _add(order, "PUT", f"ServiceRequest/{order['id']}")
+        if not orders_only:
+            for report in diagnostic_report_resources(r):
+                _add(report, "PUT", f"DiagnosticReport/{report['id']}")
+            for event in audit_event_resources(r):
+                _add(event, "POST", "AuditEvent")
+
+    return {
+        "resourceType": "Bundle",
+        "id": f"bundle-transaction-{record['id']}" + ("-orders" if orders_only else ""),
+        "type": "transaction",
+        "timestamp": _iso(record.get("updated_at")),
+        "entry": entries,
+    }
+
+
+def search_service_requests(patient_id: Optional[str] = None, count: int = 200,
+                            status: Optional[str] = None) -> dict:
+    """ServiceRequest searchset -- NeuroPilot's placed orders (Phase 3).
+    `status=active` returns what the hospital still owes; `completed` what has
+    come back."""
+    records = [_record(patient_id)] if patient_id else _sorted_records()
+    records = [r for r in records if r is not None][: max(min(count, 500), 1)]
+    flat: list[dict] = []
+    for r in records:
+        flat.extend(service_request_resources(r))
+    if status:
+        flat = [s for s in flat if s.get("status") == status]
+    return {
+        "resourceType": "Bundle",
+        "id": "servicerequest-search",
+        "type": "searchset",
+        "total": len(flat),
+        "entry": [{"fullUrl": f"ServiceRequest/{s['id']}", "resource": s} for s in flat],
+    }
+
+
+def search_diagnostic_reports(patient_id: Optional[str] = None, count: int = 200) -> dict:
+    records = [_record(patient_id)] if patient_id else _sorted_records()
+    records = [r for r in records if r is not None][: max(min(count, 500), 1)]
+    flat: list[dict] = []
+    for r in records:
+        flat.extend(diagnostic_report_resources(r))
+    return {
+        "resourceType": "Bundle",
+        "id": "diagnosticreport-search",
+        "type": "searchset",
+        "total": len(flat),
+        "entry": [{"fullUrl": f"DiagnosticReport/{d['id']}", "resource": d} for d in flat],
     }
 
 

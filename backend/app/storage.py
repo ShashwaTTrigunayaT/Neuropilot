@@ -22,7 +22,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from .config import GLOBAL_IMPORTANCE_PATH, RISK_SCORES_PATH, PROJECT_ROOT, risk_tier
+from .config import (BIOMARKER_FEATURES, GLOBAL_IMPORTANCE_PATH, RISK_SCORES_PATH,
+                     PROJECT_ROOT, risk_tier)
 from .seed_data import MOCK_PATIENTS
 
 # Feature name -> human-readable explanation (blueprint section 4.4)
@@ -75,7 +76,6 @@ MOCK_GLOBAL_IMPORTANCE = [
 def _map_real_record(r: dict) -> dict:
     """risk_scores.json entry -> internal patient record."""
     score = float(r.get("risk_score", 0.5))
-    tier = risk_tier(score)
     mmse = r.get("mmse")
     factors = []
     for f in r.get("top_factors", []):
@@ -88,6 +88,12 @@ def _map_real_record(r: dict) -> dict:
                 "effect": float(f.get("contribution", 0.0)),
             }
         )
+    # risk_scores.json is the de-identified seed: it carries no measured values,
+    # so corroborating evidence is inferred from whether the model actually used
+    # a biomarker feature for this subject. Without one the tier stays capped at
+    # Medium, exactly as it would for a cognition-only record.
+    evidence = any(f["feature"] in BIOMARKER_FEATURES for f in factors)
+    tier = risk_tier(score, evidence)
     return {
         "id": str(r.get("subject_id")),
         "age": r.get("age"),
@@ -246,6 +252,31 @@ def _file_records() -> tuple[list[dict], str]:
     return [copy.deepcopy(p) for p in MOCK_PATIENTS], "mock"
 
 
+def _only_patients_with_real_results(records: list[dict]) -> list[dict]:
+    """Drop patients whose file holds no blood / MRI / PET result at all.
+
+    NeuroPilot is a workup product: a patient with no measured biomarker
+    anywhere can never be re-scored by ordering a test, because there is no
+    result for the order to return. Those records are removed from the served
+    cohort instead of sitting in the UI as a permanent dead end.
+
+    The test is STAGE-INDEPENDENT on purpose. A patient who reads as
+    "cognitive" in the UI because ADNI delivers modalities out of order can
+    still hold a real MRI on file -- those are exactly the records the pathway
+    has something to do for, and they must survive this filter.
+    """
+    from .config import real_result_slots
+
+    kept = [rec for rec in records if real_result_slots(rec)]
+    dropped = len(records) - len(kept)
+    if dropped:
+        print(
+            f"[storage] cohort filter: dropped {dropped} patient(s) with no "
+            f"blood/MRI/PET result on file — serving {len(kept)}"
+        )
+    return kept
+
+
 def load_patients() -> tuple[dict[str, dict], str]:
     """Return (id -> record, data_source).
 
@@ -253,6 +284,7 @@ def load_patients() -> tuple[dict[str, dict], str]:
     the store of record (memory stays the read cache). Otherwise in-memory only.
     """
     records, source = _file_records()
+    records = _only_patients_with_real_results(records)
     from . import db
     if db.enabled():
         print("[storage] DATABASE_URL detected — initializing database store...")
@@ -265,7 +297,10 @@ def load_patients() -> tuple[dict[str, dict], str]:
             loaded = db.load_all()
             if loaded:
                 db_name = "sqlite" if (db.get_database_url() or "").startswith("sqlite") else "postgres"
-                return {r["id"]: r for r in loaded}, f"{source}+{db_name}"
+                # Re-applied after load: an existing database can still hold rows
+                # seeded before the filter existed.
+                served = _only_patients_with_real_results(loaded)
+                return {r["id"]: r for r in served}, f"{source}+{db_name}"
         except Exception as exc:  # noqa: BLE001 -- DB down should not crash the API
             print(f"[storage] Database unavailable ({exc}); using in-memory store")
     return {r["id"]: r for r in records}, source
@@ -283,26 +318,22 @@ def persist(record: dict) -> None:
 
 
 def load_global_importance() -> list[dict]:
-    """Prefer artifacts/global_importance.csv (real training run), else the static mock."""
-    if GLOBAL_IMPORTANCE_PATH.exists():
-        try:
-            rows = []
-            with GLOBAL_IMPORTANCE_PATH.open(encoding="utf-8", newline="") as fh:
-                for row in csv.DictReader(fh):
-                    # After FAQ removal (2026-09-19), the CSV has both global and conditional
-                    # importance. Use conditional (measured-only) for the radar as it shows
-                    # true test value when measured, not diluted by unmeasured cases.
-                    shap_val = row.get("mean_abs_shap_conditional") or row.get("mean_abs_shap_global") or row.get("mean_abs_shap") or "0.0"
-                    rows.append(
-                        {
-                            "feature": row.get("feature", ""),
-                            "mean_abs_shap": float(shap_val),
-                        }
-                    )
-            if rows:
-                return rows
-        except Exception as exc:  # noqa: BLE001
-            print(f"[storage] could not parse {GLOBAL_IMPORTANCE_PATH} ({exc}); using static list")
+    """Attribution of the SERVED model; falls back to the static mock.
+
+    Routed through model_service on purpose: the panel must never describe a
+    different model family than the one producing the scores. Measured-only
+    (conditional) values are used, so a rarely-ordered test is not diluted to
+    near-zero by the subjects who were never scanned.
+    """
+    try:
+        from . import model_service
+
+        rows = model_service.load_importance()
+        if rows:
+            return rows
+        print("[storage] served model publishes no attribution file; using static list")
+    except Exception as exc:  # noqa: BLE001
+        print(f"[storage] could not load served-model attribution ({exc}); using static list")
     return copy.deepcopy(MOCK_GLOBAL_IMPORTANCE)
 
 

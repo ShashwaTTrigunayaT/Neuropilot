@@ -3,6 +3,7 @@ import {
   AlertCircle,
   LayoutDashboard,
   Moon,
+  Plug,
   RefreshCw,
   SlidersHorizontal,
   Sun,
@@ -12,6 +13,7 @@ import AllPatients from './components/AllPatients.jsx';
 import { NeuroPilotLogo } from './components/BrandLogo.jsx';
 import CompareView from './components/CompareView.jsx';
 import Footer from './components/Footer.jsx';
+import Interoperability from './components/Interoperability.jsx';
 import Overview from './components/Overview.jsx';
 import PatientDetail from './components/PatientDetail.jsx';
 import ProgressionView from './components/ProgressionView.jsx';
@@ -70,6 +72,18 @@ function Header({ theme, onToggleTheme, currentView, onViewChange, patientCount,
           >
             <SlidersHorizontal className="h-3.5 w-3.5" />
             Risk Simulator
+          </button>
+          <button
+            onClick={() => onViewChange('interop')}
+            title="HL7 FHIR R4 exchange — export, inbound ingestion, orders/results and SMART launch"
+            className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-semibold transition active:scale-[0.97] ${
+              currentView === 'interop'
+                ? 'bg-white dark:bg-darkCard text-accent shadow-soft font-bold'
+                : 'text-muted dark:text-darkMuted hover:text-ink dark:hover:text-darkText'
+            }`}
+          >
+            <Plug className="h-3.5 w-3.5" />
+            Interoperability
           </button>
         </nav>
 
@@ -169,13 +183,12 @@ export default function App() {
   const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
 
   const [patients, setPatients] = useState([]);
-  const [globalImportance, setGlobalImportance] = useState([]);
   const [modelInfo, setModelInfo] = useState(null);
   const [dataSource, setDataSource] = useState('');
   const [status, setStatus] = useState('loading');
   const [loadError, setLoadError] = useState('');
 
-  const [view, setView] = useState('overview'); // overview | all | simulator | progression | compare
+  const [view, setView] = useState('overview'); // overview | all | simulator | interop | progression | compare
   const [selectedId, setSelectedId] = useState(null);
   const [simulatedPatient, setSimulatedPatient] = useState(null);
   const [detail, setDetail] = useState(null);
@@ -213,7 +226,8 @@ export default function App() {
         api.health(),
       ]);
       setPatients(list);
-      setGlobalImportance(info.available && info.global_importance ? info.global_importance : []);
+      // modelInfo carries the served model card plus the retained family under
+      // `legacy`; the Overview radar reads the served card's attribution.
       setModelInfo(info);
       setDataSource(health.data_source || '');
       setStatus('ready');
@@ -227,6 +241,22 @@ export default function App() {
     loadAll();
   }, [loadAll]);
 
+  // SMART on FHIR hand-off: after the backend exchanges the authorization code
+  // it redirects the browser back here with ?smart=connected&patient=… — land
+  // on the interoperability view and say what was bound.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('smart') !== 'connected') return;
+    const patient = params.get('patient');
+    setView('interop');
+    setToast({
+      title: 'SMART session connected',
+      message: patient ? `Patient in context: ${patient}` : 'Launch complete.',
+      type: 'success',
+    });
+    window.history.replaceState({}, '', window.location.pathname);
+  }, []);
+
   const loadDetail = useCallback(
     async (id) => {
       setDetailStatus('loading');
@@ -237,9 +267,9 @@ export default function App() {
         setDetail(d);
         setPipeline(p);
         setDetailStatus('ready');
-        // 12-month forecast loads alongside (non-blocking failure: the detail
+        // outlook loads alongside (non-blocking failure: the detail
         // view simply renders without the forecast card if unavailable)
-        api.getProgression(id).then(setProgression).catch(() => setProgression(null));
+        api.getOutlook(id).then(setProgression).catch(() => setProgression(null));
       } catch (err) {
         setDetailError(err.message);
         setDetailStatus('error');
@@ -269,17 +299,37 @@ export default function App() {
     setAdvanceBusy(true);
     setAdvanceError('');
     const scoreBefore = detail?.score;
+    const priorityBefore = detail?.final_score ?? detail?.score;
     try {
       const res = await api.advanceStage(selectedId, { override, note: note || null });
       await Promise.all([loadDetail(selectedId), loadAll()]);
       const scoreAfter = res?.new_score;
-      const moved =
+      const priorityAfter = res?.new_priority_score ?? scoreAfter;
+      const officialMoved =
         typeof scoreBefore === 'number' && typeof scoreAfter === 'number' && Math.abs(scoreAfter - scoreBefore) >= 0.005;
-      const resultInfo = res?.result ? ` ${res.result.slot.toUpperCase()} result: ${res.result.outcome}.` : '';
-      const scoreInfo = moved ? ` Risk re-scored ${scoreBefore.toFixed(2)} → ${scoreAfter.toFixed(2)} (${res.new_tier} tier).` : '';
+      const priorityMoved =
+        typeof priorityBefore === 'number' && typeof priorityAfter === 'number' && Math.abs(priorityAfter - priorityBefore) >= 0.005;
+      // A real measurement on file is incorporated; a slot with nothing on file
+      // is simply ordered and the score deliberately stays put.
+      const r = res?.result;
+      const onFile = r?.status === 'completed';
+      const resultInfo = !r
+        ? ''
+        : onFile
+          ? ` ${r.slot.toUpperCase()} result on file (${r.outcome}) incorporated.`
+          : ` ${r.slot.toUpperCase()} ordered — no result available in this cohort yet.`;
+      const scoreInfo = onFile
+        ? officialMoved
+          ? ` Official score ${scoreBefore.toFixed(2)} → ${scoreAfter.toFixed(2)}; priority ${priorityBefore.toFixed(2)} → ${priorityAfter.toFixed(2)} (${res.new_tier} tier).`
+          : ` Official score remains ${scoreBefore.toFixed(2)}; priority remains ${priorityBefore.toFixed(2)} (${res.new_tier} tier).`
+        : ` Official score remains ${scoreBefore.toFixed(2)}; predicted stage is not official evidence; priority ${priorityBefore.toFixed(2)} → ${priorityAfter.toFixed(2)}${priorityMoved ? ' (changed)' : ' (unchanged)'} (${res.new_tier} tier).`;
       showToast(
-        override ? 'Clinician Override Recorded' : 'Test Ordered — Result Arrived',
-        (override ? 'Bypassed stage gate with documented note.' : 'Result auto-derived and model re-ran on the new values.') +
+        override ? 'Clinician Override Recorded' : onFile ? 'Result On File — Incorporated' : 'Test Ordered',
+        (override
+          ? 'Bypassed stage gate with documented note.'
+          : onFile
+            ? 'An existing measurement entered the pathway and the model re-ran on it.'
+            : 'No result to return, so the official score is unchanged; the priority score may use the predicted stage — nothing was invented to fill the gap.') +
           resultInfo +
           scoreInfo,
         'success'
@@ -310,7 +360,15 @@ export default function App() {
           [
             {
               id: `${s.id}-${s.stage_after}-${Date.now()}`,
-              text: `${s.id} · ${s.slot.toUpperCase()} ${s.outcome} · ${s.score_before.toFixed(2)} → ${s.score_after.toFixed(2)} (${s.tier_after})${rankNote}`,
+              text: `${s.id} · ${s.slot.toUpperCase()} ${
+                s.result_on_file ? `${s.outcome} · real result incorporated` : 'no result · predicted stage used for priority only'
+              } · priority ${s.priority_score_before?.toFixed(2) ?? s.score_before.toFixed(2)} → ${s.priority_score_after?.toFixed(2) ?? s.score_after.toFixed(2)}${
+                !s.result_on_file && s.official_score_before != null
+                  ? ` · official remains ${s.official_score_before.toFixed(2)}`
+                  : s.result_on_file && s.official_score_after != null
+                    ? ` · official ${s.official_score_after.toFixed(2)}`
+                    : ''
+              } · ${s.tier_after}${rankNote}`,
             },
             ...log,
           ].slice(0, 4)
@@ -438,6 +496,7 @@ export default function App() {
         if (e.key === 'd' || e.key === 'D') handleNavChange('overview');
         if (e.key === 'p' || e.key === 'P') handleNavChange('all');
         if (e.key === 's' || e.key === 'S') handleNavChange('simulator');
+        if (e.key === 'f' || e.key === 'F') handleNavChange('interop');
         if (e.key === 't' || e.key === 'T') toggleTheme();
       }
     };
@@ -527,7 +586,6 @@ export default function App() {
               {view === 'overview' && (
                 <Overview
                   patients={patients}
-                  globalImportance={globalImportance}
                   modelInfo={modelInfo}
                   onSelect={openPatient}
                   onShowAll={() => setView('all')}
@@ -548,6 +606,14 @@ export default function App() {
                 <RiskSimulator
                   initialPatient={simulatedPatient}
                   onSelectPatient={openPatient}
+                />
+              )}
+
+              {view === 'interop' && (
+                <Interoperability
+                  patients={patients}
+                  initialPatientId={selectedId}
+                  onToast={showToast}
                 />
               )}
             </div>

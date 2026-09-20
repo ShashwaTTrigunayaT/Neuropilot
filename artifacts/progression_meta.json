@@ -1,31 +1,175 @@
 {
   "model_type": "xgb_regressor+xgb_classifier",
-  "horizon_months": 12,
+  "data_mode": "adni",
+  "data_source": "real ADNI follow-up (13-table drop) \u2014 baseline CN/MCI visit -> follow-up outcome, 138/1,634 conversions",
+  "horizon_months": 24,
+  "label_definition": "crossing into a strictly worse ADNI diagnostic category (CN->MCI or MCI->Dementia) from a first labeled CN/MCI visit",
   "features": [
     "age",
-    "education_years",
     "sex",
+    "education_years",
     "mmse",
-    "mmse_change",
-    "ptau181",
+    "adas_cog_13",
+    "apoe_e4",
+    "ptau217",
     "abeta4240",
+    "nfl",
+    "gfap",
     "hippocampal_volume",
-    "amyloid_positive",
-    "tau_positive"
+    "hippocampal_icv_ratio",
+    "centiloids",
+    "tau_meta_temporal"
   ],
-  "trained_at": "2026-09-08T20:15:24",
-  "data_source": "synthetic v2 cohort + biomarker-driven 12-month follow-up simulation",
-  "n_train": 640,
-  "n_test": 160,
-  "conversion_prevalence": 0.1663,
+  "excluded_features": {
+    "faq_total": "label leakage (part of ADNI's diagnostic algorithm)",
+    "mmse_change": "2.5% present at a first visit \u2014 no prior-visit slope exists"
+  },
+  "trained_at": "2026-09-20T01:43:06",
+  "n_train": 1307,
+  "n_test": 327,
+  "n_cohort": 1634,
+  "conversion_prevalence": 0.0845,
+  "conversion_by_baseline": {
+    "CN": {
+      "n": 775,
+      "rate": 0.02967741935483871
+    },
+    "MCI": {
+      "n": 859,
+      "rate": 0.13387660069848661
+    }
+  },
   "metrics": {
-    "delta_mae": 0.6111,
-    "delta_mae_baseline": 1.0427,
-    "delta_rmse": 0.7413,
-    "delta_r2": 0.6791,
-    "conversion_auc": 0.7698,
-    "conversion_pr_auc": 0.4649,
-    "conversion_brier": 0.1427,
-    "conversion_accuracy": 0.8
-  }
+    "conversion_cv_auc_mean": 0.8188,
+    "conversion_cv_auc_std": 0.031,
+    "conversion_auc": 0.7962,
+    "conversion_pr_auc": 0.386,
+    "conversion_brier": 0.089,
+    "conversion_accuracy": 0.8777,
+    "conversion_baseline_accuracy": 0.9144,
+    "conversion_auc_stage1": 0.8217,
+    "conversion_auc_blood_measured": 0.7321,
+    "conversion_auc_pet_measured": 0.7929,
+    "conversion_auc_cn_baseline": 0.6569,
+    "conversion_auc_mci_baseline": 0.7614,
+    "delta_cv_mae_mean": 1.4819,
+    "delta_cv_mae_std": 0.049,
+    "delta_mae": 1.5487,
+    "delta_mae_baseline": 1.8591,
+    "delta_rmse": 2.2174,
+    "delta_r2": 0.2965,
+    "n_mmse_outcomes": 1387
+  },
+  "n_subgroup": {
+    "stage1": 232,
+    "blood_measured": 95,
+    "pet_measured": 205,
+    "cn_baseline": 157,
+    "mci_baseline": 170
+  },
+  "ablations": [
+    {
+      "label": "Stage 1 only (cognition + demographics + APOE)",
+      "n_features": 6,
+      "cv_auc_mean": 0.7627,
+      "cv_auc_std": 0.0471
+    },
+    {
+      "label": "Biomarkers only (blood + MRI + PET)",
+      "n_features": 8,
+      "cv_auc_mean": 0.7941,
+      "cv_auc_std": 0.0275
+    },
+    {
+      "label": "All stages (served model)",
+      "n_features": 14,
+      "cv_auc_mean": 0.8188,
+      "cv_auc_std": 0.031
+    }
+  ],
+  "stage_importance": {
+    "1": {
+      "name": "Cognitive",
+      "share_pct": 31.1
+    },
+    "2": {
+      "name": "Blood biomarkers",
+      "share_pct": 15.35
+    },
+    "3": {
+      "name": "MRI volumetrics",
+      "share_pct": 21.03
+    },
+    "4": {
+      "name": "PET imaging",
+      "share_pct": 32.52
+    }
+  },
+  "feature_stages": {
+    "age": 1,
+    "sex": 1,
+    "education_years": 1,
+    "mmse": 1,
+    "adas_cog_13": 1,
+    "apoe_e4": 1,
+    "ptau217": 2,
+    "abeta4240": 2,
+    "nfl": 2,
+    "gfap": 2,
+    "hippocampal_volume": 3,
+    "hippocampal_icv_ratio": 3,
+    "centiloids": 4,
+    "tau_meta_temporal": 4
+  },
+  "feature_coverage": {
+    "centiloids": 58.6,
+    "tau_meta_temporal": 25.1,
+    "adas_cog_13": 98.7,
+    "hippocampal_icv_ratio": 97.6,
+    "hippocampal_volume": 97.6,
+    "abeta4240": 27.4,
+    "nfl": 27.5,
+    "age": 100.0,
+    "apoe_e4": 99.9,
+    "ptau217": 27.5,
+    "sex": 100.0,
+    "mmse": 100.0,
+    "education_years": 100.0,
+    "gfap": 27.5
+  },
+  "top_contributors": [
+    {
+      "feature": "centiloids",
+      "stage": 4,
+      "contribution": 1.1856
+    },
+    {
+      "feature": "tau_meta_temporal",
+      "stage": 4,
+      "contribution": 1.1677
+    },
+    {
+      "feature": "adas_cog_13",
+      "stage": 1,
+      "contribution": 1.07
+    },
+    {
+      "feature": "hippocampal_icv_ratio",
+      "stage": 3,
+      "contribution": 0.9729
+    },
+    {
+      "feature": "hippocampal_volume",
+      "stage": 3,
+      "contribution": 0.5489
+    }
+  ],
+  "caveats": [
+    "labels are real clinician follow-up diagnoses from ADNI, not simulated outcomes",
+    "conversion is defined over a bounded evaluation window; subjects with shorter follow-up are excluded rather than assumed stable",
+    "served records are latest visits while training baselines are first visits",
+    "mmse_change excluded (2.5% present at a first visit)",
+    "faq_total excluded (label leakage)",
+    "a shorter evaluation window was rejected because it does not carry enough positives to calibrate the classifier"
+  ]
 }

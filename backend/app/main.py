@@ -47,6 +47,18 @@ from fastapi.responses import FileResponse
 
 app.include_router(router)
 
+# The in-process mock ABDM Consent Manager + mock HIP (Phase 4 of FHIR plan.md).
+# Mounted only when no real CM is configured, so a deployment pointed at an ABDM
+# sandbox does not also ship a simulator that answers on its own URL space. It is
+# a genuine second ASGI app reached over real HTTP (abdm.py calls it by URL), which
+# is what makes the consent flow testable without an ABDM account.
+from . import config as _config
+
+if _config.ABDM_USE_MOCK_GATEWAY and not _config.ABDM_CM_BASE_URL:
+    from . import abdm_mock
+
+    app.mount("/mock-abdm", abdm_mock.app)
+
 # Production SPA static file serving (if dist exists)
 _project_root = Path(os.getenv("PROJECT_ROOT", Path(__file__).resolve().parents[2]))
 _dist_dir = _project_root / "dist"

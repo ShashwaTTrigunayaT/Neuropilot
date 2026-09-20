@@ -14,13 +14,24 @@ export default function RiskDistributionChart({ patients = [], onSelectBin }) {
   const binData = useMemo(() => {
     return BINS_10.map(([lo, hi], i) => {
       const isLast = i === BINS_10.length - 1;
-      const count = patients.filter((p) =>
-        isLast ? p.score >= lo && p.score <= 1.0 : p.score >= lo && p.score < hi
-      ).length;
+      const inBin = patients.filter((p) => {
+        const score = p.final_score ?? p.score;
+        return isLast ? score >= lo && score <= 1.0 : score >= lo && score < hi;
+      });
+      const count = inBin.length;
       const pct = (count / total) * 100;
       const mid = lo + 0.05;
-      const tier = lo >= 0.7 ? 'high' : lo >= 0.4 ? 'medium' : 'low';
-      return { lo, hi, mid, count, pct, tier, index: i };
+      // Colour and label come from the SERVED tier, not the score band: a High
+      // tier requires a biomarker result on file, so a bin can hold
+      // high-scoring cognition-only patients the API reports as Medium.
+      const byTier = { high: 0, medium: 0, low: 0 };
+      inBin.forEach((p) => {
+        if (byTier[p.risk_tier] !== undefined) byTier[p.risk_tier] += 1;
+      });
+      const tier = count
+        ? ['high', 'medium', 'low'].reduce((best, t) => (byTier[t] > byTier[best] ? t : best), 'low')
+        : lo >= 0.7 ? 'high' : lo >= 0.4 ? 'medium' : 'low';
+      return { lo, hi, mid, count, pct, tier, byTier, index: i };
     });
   }, [patients, total]);
 
@@ -33,7 +44,7 @@ export default function RiskDistributionChart({ patients = [], onSelectBin }) {
     if (!patients.length) {
       return { mean: 0, median: 0, stdDev: 0, q1: 0, q3: 0, low: { count: 0, pct: 0 }, med: { count: 0, pct: 0 }, high: { count: 0, pct: 0 } };
     }
-    const scores = patients.map((p) => p.score).sort((a, b) => a - b);
+    const scores = patients.map((p) => p.final_score ?? p.score).sort((a, b) => a - b);
     const n = scores.length;
     const mean = scores.reduce((a, b) => a + b, 0) / n;
     const median = n % 2 === 0 ? (scores[n / 2 - 1] + scores[n / 2]) / 2 : scores[Math.floor(n / 2)];
@@ -42,9 +53,10 @@ export default function RiskDistributionChart({ patients = [], onSelectBin }) {
     const variance = scores.reduce((sum, s) => sum + Math.pow(s - mean, 2), 0) / n;
     const stdDev = Math.sqrt(variance);
 
-    const lowPatients = patients.filter((p) => p.score < 0.4);
-    const medPatients = patients.filter((p) => p.score >= 0.4 && p.score < 0.7);
-    const highPatients = patients.filter((p) => p.score >= 0.7);
+    // Served tiers, so these counts match the cohort tables and the filters.
+    const lowPatients = patients.filter((p) => p.risk_tier === 'low');
+    const medPatients = patients.filter((p) => p.risk_tier === 'medium');
+    const highPatients = patients.filter((p) => p.risk_tier === 'high');
 
     return {
       mean,
@@ -468,7 +480,7 @@ export default function RiskDistributionChart({ patients = [], onSelectBin }) {
               Subjects: <strong className="text-accent">{hoveredBin.count}</strong> ({hoveredBin.pct.toFixed(1)}%)
             </span>
             <span style={{ color: TIER_HEX[hoveredBin.tier] }}>
-              {hoveredBin.tier.toUpperCase()} TIER
+              {hoveredBin.byTier.high} High · {hoveredBin.byTier.medium} Med · {hoveredBin.byTier.low} Low
             </span>
           </div>
         ) : (

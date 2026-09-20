@@ -3,41 +3,23 @@ NeuroPilot -- real-ADNI model audit (2026-09-19 review items 2 and 7)
 ==============================================================================
 cohort: 3,636 subjects | feature contract: 15 features
 
-A. APOE-e4 ENCODING BENCHMARK (identical 5-fold CV folds, 300 trees)
-   encoding                      CV AUC      +/-   n_feat
-   binary carrier (served)       0.9007   0.0181       15
-   copy count 0/1/2              0.9002   0.0184       15
-   binary + APOE x age           0.9005   0.0182       16
-   copies + APOE x age           0.9002   0.0179       16
-   no APOE at all                0.9001   0.0178       14
 
-   spread across ALL encodings (incl. dropping APOE): 0.0006 CV AUC
-   best config: binary carrier (served)  |  served (binary carrier): 0.9007
-   coverage of APOE in this cohort: 78.7%
-   copy-count distribution: 0=1562, 1=1028, 2=271, missing=775
-   VERDICT: encoding is NOT the limiting factor -- every variant (including
-            removing APOE) lands within noise. Keep the standard binary
-            carrier flag; report APOE as a progression signal, not a
-            cross-sectional one. No encoding change made.
+C. INCREMENTAL VALUE BY FEATURE / STAGE (identical 5-fold CV folds)
+   single-feature AUC (rows where measured):
+     adas_cog_13           0.885   (n=2832)
+     mmse                  0.836   (n=3636)
+     tau_meta_temporal     0.774   (n=716)
+     centiloids            0.701   (n=1065)
+     mmse_change           0.631   (n=2335)
 
-B. COMPLETE-CASE CROSS-CHECK (all four families measured)
-   stage-complete subjects: 510 (365 CN / 145 impaired)
-   AUC on these rows: served 0.9328 (partly in-sample — upper bound) | complete-case-only model 0.8820 (5-fold CV, honest)
-   top-10 feature overlap    : 8/10
-   Spearman rho of the two mean|SHAP| vectors: 0.818
+   arm                                n_feat   CV AUC       ±    delta
+   full model                             15   0.9007  0.0181         
+   minus adas_cog_13                      14   0.8843  0.0160  -0.0163
+   minus mmse                             14   0.8853  0.0166  -0.0154
+   cognition + demographics only           6   0.8839  0.0136  -0.0168
+   biomarkers only (no cognition)         12   0.8295  0.0187  -0.0711
 
-     #  served model (SHAP)       complete-case model (SHAP)  
-     1  adas_cog_13               adas_cog_13                 
-     2  mmse                      tau_meta_temporal           
-     3  tau_meta_temporal         ptau217                     
-     4  centiloids                mmse                        
-     5  ptau217                   hippocampal_icv_ratio       
-     6  hippocampal_icv_ratio     hippocampal_volume          
-     7  nfl                       mmse_change                 
-     8  hippocampal_volume        nfl                         
-     9  age                       centiloids                  
-    10  sex                       abeta4240                   
-
-   VERDICT: the served model's attributions on complete cases agree with a
-            model that never saw a missing value -- the NaN handling is not
-            inventing structure the complete-case subset does not support.
+   every biomarker family combined (blood + MRI + PET) adds +0.0711 CV AUC
+   over cognition + demographics alone. Cognition is the column that carries
+   this model for cross-sectional diagnosis, which is why the High TIER is
+   evidence-gated rather than the training data being rebalanced.

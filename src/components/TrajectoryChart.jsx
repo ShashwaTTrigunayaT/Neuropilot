@@ -1,5 +1,6 @@
 /*
- * 12-month MMSE trajectory: observed history → predicted future with an
+ * MMSE trajectory: observed history → predicted future (window supplied by the
+ * served model) with an
  * uncertainty band and the current diagnostic stage annotated at "today".
  * Stage-completion risk scores render in a DEDICATED LANE BELOW the main
  * plot (outcome-colored diamonds on their own 0–1 axis), so they never
@@ -110,7 +111,7 @@ export default function TrajectoryChart({ trajectory = [], scoreCheckpoints = []
         {/* month labels under the main plot */}
         {trajectory.map((p, i) => (
           <text key={`x${i}`} x={x(p.t)} y={mainBottom + 16} textAnchor="middle" fontSize="9" fill="currentColor" className="text-muted dark:text-darkMuted" style={mono}>
-            {p.t === 0 ? 'today' : `${p.t > 0 ? '+' : ''}${p.t}mo`}
+            {p.t === 0 ? 'today' : p.t > 0 ? 'projected' : 'previous'}
           </text>
         ))}
 
@@ -199,7 +200,7 @@ export default function TrajectoryChart({ trajectory = [], scoreCheckpoints = []
               );
             })}
 
-            {/* FINAL 12-month projected score point */}
+            {/* FINAL projected score point */}
             {showProjection && (
               <g>
               <circle

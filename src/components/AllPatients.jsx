@@ -54,9 +54,10 @@ export default function AllPatients({ patients, onSelect, onSimulate, onCompare 
       list = list.filter((p) => p.id.toLowerCase().includes(q));
     }
     const sorted = [...list];
-    if (sortKey === 'risk-desc') sorted.sort((a, b) => b.score - a.score);
-    if (sortKey === 'risk-asc') sorted.sort((a, b) => a.score - b.score);
-    if (sortKey === 'stage') sorted.sort((a, b) => a.stage - b.stage || b.score - a.score);
+    const priority = (p) => p.final_score ?? p.score;
+    if (sortKey === 'risk-desc') sorted.sort((a, b) => priority(b) - priority(a));
+    if (sortKey === 'risk-asc') sorted.sort((a, b) => priority(a) - priority(b));
+    if (sortKey === 'stage') sorted.sort((a, b) => a.stage - b.stage || priority(b) - priority(a));
     return sorted;
   }, [patients, tierFilter, stageFilter, query, sortKey]);
 
@@ -132,8 +133,8 @@ export default function AllPatients({ patients, onSelect, onSimulate, onCompare 
               onChange={(e) => setSortKey(e.target.value)}
               className={`${controlBase} appearance-none pr-8 font-medium cursor-pointer`}
             >
-              <option value="risk-desc">Sort: Risk (High → Low)</option>
-              <option value="risk-asc">Sort: Risk (Low → High)</option>
+              <option value="risk-desc">Sort: Priority (High → Low)</option>
+              <option value="risk-asc">Sort: Priority (Low → High)</option>
               <option value="stage">Sort: Pipeline Stage</option>
             </select>
             <Chevron />

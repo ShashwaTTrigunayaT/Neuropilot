@@ -35,10 +35,22 @@ class PatientSummary(BaseModel):
     sex: Optional[str] = None
     education_years: Optional[int] = None
     cognitive: Optional[dict] = None
+    # Official measured score. Ranking uses final_score instead.
     score: float
+    official_score: Optional[float] = None
+    provisional_score: Optional[float] = None
+    final_score: Optional[float] = None
+    estimate_confidence: Optional[float] = None
+    estimated_stages: List[int] = []
+    estimated_values: dict = {}
     risk_tier: str
     stage: int
     stage_name: str
+    # True when a LATER-stage result is already on file while the ordered pathway
+    # stops at the first missing test. Declared here (not only on PatientDetail)
+    # so the LIST carries it -- the cohort table needs it to avoid labelling a
+    # scanned patient as cognition-only.
+    beyond_stage: bool = False
     recommended_next: Optional[str] = None
     updated_at: str
 
@@ -64,7 +76,6 @@ class PatientDetail(PatientSummary):
     n_visits: Optional[int] = None
     # Slots measured outside the ordered pathway (real-cohort ordering gaps)
     slots_on_file: List[str] = []
-    beyond_stage: bool = False
 
 
 class ExplainFactor(BaseModel):
@@ -82,6 +93,10 @@ class GlobalImportance(BaseModel):
 class ExplainResponse(BaseModel):
     id: str
     score: float
+    official_score: Optional[float] = None
+    provisional_score: Optional[float] = None
+    final_score: Optional[float] = None
+    estimate_confidence: Optional[float] = None
     risk_tier: str
     factors: List[ExplainFactor]
     global_importance: List[GlobalImportance]
@@ -92,11 +107,28 @@ class RecommendedNext(BaseModel):
     button: str
 
 
+class PathwaySlot(BaseModel):
+    """State of one pathway step.
+
+    `status` is None before the step is ordered, "ordered" when the order was
+    placed with nothing on file to return, "completed" when a real measurement
+    is in the record. `measured` distinguishes a real value from a bare order.
+    """
+
+    slot: str
+    label: str
+    stage: int
+    status: Optional[str] = None
+    measured: bool = False
+
+
 class PipelineResponse(BaseModel):
     id: str
     current_stage: int
     stage_name: str
     stages: List[str]
+    slots: List[PathwaySlot] = []
+    estimated_values: dict = {}
     history: List[HistoryEntry]
     recommended_next: Optional[RecommendedNext] = None
 
@@ -108,10 +140,16 @@ class AdvanceRequest(BaseModel):
 
 class OrderResultInfo(BaseModel):
     carried_forward: bool = False
-    """Simulated lab result attached when a test is ordered (auto-populated)."""
+    """Outcome of ordering a test.
+
+    `status` is "completed" when a real measurement was already on file and got
+    incorporated, or "ordered" when this cohort holds no result for that slot.
+    `outcome` is None in the latter case -- nothing is fabricated to fill it.
+    """
 
     slot: str
-    outcome: str
+    status: Optional[str] = None
+    outcome: Optional[str] = None
     note: str = ""
 
 
@@ -120,21 +158,33 @@ class AdvanceResponse(BaseModel):
     event: Optional[str] = None
     result: Optional[OrderResultInfo] = None  # populated: result arrives with the order
     rescored: bool = False  # trained model re-ran on the new values
+    # new_score is the official measured score; new_priority_score is the
+    # confidence-weighted score used for ranking.
     new_score: Optional[float] = None
+    official_score: Optional[float] = None
+    new_priority_score: Optional[float] = None
+    priority_changed: bool = False
     new_tier: Optional[str] = None
     pipeline: PipelineResponse
 
 
 class AutoWorkupStep(BaseModel):
     carried_forward: bool = False
-    action: str  # test | stop | complete
+    action: str  # test | stop | complete | awaiting
     stage: Optional[int] = None
     slot: Optional[str] = None
+    status: Optional[str] = None
+    result_on_file: Optional[bool] = None
     button: Optional[str] = None
     summary: Optional[str] = None
     outcome: Optional[str] = None
     note: Optional[str] = None
     score_after: Optional[float] = None
+    priority_score_before: Optional[float] = None
+    priority_score_after: Optional[float] = None
+    priority_changed: bool = False
+    official_score_before: Optional[float] = None
+    official_score_after: Optional[float] = None
     tier_after: Optional[str] = None
 
 
@@ -155,9 +205,17 @@ class WorkupSubject(BaseModel):
     stage_before: int
     stage_after: int
     slot: str
-    outcome: str
+    status: Optional[str] = None
+    result_on_file: Optional[bool] = None
+    outcome: Optional[str] = None
+    # score_before/after are retained for compatibility and represent priority.
     score_before: float
     score_after: float
+    priority_score_before: Optional[float] = None
+    priority_score_after: Optional[float] = None
+    priority_changed: bool = False
+    official_score_before: Optional[float] = None
+    official_score_after: Optional[float] = None
     tier_after: str
     rank_before: Optional[int] = None
     rank_after: Optional[int] = None
@@ -256,6 +314,9 @@ class CompareResponse(BaseModel):
 
 class ModelInfoResponse(BaseModel):
     available: bool
+    # Which model family is being served (config.PRIMARY_MODEL) and its label.
+    name: Optional[str] = None
+    label: Optional[str] = None
     model_type: Optional[str] = None
     features: List[str] = []
     trained_at: Optional[str] = None
@@ -270,7 +331,14 @@ class ModelInfoResponse(BaseModel):
     test_auc_biomarker_measured: Optional[float] = None
     baseline_accuracy: Optional[float] = None
     n_train: Optional[int] = None
+    n_subgroup: Optional[dict] = None
+    stage_importance: Optional[dict] = None
+    ablations: List[dict] = []
+    caveats: List[str] = []
     global_importance: List[GlobalImportance] = []
+    # The model family NOT being served, retained and still loadable — this is
+    # what makes the switch inspectable rather than invisible.
+    legacy: Optional[dict] = None
 
 
 class TrajectoryPoint(BaseModel):
@@ -283,19 +351,31 @@ class TrajectoryPoint(BaseModel):
     hi: Optional[int] = None
 
 
-class ProgressionDriver(BaseModel):
+class OutlookDriver(BaseModel):
     feature: str
     contribution: float
 
 
-class ProgressionResponse(BaseModel):
+class AbdmConsentRequest(BaseModel):
+    """Open a consent request with the ABDM Consent Manager.
+
+    Only the ABHA address identifies the patient — no patient id, no score, no
+    tier leaves this system when asking for consent.
+    """
+
+    abha_address: str
+    hi_types: Optional[List[str]] = None
+    days: int = 180
+    purpose: str = "CAREMGT"
+
+
+class RefinedOutlookResponse(BaseModel):
     id: str
-    horizon_months: int
     model_available: bool
     current: dict
     projected: dict
     trajectory: List[TrajectoryPoint]
     # Risk score at the moment each stage test completed (chart annotations)
     score_checkpoints: List[dict] = []
-    drivers: List[ProgressionDriver]
+    drivers: List[OutlookDriver]
     disclaimer: str

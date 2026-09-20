@@ -179,7 +179,7 @@ export function RiskGauge({ score, tier }) {
           fontSize="10.5"
           className="fill-muted dark:fill-darkMuted uppercase tracking-wider font-semibold"
         >
-          Progression Risk Score
+Refined Risk Score
         </text>
       </svg>
     </div>
@@ -321,7 +321,7 @@ export function RiskHistogram({ patients, onSelectBin }) {
       BINS.map(([lo, hi], i) => ({
         lo,
         hi,
-        count: patients.filter((p) => (i === BINS.length - 1 ? p.score >= lo : p.score >= lo && p.score < hi)).length,
+        count: patients.filter((p) => { const score = p.final_score ?? p.score; return i === BINS.length - 1 ? score >= lo : score >= lo && score < hi; }).length,
       })),
     [patients]
   );
@@ -598,13 +598,13 @@ export function PatientTable({
               )}
               <td className="px-4 py-3.5">
                 <div className="flex items-center gap-2">
-                  <span style={MONO} className="text-[13px] font-bold text-ink dark:text-darkText">{fmtScore(p.score)}</span>
+                  <span style={MONO} className="text-[13px] font-bold text-ink dark:text-darkText">{fmtScore(p.final_score ?? p.score)}</span>
                   <TierTag tier={p.risk_tier} />
                 </div>
                 <div className="mt-1.5 h-[4px] w-24 overflow-hidden rounded-full bg-[#EDE9E1] dark:bg-darkBorder">
                   <div
                     className="h-full rounded-full transition-all duration-500"
-                    style={{ width: `${Math.round(p.score * 100)}%`, background: TIER_HEX[p.risk_tier] }}
+                    style={{ width: `${Math.round((p.final_score ?? p.score) * 100)}%`, background: TIER_HEX[p.risk_tier] }}
                   />
                 </div>
               </td>
@@ -623,6 +623,19 @@ export function PatientTable({
                 </div>
                 <div style={MONO} className="mt-1 text-[11px] font-medium text-muted dark:text-darkMuted">
                   {STAGES_SHORT[p.stage - 1] ?? p.stage_name} · Stage {p.stage}/4
+                  {/* Stage = the completed CONTIGUOUS prefix of the pathway. A real
+                      cohort arrives with ordering gaps, so a patient can be at
+                      Stage 1 while a later-stage result is already on file. Without
+                      this marker the cell reads as "cognition only", which is wrong
+                      for those patients and was mistaken for one. */}
+                  {p.beyond_stage && (
+                    <span
+                      className="ml-1.5 rounded px-1 py-[1px] text-[10px] font-semibold text-accent bg-accent/10"
+                      title="A later-stage result is already on file — the pathway stops at the first missing test, so this stage reflects the gap, not the patient"
+                    >
+                      results on file
+                    </span>
+                  )}
                 </div>
               </td>
               <td className={`px-4 py-3.5 ${compact ? '' : 'max-w-[260px]'}`}>
