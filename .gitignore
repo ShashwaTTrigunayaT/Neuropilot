@@ -37,6 +37,12 @@ artifacts/*
 !artifacts/progression_conversion.joblib
 !artifacts/progression_meta.json
 !artifacts/progression_report.txt
+# The served (refined) model's attribution file. Without it the dashboard's
+# importance panel falls back to a static list that describes features the
+# model does not even have — this omission is the "publishes no attribution
+# file" warning in the deploy log.
+!artifacts/progression_importance.csv
+!artifacts/stage_importance.csv
 
 # ---- Python ----
 __pycache__/

@@ -1,11 +1,13 @@
 """Patient store.
 
-Preference order (override with PATIENT_DATA=adni|synthetic|real|mock):
+Preference order (override with PATIENT_DATA=adni|mock):
   1. REAL ADNI cohort: data/processed/adni_cohort.json (scripts/ingest_adni.py)
      -- 3.6k subjects, real DIAGNOSIS labels, all four stages where measured
-  2. Synthetic ADNI-shaped cohort: data/processed/synthetic_patients_v2.json
-  3. Real OASIS scores: data/processed/risk_scores.json
-  4. Mock cohort (backend/app/seed_data.py) so the API demos standalone
+  2. Mock cohort (backend/app/seed_data.py) so the API demos standalone
+
+The synthetic and OASIS-1 paths were removed once real ADNI became the served
+cohort; every fallback that could silently put a simulated subject in front of a
+clinician went with them.
 
 Each subject carries only the stages that were actually measured, so the
 missing slots stay empty and the escalation engine recommends the next test
@@ -74,7 +76,13 @@ MOCK_GLOBAL_IMPORTANCE = [
 
 
 def _map_real_record(r: dict) -> dict:
-    """risk_scores.json entry -> internal patient record."""
+    """De-identified seed entry -> internal patient record (fallback only).
+
+    risk_scores.json carries no measured values, so corroborating evidence is
+    inferred from whether the model actually used a biomarker feature for this
+    subject. Without one the tier stays capped at Medium, exactly as it would
+    for a cognition-only record.
+    """
     score = float(r.get("risk_score", 0.5))
     mmse = r.get("mmse")
     factors = []
@@ -88,10 +96,6 @@ def _map_real_record(r: dict) -> dict:
                 "effect": float(f.get("contribution", 0.0)),
             }
         )
-    # risk_scores.json is the de-identified seed: it carries no measured values,
-    # so corroborating evidence is inferred from whether the model actually used
-    # a biomarker feature for this subject. Without one the tier stays capped at
-    # Medium, exactly as it would for a cognition-only record.
     evidence = any(f["feature"] in BIOMARKER_FEATURES for f in factors)
     tier = risk_tier(score, evidence)
     return {
@@ -112,7 +116,7 @@ def _map_real_record(r: dict) -> dict:
         "history": [
             {
                 "at": NOW,
-                "text": f"Scored {score:.2f} → prioritized {tier} at Stage 1 (latest OASIS visit)",
+                "text": f"Scored {score:.2f} → prioritized {tier} at Stage 1 (de-identified seed)",
             }
         ],
     }
@@ -171,7 +175,7 @@ def _cohort_records(rows: list[dict]) -> list[dict]:
     except Exception as exc:  # noqa: BLE001 -- fall back to generator scores
         print(f"[storage] model batch rescore failed ({exc}); keeping generator scores")
 
-    # Fallback: generator's heuristic scores with whatever factors the file has
+    # Fallback: the de-identified seed's heuristic scores (no model artifact).
     try:
         if RISK_SCORES_PATH.exists():
             model_scores = json.loads(RISK_SCORES_PATH.read_text(encoding="utf-8"))
@@ -200,22 +204,15 @@ def _cohort_records(rows: list[dict]) -> list[dict]:
 
 
 def _file_records() -> tuple[list[dict], str]:
-    """Records from the real ADNI cohort, synthetic cohort, OASIS or mock."""
+    """Records from the real ADNI cohort, or the mock cohort when it is absent."""
     processed = PROJECT_ROOT / "data" / "processed"
     adni_path = processed / "adni_cohort.json"
-    # v2 = ADNI-1-proportioned cohort (800 subjects, all stages populated)
-    synthetic_path = processed / "synthetic_patients_v2.json"
-    if not synthetic_path.exists():
-        synthetic_path = processed / "synthetic_patients.json"
 
     mode = os.getenv("PATIENT_DATA", "auto").strip().lower()
-    # legacy flag: OASIS_DATA_MODE=real still means "use the OASIS cohort"
-    if mode == "auto" and os.getenv("OASIS_DATA_MODE", "").strip().lower() in {"real", "1", "true"}:
-        mode = "real"
-    if mode not in {"adni", "synthetic", "real", "mock"}:
+    if mode not in {"adni", "mock"}:
         mode = "auto"
 
-    def _load(path: Path, tag: str) -> Optional[list[dict]]:
+    def _load(path: Path) -> Optional[list[dict]]:
         if not path.exists():
             return None
         try:
@@ -225,29 +222,17 @@ def _file_records() -> tuple[list[dict], str]:
             return None
         if not isinstance(raw, list) or not raw:
             return None
-        return _cohort_records(raw) if tag in {"adni", "synthetic"} else None
+        return _cohort_records(raw)
 
-    order: list[tuple[Path, str]] = []
     if mode in {"auto", "adni"}:
-        order.append((adni_path, "adni"))
-    if mode in {"auto", "synthetic"}:
-        order.append((synthetic_path, "synthetic"))
-    for path, tag in order:
-        rows = _load(path, tag)
+        rows = _load(adni_path)
         if rows:
-            return rows, tag
+            return rows, "adni"
 
-    if mode == "real" and RISK_SCORES_PATH.exists():
-        pass  # fall through to the OASIS branch below
-    elif mode in {"mock"}:
-        return [copy.deepcopy(p) for p in MOCK_PATIENTS], "mock"
-
-    if RISK_SCORES_PATH.exists():
-        try:
-            raw = json.loads(RISK_SCORES_PATH.read_text(encoding="utf-8"))
-            return [_map_real_record(r) for r in raw], "real"
-        except Exception as exc:  # noqa: BLE001 -- bad/missing file should not crash the API
-            print(f"[storage] could not load {RISK_SCORES_PATH} ({exc}); falling back to mock data")
+    if mode == "adni":
+        print(f"[storage] PATIENT_DATA=adni requested but {adni_path} is missing; "
+              "run scripts/ingest_adni.py against the 'ADNI DATA' drop")
+        return [], "adni-missing"
 
     return [copy.deepcopy(p) for p in MOCK_PATIENTS], "mock"
 

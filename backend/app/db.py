@@ -270,10 +270,18 @@ def seed_if_empty(records: List[dict], source: str = "") -> None:
     """
     if not enabled():
         return
+    if not records:
+        # An empty cohort must NEVER reach the seeder. This is the guard that
+        # keeps a degraded boot (a missing cohort file, or the served-cohort
+        # filter dropping everything) from wiping a database that still holds
+        # the last good cohort — which is precisely the state a Railway deploy
+        # without the gitignored cohort file would produce on every restart.
+        print("[db] seed skipped: incoming cohort is empty — database left untouched")
+        return
     # cohort_version is a content digest of the cohort records (written by the
     # ingesters). Without it, re-ingesting data with corrected values would keep
     # serving the previous stage/score values out of Postgres forever.
-    version = str(records[0].get("cohort_version") or "") if records else ""
+    version = str(records[0].get("cohort_version") or "")
     fingerprint = f"{source}:{len(records)}:{version}:{_model_signature()}"
     with _session() as s:
         meta = s.query(AppMeta).filter_by(key="cohort_fingerprint").first()

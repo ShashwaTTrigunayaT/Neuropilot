@@ -1,8 +1,11 @@
-"""Placeholder cohort stubs used only when neither real OASIS pipeline outputs
-nor synthetic cohort data are present yet, so the API demos out of the box.
+"""Placeholder cohort stubs used only when the real ADNI cohort is absent, so
+the API demos out of the box instead of serving an empty dashboard.
 
-When data/processed/risk_scores.json exists it is preferred; when a synthetic
-cohort exists it is preferred; only when neither exist does this fallback kick in.
+This is a LAST-RESORT fallback: data/processed/adni_cohort.json (built by
+scripts/ingest_adni.py from the real ADNI drop) is always preferred, and the
+served-cohort filter drops anything without a measured biomarker result. These
+stubs never carry measurements, so they can never masquerade as real patients —
+but they are synthetic, and the UI labels the data source accordingly.
 """
 from __future__ import annotations
 

@@ -1,18 +1,15 @@
 #!/usr/bin/env python3
 """One-command pipeline runner (blueprint section 3, Scheduling row).
 
-Order of preference:
-
-  1. Real ADNI drop present in "ADNI DATA/" -> scripts/ingest_adni.py, then
-     scripts/train_model.py --data adni. Real clinician labels, all four
-     stages, no simulation.
-  2. Otherwise the OASIS-1 CSV path (download if missing), ingest + train.
+Trains on the REAL ADNI drop in "ADNI DATA/": scripts/ingest_adni.py, then
+scripts/train_model.py --data adni, then the progression forecaster off the same
+ingestion. Real clinician labels, all four stages, no simulation.
 
 Safe to put on a cron schedule (the pragmatic hackathon answer to "repeatable,
 auditable ingestion" -- Airflow is the production answer).
 
 Usage:
-    python scripts/run_pipeline.py [--model xgb|rf|auto] [--data adni|synthetic|real|auto]
+    python scripts/run_pipeline.py [--model xgb|rf|auto]
 
 Cron example (weekly, Mondays 02:00):
     0 2 * * 1 cd /path/to/project && python scripts/run_pipeline.py >> data/pipeline.log 2>&1
@@ -24,7 +21,6 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-RAW = ROOT / "data" / "raw" / "oasis_longitudinal.csv"
 ADNI_DIR = ROOT / "ADNI DATA"
 
 
@@ -48,40 +44,26 @@ def main() -> int:
 
     has_adni_tables = ADNI_DIR.exists() and any(ADNI_DIR.glob("*.csv"))
 
-    if data_mode == "adni" or (data_mode is None and has_adni_tables):
-        if not has_adni_tables:
-            print(f"[run_pipeline] --data adni requested but no CSVs in {ADNI_DIR}")
-            return 1
-        n = len(list(ADNI_DIR.glob("*.csv")))
-        print(f"[run_pipeline] real ADNI drop detected ({n} CSV tables) — real data path")
-        run(ROOT / "scripts" / "ingest_adni.py")
-        # pin --data adni unless the caller chose a mode explicitly
-        train_args = args if data_mode is not None else ["--data", "adni", *args]
-        run(ROOT / "scripts" / "train_model.py", *train_args)
-        # The 24-month progression forecaster trains off the same ingestion
-        # (data/processed/adni_progression.csv). Keeping it in the pipeline is
-        # what stops the served forecast from silently drifting behind a retrain.
-        run(ROOT / "scripts" / "train_progression_model.py", "--data", "adni")
-        served = "adni"
-    else:
-        print("[run_pipeline] no ADNI drop — falling back to the OASIS-1 path")
-        if not RAW.exists():
-            print("[run_pipeline] raw OASIS CSV missing — attempting download…")
-            try:
-                run(ROOT / "scripts" / "download_oasis.py")
-            except subprocess.CalledProcessError:
-                print(
-                    "Download failed. Place oasis_longitudinal.csv manually at:\n"
-                    f"  {RAW}\nThen re-run this script."
-                )
-                return 1
-            if not RAW.exists():
-                return 1
-        run(ROOT / "scripts" / "ingest.py")
-        run(ROOT / "scripts" / "train_model.py", *args)
-        print("[run_pipeline] skipping the progression forecaster: it needs the real "
-              "ADNI follow-up index (data/processed/adni_progression.csv)")
-        served = "real (OASIS)"
+    if data_mode not in (None, "adni"):
+        print(f"[run_pipeline] --data {data_mode} is no longer a supported mode; "
+              "the pipeline trains on the real ADNI drop only")
+        return 1
+    if not has_adni_tables:
+        print(f"[run_pipeline] no CSVs in {ADNI_DIR} — place the real ADNI drop there "
+              "(MMSE, plasma panel, FreeSurfer MRI, amyloid/tau PET, ADAS-Cog, APOE, DXSUM)")
+        return 1
+
+    n = len(list(ADNI_DIR.glob("*.csv")))
+    print(f"[run_pipeline] real ADNI drop detected ({n} CSV tables) — real data path")
+    run(ROOT / "scripts" / "ingest_adni.py")
+    # pin --data adni unless the caller chose a mode explicitly
+    train_args = args if data_mode is not None else ["--data", "adni", *args]
+    run(ROOT / "scripts" / "train_model.py", *train_args)
+    # The progression forecaster trains off the same ingestion
+    # (data/processed/adni_progression.csv). Keeping it in the pipeline is
+    # what stops the served forecast from silently drifting behind a retrain.
+    run(ROOT / "scripts" / "train_progression_model.py", "--data", "adni")
+    served = "adni"
 
     print(
         f"\n[done] pipeline finished. The API now serves the {served} cohort "
