@@ -166,12 +166,22 @@ export default function Interoperability({ patients = [], initialPatientId, onTo
   const doPush = () =>
     run('push', async () => {
       const receipt = await api.fhirPush(patientId);
+      const accepted = receipt.resourceType === 'Bundle' ? receipt.entry || [] : [];
+      const base = (overview.outbound_server?.base_url || '').replace(/\\/$/, '');
       setPushResult({
         ok: receipt.resourceType === 'Bundle',
         detail:
           receipt.resourceType === 'Bundle'
-            ? `${(receipt.entry || []).length} resource(s) accepted by the hospital server`
+            ? `${accepted.length} resource(s) accepted by the hospital server`
             : (receipt.issue || [{}])[0].diagnostics,
+        server: base,
+        resources: accepted.map((entry) => ({
+          status: entry.response?.status || 'accepted',
+          location: entry.response?.location || '',
+          url: entry.response?.location && base
+            ? `${base}/${entry.response.location.replace(/^\\//, '')}`
+            : '',
+        })),
       });
     });
 
@@ -503,7 +513,36 @@ export default function Interoperability({ patients = [], initialPatientId, onTo
                   : 'border-amber-500/35 bg-amber-500/10 text-amber-700 dark:text-amber-400'
               }`}
             >
-              {pushResult.detail}
+              <p>{pushResult.detail}</p>
+              {pushResult.ok && pushResult.resources?.length > 0 && (
+                <details className="mt-3">
+                  <summary className="cursor-pointer font-semibold">
+                    Remote FHIR receipt ({pushResult.resources.length} resources)
+                  </summary>
+                  <div className="mt-2 max-h-52 space-y-1 overflow-auto rounded-lg border border-emerald-500/20 bg-white/50 p-2 dark:bg-black/10">
+                    {pushResult.resources.map((resource, index) => (
+                      <div key={`${resource.location}-${index}`} className="flex items-center justify-between gap-2 text-[10px]">
+                        <span style={MONO} className="truncate">
+                          {resource.location || `resource-${index + 1}`}
+                        </span>
+                        <span className="flex shrink-0 items-center gap-2">
+                          <span>{resource.status}</span>
+                          {resource.url && (
+                            <a
+                              href={resource.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-bold underline"
+                            >
+                              Open
+                            </a>
+                          )}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
             </div>
           )}
         </div>
