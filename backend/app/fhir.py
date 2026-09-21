@@ -73,9 +73,23 @@ def _iso(dt: Optional[str]) -> Optional[str]:
     if not dt:
         return None
     try:
-        return datetime.strptime(dt, "%Y-%m-%d %H:%M").isoformat(timespec="seconds")
+        value = datetime.strptime(dt, "%Y-%m-%d %H:%M").isoformat(timespec="seconds")
     except ValueError:
-        return dt
+        value = dt
+    # FHIR instant/dateTime values with a time require a timezone. The internal
+    # audit timestamps are deliberately timezone-free local values, so publish
+    # them as UTC with an explicit Z rather than emitting invalid R4 JSON.
+    if "T" in value and not value.endswith("Z") and "+" not in value[10:]:
+        value += "Z"
+    return value
+
+
+def _instant(dt: Optional[str]) -> Optional[str]:
+    """Convert an internal timestamp to an R4 instant with timezone."""
+    value = _iso(dt)
+    if value and "T" not in value:
+        return f"{value}T00:00:00Z"
+    return value
 
 
 def _operation_outcome(severity: str, code: str, diagnostics: str) -> dict:
@@ -355,12 +369,14 @@ def risk_assessment_resource(record: dict) -> dict:
                                                 "code": _TIER_TO_V3.get(tier, "M")}]},
             }
         ],
-        "rationale": rationale,
+        # R4 has no `rationale` element. Carry the explanation in the standard
+        # note field and keep each SHAP driver as a typed extension.
         "note": [
             {
                 "text": (
-                    "NeuroPilot priority decision-support output -- allocation guidance "
-                    "only, never a diagnosis. Thresholds: high >0.7, medium >=0.4."
+                    f"{rationale}. NeuroPilot priority decision-support output -- "
+                    "allocation guidance only, never a diagnosis. Thresholds: "
+                    "high >0.7, medium >=0.4."
                 )
             }
         ],
@@ -383,10 +399,11 @@ def audit_event_resources(record: dict, limit: int = 20) -> list[dict]:
                 "id": f"audit-{pid}-{i}",
                 "type": {"system": NP_SYSTEM, "code": "neuropilot-event",
                          "display": "NeuroPilot decision event"},
-                "recorded": _iso(entry.get("at")),
+                "recorded": _instant(entry.get("at")),
                 "agent": [{"who": {"display": "NeuroPilot decision engine"}, "requestor": False}],
                 "source": {"observer": {"display": "NeuroPilot"}},
-                "outcome": {"system": AUDIT_OUTCOME, "code": "0", "display": "Success"},
+                # AuditEvent.outcome is an R4 code, not a Coding object.
+                "outcome": "0",
                 "entity": [
                     {
                         "what": {"reference": f"Patient/{pid}"},
@@ -431,7 +448,12 @@ def service_request_resources(record: dict) -> list[dict]:
                      "text": label},
             "subject": {"reference": f"Patient/{pid}"},
             "requester": {"display": "NeuroPilot autonomous triage loop"},
-            "reasonReference": [{"reference": f"RiskAssessment/risk-{pid}"}],
+            # FHIR R4's reasonReference is restricted to Condition, Observation,
+            # DiagnosticReport and DocumentReference; RiskAssessment is not valid
+            # there. supportingInfo accepts Reference(Any) and preserves the
+            # auditable link to NeuroPilot's decision-support output.
+            "supportingInfo": [{"reference": f"RiskAssessment/risk-{pid}"}],
+            "reasonCode": [{"text": "NeuroPilot priority decision-support order"}],
             "note": [{
                 "text": (
                     "Placed by NeuroPilot priority decision support. The patient's "
@@ -494,7 +516,12 @@ def diagnostic_report_resources(record: dict) -> list[dict]:
             if interpretation:
                 res["conclusionCode"] = interpretation
         if payload.get("note"):
-            res["note"] = [{"text": str(payload["note"])}]
+            # DiagnosticReport.note is not an R4 element. Preserve the source
+            # note as a namespaced extension instead of emitting invalid JSON.
+            res.setdefault("extension", []).append({
+                "url": "urn:neuropilot:fhir:report-note",
+                "valueString": str(payload["note"]),
+            })
         out.append(res)
     return out
 

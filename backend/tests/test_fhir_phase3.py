@@ -105,7 +105,7 @@ def test_placed_order_exports_as_active_service_request():
     assert order["code"]["coding"][0]["code"] == "panel-blood-plasma-ad"
     assert order["subject"]["reference"] == f"Patient/{pid}"
     assert order["authoredOn"], "an order must carry when it was placed"
-    assert order["reasonReference"][0]["reference"] == f"RiskAssessment/risk-{pid}"
+    assert order["supportingInfo"][0]["reference"] == f"RiskAssessment/risk-{pid}"
     # status filter is honoured server-side
     assert _orders(pid, "active") and _orders(pid, "completed") == []
 
