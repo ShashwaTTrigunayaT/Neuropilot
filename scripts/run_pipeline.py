@@ -10,6 +10,12 @@ auditable ingestion" -- Airflow is the production answer).
 
 Usage:
     python scripts/run_pipeline.py [--model xgb|rf|auto]
+    python scripts/run_pipeline.py --refresh-railway
+
+`--refresh-railway` is opt-in. After the local ADNI ingestion and both model
+training steps succeed, it opens a temporary Railway tunnel, refreshes the
+persistent database, retries resumable batches if needed, and closes the tunnel.
+It never runs during API startup or FHIR ingestion.
 
 Cron example (weekly, Mondays 02:00):
     0 2 * * 1 cd /path/to/project && python scripts/run_pipeline.py >> data/pipeline.log 2>&1
@@ -39,7 +45,9 @@ def _explicit_data_mode(argv: list[str]) -> str | None:
 
 
 def main() -> int:
-    args = sys.argv[1:]
+    raw_args = sys.argv[1:]
+    refresh_railway = "--refresh-railway" in raw_args
+    args = [a for a in raw_args if a != "--refresh-railway"]
     data_mode = _explicit_data_mode(args)
 
     has_adni_tables = ADNI_DIR.exists() and any(ADNI_DIR.glob("*.csv"))
@@ -70,9 +78,18 @@ def main() -> int:
         f"(check GET /health -> data_source/patients) and POST /patients/score uses "
         "artifacts/pipeline.joblib."
     )
+    if refresh_railway:
+        print("\n[run_pipeline] --refresh-railway requested; refreshing Railway now")
+        run(ROOT / "scripts" / "refresh_railway.py")
+    else:
+        print(
+            "\nRailway was not refreshed. Use --refresh-railway after a successful "
+            "retrain to update the deployed database."
+        )
+
     print(
         "\nTo schedule weekly: add this to crontab:\n"
-        '  0 2 * * 1 cd ' + str(ROOT) + ' && python scripts/run_pipeline.py >> data/pipeline.log 2>&1'
+        '  0 2 * * 1 cd ' + str(ROOT) + ' && python scripts/run_pipeline.py --refresh-railway >> data/pipeline.log 2>&1'
     )
     return 0
 

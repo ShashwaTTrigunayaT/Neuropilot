@@ -85,6 +85,14 @@ def main() -> int:
         description="Seed a deployment database from the local real-ADNI cohort."
     )
     parser.add_argument(
+        "--chunk-size",
+        type=int,
+        default=db.SEED_CHUNK_PATIENTS,
+        help=f"patients per committed batch (default {db.SEED_CHUNK_PATIENTS}). Lower "
+             "it if the link to the database is slow or unstable; seeding is "
+             "resumable, so a smaller batch just means less re-sent after a drop",
+    )
+    parser.add_argument(
         "--allow-local",
         action="store_true",
         help="permit a local sqlite target (this script targets a DEPLOYMENT database; "
@@ -142,29 +150,33 @@ def main() -> int:
         return 1
 
     print(f"[seed_db] local cohort file: {len(records)} patient(s) with a real result")
-    print("[seed_db] writing in one transaction (patients + cognitive, lab, factor "
-          "and history rows) -- a minute or two over a public connection is normal")
+    print("[seed_db] writing in batches (patients + cognitive, lab, factor and history "
+          "rows) -- a minute or two over a tunnel is normal; the progress line shows "
+          "how far it got, and re-running is safe")
 
     # A connection failure is the most likely outcome here (wrong URL, database
     # asleep, network), and a raw SQLAlchemy traceback would bury the one line
     # that matters.
     try:
         db.init_db()
-        before = len(db.load_all() or [])
+        # Do not call load_all() over the Railway tunnel: it assembles every
+        # patient's child rows with N+1 queries and can drop the tunnel before
+        # the actual seed starts. Counts are sufficient for this operator check.
+        before = db.count_patients()
         # force=True: an operator asked for this explicitly, so the command is
         # idempotent and also usable as the post-retrain refresh.
-        db.seed_if_empty(records, source, force=True)
-        after = db.load_all() or []
+        db.seed_if_empty(records, source, force=True, chunk_size=max(1, args.chunk_size))
+        after = db.count_patients()
     except Exception as exc:  # noqa: BLE001 -- operator command: report, do not trace
         print(f"[seed_db] could not reach or write the database ({type(exc).__name__}): {exc}")
         print("          Check DATABASE_URL (Railway -> Postgres -> Connect -> public URL)"
               " and that the database is running.")
         return 1
 
-    print(f"[seed_db] done: {before} -> {len(after)} patient(s) stored")
-    if len(after) != len(records):
+    print(f"[seed_db] done: {before} -> {after} patient(s) stored")
+    if after != len(records):
         print(
-            f"[seed_db] WARNING: the database holds {len(after)} patients but the file\n"
+            f"[seed_db] WARNING: the database holds {after} patients but the file\n"
             f"          has {len(records)} -- check the column widths and foreign keys."
         )
         return 1

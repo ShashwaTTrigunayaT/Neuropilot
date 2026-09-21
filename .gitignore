@@ -62,6 +62,7 @@ env/
 
 # ---- Logs, DB, coverage ----
 *.log
+.seed_attempt.log
 data/pipeline.log
 *.sqlite3
 *.db

@@ -360,6 +360,8 @@ def seed_if_empty(records: List[dict], source: str = "", force: bool = False,
     # serving the previous stage/score values out of Postgres forever.
     version = str(records[0].get("cohort_version") or "")
     fingerprint = f"{source}:{len(records)}:{version}:{_model_signature()}"
+    resume_partial = False
+    existing_ids: set[str] = set()
     with _session() as s:
         meta = s.query(AppMeta).filter_by(key="cohort_fingerprint").first()
         current = meta.value if meta else None
@@ -367,6 +369,18 @@ def seed_if_empty(records: List[dict], source: str = "", force: bool = False,
         stored_is_real = bool(current) and not str(current).startswith(
             f"{STUB_DATA_SOURCE}:"
         )
+        incoming_ids = {str(r["id"]) for r in records}
+        if count and count < len(records):
+            # A network drop can occur after several committed batches. If the
+            # surviving IDs are all from this incoming cohort, continue that
+            # partial seed rather than deleting and resending them. This must
+            # also work when the fingerprint was written by a previous attempt.
+            existing_ids = {
+                str(row[0]) for row in s.query(Patient.id).all()
+            }
+            resume_partial = bool(existing_ids) and existing_ids <= incoming_ids
+            if resume_partial:
+                print(f"[db] resuming partial seed: {count}/{len(records)} patients already stored")
         if count > 0 and source == STUB_DATA_SOURCE and stored_is_real:
             print(
                 f"[db] refusing to re-seed: incoming cohort is placeholder stubs and "
@@ -376,7 +390,7 @@ def seed_if_empty(records: List[dict], source: str = "", force: bool = False,
             return
         if count > 0 and current == fingerprint and not force:
             return
-        if count > 0:
+        if count > 0 and not resume_partial:
             reason = "forced re-seed" if force else "cohort changed"
             print(f"[db] {reason} ({current or 'unknown'}) — "
                   f"{count} → {len(records)} patients")
@@ -394,17 +408,19 @@ def seed_if_empty(records: List[dict], source: str = "", force: bool = False,
     # Batched writes, parents before children (Postgres enforces the FKs). A
     # single upsert per batch rather than one flush per row keeps the statement
     # count low; the batches keep each statement small.
+    pending = [r for r in records if str(r["id"]) not in existing_ids] if resume_partial else records
     total = len(records)
-    print(f"[db] seeding {total} patient(s) in batches of {chunk_size}")
-    for start in range(0, total, chunk_size):
-        chunk = records[start:start + chunk_size]
+    print(f"[db] seeding {len(pending)} new patient(s) ({total} total) in batches of {chunk_size}")
+    for start in range(0, len(pending), chunk_size):
+        chunk = pending[start:start + chunk_size]
         with _session() as s:
             s.add_all([_make_patient(r) for r in chunk])
             s.flush()
             for r in chunk:
                 _insert_children(s, r)
             s.commit()
-        print(f"[db]   {min(start + chunk_size, total)}/{total}")
+        completed = len(existing_ids) + min(start + chunk_size, len(pending))
+        print(f"[db]   {completed}/{total}")
 
     # The fingerprint goes last on purpose: a partially written cohort must not
     # look like a completed seed, so the next run re-seeds instead of serving it.
@@ -474,6 +490,19 @@ def stored_cohort_source() -> Optional[str]:
     except Exception as exc:  # noqa: BLE001 -- diagnostics must never break startup
         print(f"[db] could not read the stored cohort source ({type(exc).__name__})")
         return None
+
+
+def count_patients() -> int:
+    """Return the patient row count without assembling child records.
+
+    Deployment seeding uses this for verification. Calling load_all() over a
+    Railway tunnel performs one child-query set per patient and can exhaust or
+    reset the tunnel even when the seed itself completed successfully.
+    """
+    if not enabled():
+        return 0
+    with _session() as s:
+        return int(s.query(Patient).count())
 
 
 def load_all() -> Optional[List[dict]]:
