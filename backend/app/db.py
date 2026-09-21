@@ -161,7 +161,13 @@ def _connect() -> None:
         if url.startswith("sqlite"):
             _engine = create_engine(url, connect_args={"check_same_thread": False})
         else:
-            _engine = create_engine(url, pool_pre_ping=True)
+            # connect_timeout matters for the seeding workflow: the target is a
+            # managed database reached over the public internet (Railway's TCP
+            # proxy), where an unreachable host otherwise blocks for the libpq
+            # default of "forever" and looks like a hang rather than an error.
+            _engine = create_engine(
+                url, pool_pre_ping=True, connect_args={"connect_timeout": 15}
+            )
         _Session = sessionmaker(bind=_engine)
 
 
@@ -408,6 +414,25 @@ def _assemble(patient: Patient) -> dict:
         except Exception as exc:  # noqa: BLE001 -- corrupt payload must not break reads
             print(f"[db] could not parse extra payload for {pid} ({exc})")
     return record
+
+
+def stored_cohort_source() -> Optional[str]:
+    """The cohort source recorded in the stored fingerprint (`adni`, `mock`...).
+
+    Read rather than assumed. A database seeded with the placeholder stubs must
+    never be described -- in `/health` or in the UI's cohort label -- as the real
+    ADNI cohort, and a deployment that did exactly that is what prompted this.
+    """
+    if not enabled():
+        return None
+    try:
+        with _session() as s:
+            meta = s.query(AppMeta).filter_by(key="cohort_fingerprint").first()
+        value = meta.value if meta else None
+        return value.split(":", 1)[0] if value and ":" in value else None
+    except Exception as exc:  # noqa: BLE001 -- diagnostics must never break startup
+        print(f"[db] could not read the stored cohort source ({type(exc).__name__})")
+        return None
 
 
 def load_all() -> Optional[List[dict]]:

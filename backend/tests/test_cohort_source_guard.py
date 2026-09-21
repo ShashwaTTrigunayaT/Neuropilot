@@ -116,6 +116,32 @@ def test_force_reseeds_even_when_the_fingerprint_matches(sqlite_store):
     assert (db.load_all() or [])[0]["score"] == pytest.approx(0.90)
 
 
+def test_stub_cohort_in_the_database_is_never_served(sqlite_store, monkeypatch):
+    """A deployment that once wrote the stubs into Postgres must not keep serving
+    them: four carry illustrative lab values, so they pass the cohort filter."""
+    stubs = [_record("PTID-1102", score=0.9), _record("PTID-1190", score=0.8)]
+    db.seed_if_empty(stubs, STUB_DATA_SOURCE)
+    assert db.stored_cohort_source() == STUB_DATA_SOURCE
+
+    monkeypatch.setattr(storage, "load_cohort_file", lambda: ([], MISSING_DATA_SOURCE))
+    patients, source = storage.load_patients()
+
+    assert patients == {}, "placeholder stubs were served as if they were patients"
+    assert source == "stub-cohort"
+
+
+def test_stub_cohort_in_the_database_is_repaired_from_a_real_file(sqlite_store, monkeypatch):
+    db.seed_if_empty([_record("PTID-1102")], STUB_DATA_SOURCE)
+    fresh = [_record("ADNI-0001"), _record("ADNI-0002")]
+    monkeypatch.setattr(storage, "load_cohort_file", lambda: (fresh, "adni"))
+
+    patients, source = storage.load_patients()
+
+    assert sorted(patients) == ["ADNI-0001", "ADNI-0002"]
+    assert source == "adni+sqlite", "the label must come from the stored fingerprint"
+    assert db.stored_cohort_source() == "adni"
+
+
 def test_serves_a_seeded_database_when_the_cohort_file_is_absent(sqlite_store, monkeypatch):
     """A container has no cohort file; the database must carry the cohort."""
     db.seed_if_empty([_record("ADNI-0001"), _record("ADNI-0002")], "adni")
@@ -124,7 +150,9 @@ def test_serves_a_seeded_database_when_the_cohort_file_is_absent(sqlite_store, m
     patients, source = storage.load_patients()
 
     assert sorted(patients) == ["ADNI-0001", "ADNI-0002"]
-    assert source == "postgres+sqlite", "the source must name what actually served"
+    # The source describes the STORED cohort (read from the fingerprint), so the
+    # UI can say "ADNI cohort - database" rather than guessing from the file path.
+    assert source == "adni+sqlite"
 
 
 def test_stubs_in_the_file_do_not_mislabel_a_real_database(sqlite_store, monkeypatch):

@@ -28,15 +28,20 @@ import { MONO } from './widgets.jsx';
 /*  the first thing to check when a deployment looks wrong: `postgres`   */
 /*  means the container had no cohort file and read the seeded database, */
 /*  `mock` means the placeholder stubs are in play. Rendered verbatim     */
-/*  before, with a hardcoded fallback that still said OASIS-1 — a cohort */
+/*  before, with a hardcoded fallback that still said OASIS-1, a cohort  */
 /*  that no longer exists anywhere in the system.                        */
 /* ------------------------------------------------------------------ */
 function cohortLabel(dataSource) {
   if (!dataSource) return 'loading\u2026';
-  const db = dataSource.includes('postgres') || dataSource.includes('sqlite');
+  // Refusal states come first: the backend serves 0 patients rather than pass
+  // placeholder stubs off as a cohort, and the label must not contradict it.
+  if (dataSource.startsWith('stub-cohort')) return 'placeholder stubs \u2014 not served';
+  if (dataSource.startsWith('unusable-cohort')) return 'no usable cohort \u2014 see server log';
   if (dataSource.startsWith('mock')) return 'placeholder stubs (no real cohort)';
-  if (db) return 'ADNI cohort \u00b7 database';
   if (dataSource.startsWith('adni-missing')) return 'ADNI cohort file missing';
+  if (dataSource.includes('postgres') || dataSource.includes('sqlite')) {
+    return 'ADNI cohort \u00b7 database';
+  }
   return 'ADNI cohort \u00b7 local file';
 }
 

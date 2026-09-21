@@ -311,43 +311,42 @@ def load_patients() -> tuple[dict[str, dict], str]:
                 print("[storage] no real cohort file; placeholder stubs are only used "
                       "if the database has nothing to serve")
             loaded = db.load_all() or []
-            served = _only_patients_with_real_results(loaded)
-            if not served and loaded:
-                # The database HAS rows but none survived the cohort filter: they
-                # were seeded by an older ingester whose slot payloads the current
-                # filter cannot read, or left behind by a degraded boot.
-                if records and not stubs:
-                    # A real cohort file is present, so repair from it -- the file
-                    # is the source of truth for the derived view.
+            usable = _only_patients_with_real_results(loaded)
+            stored = db.stored_cohort_source()
+            # A real cohort file is the only thing that can repair a bad store.
+            repairable = bool(records) and not stubs
+
+            if stored == STUB_DATA_SOURCE or (loaded and not usable):
+                # Two states, one fix. Either the stored cohort is the placeholder
+                # stubs (an earlier deploy wrote them into the database before the
+                # guard existed -- they carry illustrative lab values, so they can
+                # pass the cohort filter and be served as if they were patients),
+                # or its rows cannot pass the filter at all. A database is the
+                # store of record for real workups, so neither is served.
+                if repairable:
                     print(
-                        f"[storage] stored cohort is unusable ({len(loaded)} row(s), none "
-                        f"with a real result) -- re-seeding from the {source} cohort file"
+                        f"[storage] stored cohort is unusable (source={stored or 'unknown'}, "
+                        f"{len(loaded)} row(s)) -- re-seeding from the {source} cohort file"
                     )
                     db.seed_if_empty(records, source, force=True)
-                    repaired = _only_patients_with_real_results(db.load_all() or [])
-                    served = repaired or records
+                    usable = _only_patients_with_real_results(db.load_all() or []) or records
                 else:
-                    # Nothing here can repair it: the cohort file is absent (the
-                    # normal state in a container) or holds only stubs, and stubs
-                    # are not a cohort. Serving zero patients silently would look
-                    # like the app is simply empty, so name the cause and the one
-                    # command that fixes it.
                     print(
                         f"[storage] serving 0 patients: the database holds {len(loaded)} "
-                        "row(s) but none with a real blood/MRI/PET result, and no real "
+                        f"row(s) sourced from {stored or 'an unknown cohort'} and no real "
                         "cohort file is present to repair it from.\n"
                         "          Seed the database from a machine that holds the cohort:\n"
                         "            DATABASE_URL='<the deployment database>' "
                         "python scripts/seed_db.py"
                     )
-                    return {}, "unusable-cohort"
-            if served:
+                    return {}, "stub-cohort" if stored == STUB_DATA_SOURCE else "unusable-cohort"
+            if usable:
                 db_name = "sqlite" if (db.get_database_url() or "").startswith("sqlite") else "postgres"
-                # `origin` describes the served rows, not the file: when the file
-                # was absent (or held stubs) and the database supplied the cohort,
-                # saying "adni-missing+postgres" would misreport a working deploy.
-                origin = source if (records and not stubs) else "postgres"
-                return {r["id"]: r for r in served}, f"{origin}+{db_name}"
+                # `origin` is read from the STORED fingerprint, not assumed: a
+                # database seeded with stubs must never be reported (or labelled
+                # in the UI) as the real ADNI cohort.
+                origin = db.stored_cohort_source() or "postgres"
+                return {r["id"]: r for r in usable}, f"{origin}+{db_name}"
         except Exception as exc:  # noqa: BLE001 -- DB down should not crash the API
             print(f"[storage] Database unavailable ({exc}); using in-memory store")
     else:

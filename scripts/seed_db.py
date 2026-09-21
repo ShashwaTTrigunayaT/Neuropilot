@@ -80,6 +80,8 @@ def main() -> int:
         return 1
 
     print(f"[seed_db] local cohort file: {len(records)} patient(s) with a real result")
+    print("[seed_db] writing in one transaction (patients + cognitive, lab, factor "
+          "and history rows) -- a minute or two over a public connection is normal")
 
     # A connection failure is the most likely outcome here (wrong URL, database
     # asleep, network), and a raw SQLAlchemy traceback would bury the one line

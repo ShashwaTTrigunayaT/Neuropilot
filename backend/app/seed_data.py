@@ -1,11 +1,20 @@
-"""Placeholder cohort stubs used only when the real ADNI cohort is absent, so
-the API demos out of the box instead of serving an empty dashboard.
+"""Placeholder cohort stubs, used only when no real cohort can be served.
 
-This is a LAST-RESORT fallback: data/processed/adni_cohort.json (built by
-scripts/ingest_adni.py from the real ADNI drop) is always preferred, and the
-served-cohort filter drops anything without a measured biomarker result. These
-stubs never carry measurements, so they can never masquerade as real patients —
-but they are synthetic, and the UI labels the data source accordingly.
+This is a LAST-RESORT fallback for a local demo: the real ADNI cohort
+(data/processed/adni_cohort.json, from scripts/ingest_adni.py) or a database
+seeded from it is always preferred.
+
+WHAT THESE ARE, HONESTLY: 8 invented subjects. Four of them carry illustrative
+lab values (so the blood/MRI panels have something to render); the other four
+carry none and are dropped by the served-cohort filter. The values are fabricated
+placeholders, NOT measurements, and the four that survive the filter must never
+be mistaken for patients -- which is why a cohort whose stored fingerprint says
+`mock` is refused from a database altogether (storage.load_patients), why
+`/health` reports the source it actually served, and why the UI's cohort label
+says "placeholder stubs" rather than naming a real cohort.
+
+A deployment must set PATIENT_DATA=adni: a missing real cohort is then reported
+instead of being answered with these.
 """
 from __future__ import annotations
 
