@@ -4,6 +4,9 @@ pydantic>=2.7
 
 # FHIR push/probe, SMART discovery, ABDM consent-flow calls + mock gateway
 httpx>=0.27
+# Fidelius (ABDM record encryption): HKDF + AES-256-GCM, and the curve
+# arithmetic in fidelius.py is built on cryptography's hazmat primitives.
+cryptography>=42
 
 # In-process model serving (artifacts/pipeline.joblib)
 joblib>=1.3
