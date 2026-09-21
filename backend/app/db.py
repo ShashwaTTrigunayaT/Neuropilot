@@ -134,6 +134,14 @@ def _resolve_sqlite_url(url: str) -> str:
 
 
 def get_database_url() -> Optional[str]:
+    # `PG*` variables and a `.env` DATABASE_URL can disagree, and the operator's
+    # explicit intent must win. A local `.env` typically points at sqlite for
+    # convenience; passing PGHOST/PGPORT/PGUSER/PGPASSWORD/PGDATABASE to seed a
+    # deployment must therefore override a DATABASE_URL that came from that file,
+    # while a DATABASE_URL exported in the shell still takes precedence.
+    from .config import FROM_ENV_FILE
+
+    pg_connection = bool(os.getenv("PGHOST") and os.getenv("PGDATABASE"))
     url = (
         os.getenv("DATABASE_URL")
         or os.getenv("DATABASE_PRIVATE_URL")
@@ -141,12 +149,21 @@ def get_database_url() -> Optional[str]:
         or os.getenv("POSTGRES_URL")
         or os.getenv("POSTGRESQL_URL")
     )
-    if not url and os.getenv("PGHOST") and os.getenv("PGDATABASE"):
-        user = os.getenv("PGUSER", "postgres")
-        pw = os.getenv("PGPASSWORD", "")
+    if url and pg_connection and "DATABASE_URL" in FROM_ENV_FILE:
+        url = None
+    if not url and pg_connection:
+        # The PG* variables a managed Postgres hands out (Railway sets exactly
+        # these). Accepting them means a connection can be described without
+        # hand-assembling a URL -- and the credentials MUST be percent-encoded:
+        # a generated password containing '@', ':' or '/' silently turns any
+        # naive f-string into a URL that points somewhere else entirely.
+        from urllib.parse import quote
+
+        user = quote(os.getenv("PGUSER", "postgres"), safe="")
+        pw = quote(os.getenv("PGPASSWORD", ""), safe="")
         host = os.getenv("PGHOST")
         port = os.getenv("PGPORT", "5432")
-        db = os.getenv("PGDATABASE")
+        db = quote(os.getenv("PGDATABASE"), safe="")
         url = f"postgresql://{user}:{pw}@{host}:{port}/{db}"
 
     if url and url.startswith("postgres://"):
@@ -293,7 +310,18 @@ def _model_signature() -> str:
         return "nomodel"
 
 
-def seed_if_empty(records: List[dict], source: str = "", force: bool = False) -> None:
+# Patients written per committed batch. Seeding a deployment means writing a real
+# cohort (~2.5k patients + ~10x that in child rows) over a network hop, and a
+# single transaction carrying all of it does not survive the trip: pushing a
+# 100k-character multi-row INSERT through Railway's SSH tunnel produced
+# `SSL error: unexpected eof while reading` mid-statement. Chunking keeps every
+# statement small, and per-chunk commits mean a dropped connection costs one
+# batch instead of the whole cohort.
+SEED_CHUNK_PATIENTS = 150
+
+
+def seed_if_empty(records: List[dict], source: str = "", force: bool = False,
+                  chunk_size: int = SEED_CHUNK_PATIENTS) -> None:
     """Seed the database once per cohort identity.
 
     A DB seeded with one cohort (e.g. the 800-subject synthetic set) must NOT
@@ -361,14 +389,27 @@ def seed_if_empty(records: List[dict], source: str = "", force: bool = False) ->
                 s.query(model).delete()
             s.query(Patient).delete()
             s.flush()
-        # Parents first, then children, in ONE transaction: Postgres rejects
-        # child rows whose parent is not yet inserted, and a midway failure must
-        # not leave a half-seeded database behind. add_all (rather than add in a
-        # loop) keeps this to batched inserts instead of per-row flushes.
-        s.add_all([_make_patient(r) for r in records])
-        s.flush()
-        for r in records:
-            _insert_children(s, r)
+            s.commit()
+
+    # Batched writes, parents before children (Postgres enforces the FKs). A
+    # single upsert per batch rather than one flush per row keeps the statement
+    # count low; the batches keep each statement small.
+    total = len(records)
+    print(f"[db] seeding {total} patient(s) in batches of {chunk_size}")
+    for start in range(0, total, chunk_size):
+        chunk = records[start:start + chunk_size]
+        with _session() as s:
+            s.add_all([_make_patient(r) for r in chunk])
+            s.flush()
+            for r in chunk:
+                _insert_children(s, r)
+            s.commit()
+        print(f"[db]   {min(start + chunk_size, total)}/{total}")
+
+    # The fingerprint goes last on purpose: a partially written cohort must not
+    # look like a completed seed, so the next run re-seeds instead of serving it.
+    with _session() as s:
+        meta = s.query(AppMeta).filter_by(key="cohort_fingerprint").first()
         if meta is None:
             meta = AppMeta(key="cohort_fingerprint")
             s.add(meta)

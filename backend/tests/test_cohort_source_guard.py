@@ -73,6 +73,60 @@ def test_relative_sqlite_path_is_pinned_to_the_project_root(monkeypatch, tmp_pat
     assert db.get_database_url() == "postgresql://u:p@host:5432/db"
 
 
+def test_pg_env_vars_build_a_connection_string(monkeypatch):
+    """A managed Postgres describes itself with PG* vars, not a URL.
+
+    Seeding a deployment is exactly this case: Railway's Postgres exposes
+    PGHOST/PGPORT/PGUSER/PGPASSWORD/PGDATABASE, and a generated password
+    containing URL-significant characters must be encoded rather than pasted.
+    """
+    for key in ("DATABASE_URL", "DATABASE_PRIVATE_URL", "DATABASE_PUBLIC_URL",
+                "POSTGRES_URL", "POSTGRESQL_URL"):
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("PGHOST", "turntable.proxy.rlwy.net")
+    monkeypatch.setenv("PGPORT", "41234")
+    monkeypatch.setenv("PGUSER", "postgres")
+    monkeypatch.setenv("PGPASSWORD", "p@ss:word/with#chars")
+    monkeypatch.setenv("PGDATABASE", "railway")
+
+    url = db.get_database_url()
+
+    assert url == (
+        "postgresql://postgres:p%40ss%3Aword%2Fwith%23chars"
+        "@turntable.proxy.rlwy.net:41234/railway"
+    )
+
+
+def test_pg_vars_override_a_dotenv_database_url(monkeypatch):
+    """A `.env` convenience URL must not outrank connection details typed on the
+    command line -- otherwise seeding a deployment silently hits the local store."""
+    from app import config
+
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///./neuropilot.db")
+    monkeypatch.setattr(config, "FROM_ENV_FILE", {"DATABASE_URL"}, raising=False)
+    monkeypatch.setenv("PGHOST", "proxy.example.net")
+    monkeypatch.setenv("PGPORT", "41234")
+    monkeypatch.setenv("PGUSER", "postgres")
+    monkeypatch.setenv("PGPASSWORD", "pw")
+    monkeypatch.setenv("PGDATABASE", "railway")
+
+    assert db.get_database_url() == (
+        "postgresql://postgres:pw@proxy.example.net:41234/railway"
+    )
+
+
+def test_exported_database_url_still_wins_over_pg_vars(monkeypatch):
+    """An explicit shell DATABASE_URL keeps precedence, env file or not."""
+    from app import config
+
+    monkeypatch.setattr(config, "FROM_ENV_FILE", set(), raising=False)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@exported:5432/db")
+    monkeypatch.setenv("PGHOST", "proxy.example.net")
+    monkeypatch.setenv("PGDATABASE", "railway")
+
+    assert db.get_database_url() == "postgresql://u:p@exported:5432/db"
+
+
 def test_stub_cohort_cannot_replace_a_stored_real_cohort(sqlite_store):
     """The failure this guards: a container with no cohort file seeds stubs."""
     real = [_record("ADNI-0001"), _record("ADNI-0002"), _record("ADNI-0003")]

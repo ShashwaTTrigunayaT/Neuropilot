@@ -14,7 +14,13 @@ from pathlib import Path
 _project_root_env = os.getenv("PROJECT_ROOT", "").strip()
 PROJECT_ROOT = Path(_project_root_env) if _project_root_env else Path(__file__).resolve().parents[2]
 
-# Auto-load .env from PROJECT_ROOT if it exists
+# Auto-load .env from PROJECT_ROOT if it exists.
+#
+# FROM_ENV_FILE records which keys only exist because of that file (a real
+# environment variable always wins, via setdefault). It matters for one decision:
+# a `.env` convenience value must not outrank connection details the operator
+# typed on the command line. See db.get_database_url().
+FROM_ENV_FILE: set[str] = set()
 _env_file = PROJECT_ROOT / ".env"
 if _env_file.exists():
     try:
@@ -25,7 +31,10 @@ if _env_file.exists():
                 v = v.strip().strip('"').strip("'")
                 if not v:  # empty value = unset, never shadow the code default
                     continue
-                os.environ.setdefault(k.strip(), v)
+                key = k.strip()
+                if key not in os.environ:
+                    FROM_ENV_FILE.add(key)
+                os.environ.setdefault(key, v)
     except Exception:
         pass
 

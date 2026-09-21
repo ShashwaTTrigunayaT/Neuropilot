@@ -34,6 +34,7 @@ Safety
 """
 from __future__ import annotations
 
+import argparse
 import sys
 from pathlib import Path
 
@@ -52,7 +53,46 @@ def _redacted(url: str) -> str:
     return f"{scheme or 'postgresql'}://***@{rest.split('@', 1)[1]}"
 
 
+def _preflight(url: str) -> str | None:
+    """Explain a URL that cannot possibly work from this machine.
+
+    Railway hands out two connection strings and they look alike. The private one
+    is the right value for the deployed service, and guaranteed to fail here:
+    `RAILWAY_PRIVATE_DOMAIN` resolves to `*.railway.internal`, which only exists
+    inside the Railway project. The template form never worked either, because
+    `${{...}}` is substituted by Railway, not by a shell.
+    """
+    if "${" in url:
+        return (
+            "this is a Railway template REFERENCE, not a connection string.\n"
+            "          Railway substitutes ${{...}} inside its own services; a shell passes\n"
+            "          it through literally, so it can never resolve. Copy the RESOLVED\n"
+            "          value instead."
+        )
+    if "railway.internal" in url or "RAILWAY_PRIVATE_DOMAIN" in url:
+        return (
+            "this is the PRIVATE domain, which resolves only inside your Railway\n"
+            "          project -- your machine cannot reach it, and neither can any client\n"
+            "          outside Railway. Keep it for the deployed service; for seeding use\n"
+            "          the PUBLIC one: Postgres service -> Settings -> Public Networking ->\n"
+            "          TCP Proxy (then read DATABASE_PUBLIC_URL on the Variables tab)."
+        )
+    return None
+
+
 def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Seed a deployment database from the local real-ADNI cohort."
+    )
+    parser.add_argument(
+        "--allow-local",
+        action="store_true",
+        help="permit a local sqlite target (this script targets a DEPLOYMENT database; "
+             "without this flag a sqlite URL is refused, so a stray .env DATABASE_URL "
+             "cannot silently re-seed your local demo store)",
+    )
+    args = parser.parse_args()
+
     if not db.enabled():
         print(
             "[seed_db] no DATABASE_URL is set, so there is nothing to seed.\n"
@@ -62,7 +102,29 @@ def main() -> int:
         )
         return 1
 
-    print(f"[seed_db] target database: {_redacted(db.get_database_url() or '')}")
+    url = db.get_database_url() or ""
+    problem = _preflight(url)
+    if problem:
+        print(f"[seed_db] refusing to run: {problem}")
+        return 1
+
+    print(f"[seed_db] target database: {_redacted(url)}")
+
+    # A deployment database is reached over the network. A local sqlite file is
+    # almost always an accident here: .env supplies DATABASE_URL automatically, so
+    # `python scripts/seed_db.py` with no variables set would re-seed the LOCAL
+    # demo store instead of the deployment. Require an explicit opt-in.
+    if url.startswith("sqlite") and not args.allow_local:
+        print(
+            "[seed_db] refusing to run: that is a LOCAL sqlite file, which is not a\n"
+            "          deployment database. This happens when .env supplies\n"
+            "          DATABASE_URL and no connection details were passed to this\n"
+            "          command. Pass a deployment database (or --allow-local to seed\n"
+            "          the local store on purpose):\n"
+            "            PGHOST=<proxy host> PGPORT=<proxy port> PGUSER=<user> \\\n"
+            "              PGPASSWORD=<password> PGDATABASE=<db> python scripts/seed_db.py"
+        )
+        return 1
 
     records, source = storage.load_cohort_file()
     if source == MISSING_DATA_SOURCE or not records:
