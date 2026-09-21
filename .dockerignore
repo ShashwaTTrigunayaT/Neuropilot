@@ -1,0 +1,58 @@
+# Build context filter for the production image (Dockerfile).
+#
+# Two reasons this file exists:
+#
+#  1. node_modules must NEVER reach the builder. The frontend stage runs `npm ci`
+#     for Linux inside the image and then `COPY . .`; a host node_modules
+#     directory (with platform-specific binaries from another OS) would be copied
+#     straight over the correct install and break the build.
+#
+#  2. Restricted data must not be uploaded to a build service. The raw ADNI
+#     tables are access-controlled under a Data Use Agreement, and the image does
+#     not need them -- training happens locally (scripts/run_pipeline.py).
+#
+# The derived cohort in data/processed IS included so that a snapshot deploy
+# (`railway up`, which uploads the working tree) still carries the cohort. To
+# keep the dataset off the build service entirely, seed Postgres once with
+# scripts/seed_db.py and uncomment the adni_cohort.json line below.
+
+.git
+.github
+.gitignore
+node_modules
+dist
+dist-ssr
+.vite
+
+# Restricted raw data: never uploaded
+ADNI DATA
+ADNI_DATA
+adni_*
+data/raw
+# data/processed/adni_cohort.json
+
+# Python / tooling scratch
+__pycache__
+**/__pycache__
+*.py[cod]
+*.egg-info
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.venv
+venv
+env
+coverage
+.nyc_output
+data/pipeline.log
+*.log
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Docs / brand renders not needed at runtime
+brand_assets
+architecture_pages
+_preview_*.png

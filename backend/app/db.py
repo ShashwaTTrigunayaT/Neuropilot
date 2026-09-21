@@ -25,6 +25,10 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import declarative_base, sessionmaker
 
+# config imports nothing from the app, so this cannot cycle. Needed at module
+# level because the stub-vs-real rule is enforced inside seed_if_empty.
+from .config import STUB_DATA_SOURCE
+
 DATABASE_URL = os.getenv("DATABASE_URL")
 if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
@@ -105,6 +109,30 @@ _engine = None
 _Session = None
 
 
+def _resolve_sqlite_url(url: str) -> str:
+    """Pin a relative sqlite file to PROJECT_ROOT.
+
+    Every other path in this project resolves against PROJECT_ROOT (config.py),
+    but SQLAlchemy resolves `sqlite:///./neuropilot.db` against the process CWD.
+    So `uvicorn app.main:app` (run from backend/) and `uvicorn
+    backend.app.main:app` (run from the root -- exactly what the Dockerfile and
+    the documented start command do) silently address two different databases:
+    one with the history, one empty. Observed for real: 7.7 MB of workup history
+    in backend/neuropilot.db, an empty file at the root.
+
+    Absolute paths and in-memory URLs pass through unchanged.
+    """
+    prefix = "sqlite:///"
+    if not url.startswith(prefix):
+        return url
+    path = url[len(prefix):]
+    if not path or path.startswith(":memory:") or path.startswith("/"):
+        return url
+    from .config import PROJECT_ROOT
+
+    return prefix + (PROJECT_ROOT / path).resolve().as_posix()
+
+
 def get_database_url() -> Optional[str]:
     url = (
         os.getenv("DATABASE_URL")
@@ -123,7 +151,7 @@ def get_database_url() -> Optional[str]:
 
     if url and url.startswith("postgres://"):
         url = url.replace("postgres://", "postgresql://", 1)
-    return url
+    return _resolve_sqlite_url(url) if url else url
 
 
 def _connect() -> None:
@@ -259,7 +287,7 @@ def _model_signature() -> str:
         return "nomodel"
 
 
-def seed_if_empty(records: List[dict], source: str = "") -> None:
+def seed_if_empty(records: List[dict], source: str = "", force: bool = False) -> None:
     """Seed the database once per cohort identity.
 
     A DB seeded with one cohort (e.g. the 800-subject synthetic set) must NOT
@@ -267,6 +295,21 @@ def seed_if_empty(records: List[dict], source: str = "") -> None:
     cohort). The stored fingerprint is `source:count:cohort_version:model`, so
     either a cohort change or a RETRAIN re-seeds instead of silently showing the
     previous run's patients and attributions.
+
+    Two rules exist to protect stored patient data, both learned from real
+    deployment failures:
+
+    * An EMPTY cohort never seeds. A container that cannot find the cohort file
+      must not wipe the database that still holds the last good cohort.
+    * A STUB cohort never replaces a stored real one. In a container the real
+      cohort is usually absent (it is DUA-restricted, so it is not committed and
+      not baked into the image), which makes the placeholder stubs the default
+      fallback -- and re-seeding from them would silently swap real patients for
+      Lorem-ipsum ones in Postgres.
+
+    `force=True` is for an explicit operator action (scripts/seed_db.py, or
+    repairing a database whose stored cohort is unusable). A retrain also lands
+    here through the fingerprint, which folds in the served model's identity.
     """
     if not enabled():
         return
@@ -287,11 +330,25 @@ def seed_if_empty(records: List[dict], source: str = "") -> None:
         meta = s.query(AppMeta).filter_by(key="cohort_fingerprint").first()
         current = meta.value if meta else None
         count = s.query(Patient).count()
-        if count > 0 and current == fingerprint:
+        stored_is_real = bool(current) and not str(current).startswith(
+            f"{STUB_DATA_SOURCE}:"
+        )
+        if count > 0 and source == STUB_DATA_SOURCE and stored_is_real:
+            print(
+                f"[db] refusing to re-seed: incoming cohort is placeholder stubs and "
+                f"the database holds a real cohort ({count} patient(s)). Leaving it "
+                "untouched -- real data is never replaced by stubs."
+            )
+            return
+        if count > 0 and current == fingerprint and not force:
             return
         if count > 0:
-            print(f"[db] cohort changed ({current or 'unknown'}) — re-seeding "
+            reason = "forced re-seed" if force else "cohort changed"
+            print(f"[db] {reason} ({current or 'unknown'}) — "
                   f"{count} → {len(records)} patients")
+            # Delete before inserting, on BOTH paths -- the forced path replaces
+            # the same primary keys, so skipping this would violate the PK on the
+            # first row and leave the derived child rows stale.
             # children first: Postgres enforces the FKs
             for model in (RiskFactor, PipelineHistory, LabResult, Comorbidity,
                           CognitiveAssessment):

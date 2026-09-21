@@ -29,19 +29,19 @@ stage test was completed.
 |---|---|---|
 | Data pipeline (ETL) | Run & verified | **Real ADNI drop: 13 tables → 14,746 scored MMSE visits / 4,649 subjects → 3,636 subjects with a real clinician label.** Sentinels (`MMSCORE −1`, `NfL/GFAP −4/−5`, `PTGENDER −4`, `CDR/FAQ −1`, PET `qc_flag`) all filtered; nothing silently dropped |
 | Real ADNI ingestion | Run & verified | `scripts/ingest_adni.py`: nearest-visit join (±183 d) across MMSE, plasma panel, FreeSurfer MRI, amyloid + tau PET, ADAS-Cog, FAQ, CDR, APOE — emits training matrix, visit table and serving records |
-| Legacy paths still work | Run & verified | OASIS-1 (373 visits / 150 subjects) and the 800-subject synthetic cohort remain available via `--data real|synthetic` / `PATIENT_DATA` |
-| 12-month follow-up labels | Simulated (synthetic cohort) | `scripts/simulate_followup.py` labels still drive the progression forecaster; real ADNI conversions are now available in `data/processed/adni_visits.csv` for the next retrain |
+| Legacy cohorts | Retired | OASIS-1 and the synthetic cohorts were removed with their scripts and files; `PATIENT_DATA` knows only `adni|mock`, and `--data real|synthetic` no longer exists |
+| Follow-up labels | Run & verified (real ADNI) | Real baseline → follow-up visit pairs from the ADNI drop: **1,634 pairs, 138 conversions (8.45%)** — `data/processed/adni_progression.csv`, not a simulated drift rule |
 | Risk model trained on real data | Run & verified | XGBoost, **15 features across all 4 stages**; 5-fold CV AUC **0.901 ± 0.011**, held-out test AUC **0.902**, accuracy 0.812 on 3,636 real ADNI subjects |
 | Leakage & robustness audit | Run & verified | FAQ (diagnosis-derived, like CDR) dropped from the feature set; early stopping moved off the test set; APOE encoding benchmarked; complete-case cross-check agrees (ρ = 0.82) — `artifacts/model_audit.txt` |
-| Progression forecaster trained | Run & verified (synthetic labels) | XGBRegressor + XGBClassifier; MMSE-delta MAE **0.611 pts** (R² 0.679), conversion ROC AUC **0.770** (PR AUC 0.465 ≈ 2.8× lift) |
+| Progression forecaster trained | Run & verified (real ADNI follow-up) | XGBRegressor + XGBClassifier on 1,634 real pairs; MMSE-delta MAE **1.549 pts** (baseline 1.859, R² 0.297), conversion 5-fold CV AUC **0.819 ± 0.031**, held-out AUC **0.796** at 8.45% prevalence |
 | Explainability | Run & verified | Global SHAP **with per-stage rollup** (`stage_importance.csv`) + full per-subject attribution; both an overall and a measured-only view, so a rarely-ordered test (PET) is not diluted to zero |
 | Escalation rule engine | 42 pytest cases | Deterministic stage gates; **evidence-gated High tier** (blocked, not just advised, by `has_biomarker_evidence`); clinician-in-the-loop via `override: true`; results loop via `POST /results`; **ordering gaps handled** — the stage stops at the first missing test and already-measured later slots are carried forward, never overwritten |
 | Autonomous triage | Run & verified (browser E2E) | `POST /workup/next` / `/workup/run`: model picks subject → orders test → re-scores → re-ranks; live rank movements (e.g. `#12 → #2` after an abnormal blood panel) |
 | Progression forecast served | Run & verified (local + Railway) | `GET /patients/{id}/progression` → trajectory, conversion probability with SHAP drivers, projected tier, stage-completion score checkpoints |
-| Backend API | Run & verified | FastAPI + Swagger at `/docs`; `/health` reports `data_source` (e.g. `real+postgres` on Railway); live scoring via `pipeline.joblib` |
+| Backend API | Run & verified | FastAPI + Swagger at `/docs`; `/health` reports `data_source` — `adni` (local cohort file), `adni+postgres` / `postgres` (served from the seeded database), or `mock` if only placeholder stubs could be found; live scoring via `pipeline.joblib` |
 | Frontend dashboard | Run & verified (headless Chrome) | Zero mock data; ranked cohort, detail view, full-page progression view, risk simulator rebuilt on the model's real 15 features; production build clean, zero console errors |
-| PostgreSQL store | Run & verified (Railway) | Activated by `DATABASE_URL`; schema created + seeded on boot, persists workup history across restarts, and **re-seeds when either the cohort or the served model changes** — a retrain can never leave stale attributions in the database |
-| FHIR R4 integration | Run & verified (144 pytest cases) | **Four phases live:** export (`/fhir/Patient/{id}/$everything`, LOINC-coded Observations, `RiskAssessment`), inbound ingestion (`POST /fhir/Bundle`, accepting `transaction`/`collection`/**`document`** bundles — the NRCES shape — with the **ABHA address as the preferred subject identifier** and a crosswalk that keeps one human one patient, plus idempotency on ABHA + observation date so a retried document writes nothing; atomic — 422 `OperationOutcome` on any unmappable resource or wrong UCUM unit), bidirectional (`ServiceRequest` orders → `DiagnosticReport`/`Observation` results → re-score through the served model; one-transaction push to an outbound server), and SMART on FHIR launch (authorization-code + PKCE, patient-scoped context, token held server-side). No `Condition` is ever emitted, on either direction |
+| PostgreSQL store | Run & verified (Railway) | Activated by `DATABASE_URL`; schema created + seeded on boot, persists workup history across restarts, and **re-seeds when either the cohort or the served model changes** — a retrain can never leave stale attributions in the database. In a deployment it is the **store of record** for the DUA-restricted cohort (seeded once by `scripts/seed_db.py`); an empty cohort never wipes it, placeholder stubs never replace it, and a stored cohort that filters to zero is repaired from the file rather than served as an empty dashboard |
+| FHIR R4 integration | Run & verified (152 pytest cases) | **Four phases live:** export (`/fhir/Patient/{id}/$everything`, LOINC-coded Observations, `RiskAssessment`), inbound ingestion (`POST /fhir/Bundle`, accepting `transaction`/`collection`/**`document`** bundles — the NRCES shape — with the **ABHA address as the preferred subject identifier** and a crosswalk that keeps one human one patient, plus idempotency on ABHA + observation date so a retried document writes nothing; atomic — 422 `OperationOutcome` on any unmappable resource or wrong UCUM unit), bidirectional (`ServiceRequest` orders → `DiagnosticReport`/`Observation` results → re-score through the served model; one-transaction push to an outbound server), and SMART on FHIR launch (authorization-code + PKCE, patient-scoped context, token held server-side). No `Condition` is ever emitted, on either direction |
 | ABDM (India) consent flow | Run & verified (28 pytest cases) | **HIU side of ABDM, Phases 4-5:** consent request → GRANTED/DENIED callback → health-information request (only the HIU's *public* ephemeral key travels) → HIP pushes Fidelius-encrypted FHIR → decrypted, mapped and re-scored through the served model. Fidelius is implemented on BouncyCastle Curve25519 (**short-Weierstrass, not X25519** — the trap that produces `ABDM-9999`), HKDF-SHA256 + AES-256-GCM with the tag verified, and is checked **byte-for-byte against the published `fidelius-cli` reference ciphertext**. Runs with no ABDM account against an in-process mock HIE-CM + mock HIP at `/mock-abdm`. See `ABDM_INTEGRATION.md` |
 | Docker demo | Written | `docker compose up --build` (single-image Railway deploy is the exercised path) |
 | CI (GitHub Actions) | Not built | Deliberately excluded from scope |
@@ -54,19 +54,14 @@ stage test was completed.
 # Terminal 1 — ML pipeline (once; generates data + artifacts)
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements-ml.txt
-# Preferred — real ADNI drop: place the 13 CSVs in "ADNI DATA/" then:
+# Place the real ADNI tables in "ADNI DATA/" first (access-controlled — see
+# data/raw/README.md), then check coverage and run the whole pipeline:
+python scripts/inspect_adni_coverage.py                # per-modality coverage (read-only)
+python scripts/run_pipeline.py                         # ingest → risk model → progression model
+#   ...or run the steps individually:
 python scripts/ingest_adni.py                          # 13 tables → features + serving cohort
 python scripts/train_model.py --data adni              # risk model + SHAP + artifacts
-# or the one-command runner (detects the ADNI drop automatically):
-python scripts/run_pipeline.py
-
-# Fallback — synthetic cohort (no real data needed)
-python scripts/generate_adni_like_v2.py                # 800-subject ADNI-shaped cohort
-python scripts/train_model.py                          # risk model + SHAP + artifacts
-
-# Optional — the progression forecaster (uses the cohort above)
-python scripts/simulate_followup.py                    # 12-month follow-up labels
-python scripts/train_progression_model.py              # delta + conversion models
+python scripts/train_progression_model.py --data adni  # delta + conversion models
 
 # Terminal 2 — API
 pip install -r backend/requirements.txt
@@ -76,64 +71,54 @@ cd backend && uvicorn app.main:app --reload            # http://127.0.0.1:8000/d
 npm install && npm run dev                             # http://localhost:5173
 ```
 
-Or everything in one command (needs Docker):
+Or everything in one command (needs Docker, mounts data/processed + artifacts):
 
 ```bash
 docker compose up --build     # web :8080 · API docs :8000
-```
-
-Optional real-data mode:
-
-```bash
-python scripts/download_oasis.py      # fetch public OASIS-1 CSV into data/raw/
-python scripts/run_pipeline.py        # download (if missing) → ingest → train
-# then start the API with OASIS_DATA_MODE=real to serve the 150 real subjects
 ```
 
 ---
 
 ## 3. Data policy — no datasets in this repository
 
-**This repo contains zero patient data and no source datasets.** The raw OASIS
-CSV and the synthetic cohorts are downloaded/generated locally and gitignored.
-The *derived* artifacts — trained models (risk + progression) + risk scores —
-**are committed** so a fresh deploy (Railway/Docker) serves both model families
-without re-training:
+**This repo contains zero patient data and no source datasets.** The ADNI tables
+and the retiring legacy cohorts are all kept out of git. The *derived* artifacts —
+trained models (risk + progression) + risk scores — **are committed** so a fresh
+deploy (Railway/Docker) serves both model families without re-training:
 
 | Path | What it is | How to get it |
 |---|---|---|
-| `data/raw/oasis_longitudinal.csv` | Real public OASIS-1 longitudinal CSV (150 subjects, 373 visits) | `python scripts/download_oasis.py` or manual download (see `data/raw/README.md`) |
-| `data/processed/synthetic_patients_v2.json` | 800-subject synthetic cohort, ADNI-1 proportions, all 4 pipeline stages | `python scripts/generate_adni_like_v2.py` |
-| `data/processed/synthetic_patients.json` | Legacy 500-subject synthetic cohort | `python scripts/generate_adni_like.py` |
-| `data/processed/followup_12mo.json` | Simulated 12-month follow-up labels (MMSE drift + conversion) | `python scripts/simulate_followup.py` |
-| `data/processed/visits.csv`, `patients.csv` | ETL output from real OASIS | `python scripts/ingest.py` |
+| `ADNI DATA/*.csv` | The real 13-table ADNI drop (cognition, plasma panel, FreeSurfer MRI, amyloid/tau PET, DXSUM, APOE…) | Request access from ADNI and accept the DUA — **never commit it** (see `data/raw/README.md`) |
 | `data/processed/risk_scores.json` | Per-subject model scores + SHAP attributions. On real ADNI it is written **de-identified** — subject ID, score and feature attributions only, no age/sex/MMSE/ADAS/FAQ/biomarker values, because ADNI is DUA-restricted | **Committed** (deployment seed); regenerate with `python scripts/train_model.py` |
 | `data/processed/adni_cohort.json`, `adni_features.csv`, `adni_visits.csv` | Real ADNI serving records, training matrix and longitudinal visit table | **Gitignored** (regenerate with `python scripts/ingest_adni.py`) |
 | `artifacts/pipeline.joblib`, `model_meta.json`, `global_importance.csv`, `eval_report.txt` | Risk model, model card, global SHAP, eval audit | **Committed** (deployment); regenerate with `python scripts/train_model.py` |
 | `artifacts/progression_delta.joblib`, `progression_conversion.joblib`, `progression_meta.json`, `progression_report.txt` | Progression forecaster (MMSE-delta + conversion) + card + eval audit | **Committed** (deployment); regenerate with `python scripts/train_progression_model.py` |
 | `artifacts/rf_pipeline.joblib` | RandomForest fallback model | Local only — gitignored |
 
-Why: OASIS data carries its own licensing terms and the synthetic cohorts are
-reproducible from a seeded generator in seconds — committing neither keeps the
-repo clean and legally simple. The derived model artifacts are an exception:
-they are needed for one-command deployment.
+Why: ADNI is access-controlled under a Data Use Agreement and is not
+redistributable, which is what keeps the repo clean and legally simple. The
+derived model artifacts are the deliberate exception: they are needed for
+one-command deployment, and in a deployment the cohort itself is seeded into the
+database rather than shipped in the image (§11).
 
 ---
 
 ## 4. What it does and how (end to end)
 
-1. **Generate / ingest.** `scripts/generate_adni_like_v2.py` builds an
-   800-subject cohort shaped like ADNI-1 (25% CN / 50% MCI / 25% AD) with
-   severity-correlated measures at every pipeline stage: MMSE + longitudinal
-   cognition, p-tau181 (pg/mL) + Aβ42/40 ratio, hippocampal volume (cm³),
-   amyloid/tau PET status + SUVR. `scripts/ingest.py` does the equivalent
-   harmonization for real OASIS-1 (dedupe `(subject, visit)`, flag missing).
+1. **Ingest.** `scripts/ingest_adni.py` reads the real 13-table ADNI drop and
+   performs a nearest-visit join (±183 days) across cognition (MMSE, ADAS-Cog
+   13), the plasma panel (p-tau181/217, Aβ42/40, NfL, GFAP), FreeSurfer MRI
+   volumetrics and amyloid/tau PET. Sentinel codes (`MMSCORE −1`, `−4`/`−5`
+   not-reported markers, PET `qc_flag`) are filtered rather than read as values,
+   and the real `DIAGNOSIS` column supplies the label. Output: the training
+   matrix, the longitudinal visit table and the serving cohort
+   (`data/processed/adni_*.{csv,json}`).
 2. **Feature engineering.** `scripts/train_model.py` derives per-subject
-   features: latest MMSE, `mmse_change` (latest − first), demographics, and —
-   when the corresponding test was actually performed — `ptau181`, `abeta4240`,
-   `hippocampal_volume`, `amyloid_positive`, `tau_positive`. Un-ordered tests
-   stay **NaN** (XGBoost consumes missing values natively; missingness itself
-   is informative).
+   features: latest MMSE, `mmse_change`, ADAS-Cog 13, APOE-ε4, demographics, and —
+   when the corresponding test was actually performed — `ptau217`, `abeta4240`,
+   `nfl`, `gfap`, `hippocampal_volume` / `hippocampal_icv_ratio`, `centiloids`,
+   `tau_meta_temporal_suvr`. Un-ordered tests stay **NaN** (XGBoost consumes
+   missing values natively; missingness itself is informative).
 3. **Training (risk).** XGBoost (RandomForest fallback) predicts the severity
    label. CDR is deliberately **not** a feature (clinician rating ≈ the label =
    leakage) and neither is **FAQ** (part of ADNI's diagnostic algorithm).
@@ -141,14 +126,12 @@ they are needed for one-command deployment.
    *train only* for early stopping (the test set is never used for model
    selection); 5-fold CV + held-out metrics + majority-class baseline, all
    written to `artifacts/eval_report.txt`.
-4. **Training (progression).** `scripts/simulate_followup.py` derives a
-   deterministic 12-month follow-up for every subject — MMSE drift driven by the
-   *observed* biomarker profile (amyloid/tau positivity accelerates decline,
-   cognitive reserve slows it) and conversion labels from published base rates
-   (CN ~4%/yr, MCI ~12%/yr, AD ~28%/yr) modulated by biomarker evidence.
-   `scripts/train_progression_model.py` then trains two XGBoost models on the
-   same baseline feature vector: an **MMSE-delta regressor** and a **conversion
-   classifier** (class imbalance handled via `scale_pos_weight`).
+4. **Training (progression).** `scripts/ingest_adni.py` pairs each baseline
+   visit with the subject's real follow-up visit (1,634 pairs, 138 conversions —
+   8.45%), so the labels are **clinician follow-up diagnoses, not simulated
+   trajectories**. `scripts/train_progression_model.py` trains two XGBoost
+   models on the same baseline feature vector: an **MMSE-delta regressor** and a
+   **conversion classifier** (class imbalance handled via `scale_pos_weight`).
 5. **Explainability.** SHAP TreeExplainer produces global importance
    (`artifacts/global_importance.csv`) and per-subject factors. The detail view
    groups **all 16 factors by pipeline stage** (Cognition / Blood / MRI / PET);
@@ -205,12 +188,11 @@ trajectory (−0.05) at 2%.
 
 ```
 ┌───────────────────────────────────────────────────────────────────────┐
-│ DATA (never committed): ADNI DATA/*.csv · data/raw/*.csv · *.json     │
-│   real ADNI 13-table drop (primary) · real OASIS-1 · synthetic        │
+│ DATA (never committed): ADNI DATA/*.csv (13 tables, DUA-restricted)   │
 └───────────────────────────────┬───────────────────────────────────────┘
                                 ▼
 ┌───────────────────────────────────────────────────────────────────────┐
-│ ETL — ingest_adni.py (real) · ingest.py (OASIS) · generate_*.py       │
+│ ETL — ingest_adni.py                                                  │
 │   nearest-visit join (±183 d) → sentinel filtering → per-subject      │
 │   feature table + real DIAGNOSIS labels + serving records             │
 └───────────────────────────────┬───────────────────────────────────────┘
@@ -266,19 +248,20 @@ trajectory (−0.05) at 2%.
 ├── index.html / vite.config.js / tailwind.config.js / postcss.config.js / package.json
 │
 ├── brand_assets/                # rendered logo/icon (PNG transparent, JPG, PDF brand sheet)
+├── ADNI DATA/                   # raw ADNI tables (gitignored — DUA-restricted, never committed)
 ├── data/                        # datasets gitignored (see §3); derived scores committed
-│   ├── raw/README.md            #   how to obtain OASIS-1
+│   ├── raw/README.md            #   how to obtain the ADNI drop + what ingestion writes
 │   └── processed/risk_scores.json  # trained-model scores (deployment seed)
 │
 ├── scripts/                     # the ML pipeline (Python 3.11)
-│   ├── download_oasis.py        #   fetch real OASIS-1 CSV from a public mirror
-│   ├── generate_adni_like.py    #   legacy 500-subject synthetic cohort
-│   ├── generate_adni_like_v2.py #   800-subject ADNI-1-proportioned cohort (default)
-│   ├── ingest.py                #   ETL real OASIS → unified patient-centric schema
-│   ├── simulate_followup.py     #   deterministic 12-month follow-up labels
+│   ├── ingest_adni.py           #   real ADNI drop → visits/features/progression/cohort
 │   ├── train_model.py           #   features → XGB/RF → eval → SHAP → artifacts
 │   ├── train_progression_model.py # delta + conversion models → artifacts
-│   ├── run_pipeline.py          #   download + ingest + train in one command
+│   ├── run_pipeline.py          #   ingest + train in one command (cron-friendly)
+│   ├── seed_db.py               #   seed/prepare the DEPLOYMENT database (no dataset shipped)
+│   ├── audit_model_fixes.py     #   leakage + robustness audit of the served model
+│   ├── inspect_adni_coverage.py #   per-modality coverage of the ingested cohort (read-only)
+│   ├── validate_fhir.py         #   server-side validation gate for exported FHIR resources
 │   └── render_brand_assets.cjs  #   regenerate brand_assets/ from BrandLogo.jsx (node)
 │
 ├── artifacts/                   # trained models + cards + SHAP + eval (committed for deploy)
@@ -292,7 +275,7 @@ trajectory (−0.05) at 2%.
 │
 ├── backend/                     # FastAPI service
 │   ├── requirements.txt · requirements-dev.txt · pytest.ini · Dockerfile
-│   ├── tests/                   #   144 pytest cases (API · DB seed · FHIR · SMART · ABDM)
+│   ├── tests/                   #   152 pytest cases (API · DB seed · FHIR · SMART · ABDM)
 │   └── app/
 │       ├── config.py            #   thresholds (env) + artifact paths
 │       ├── schemas.py           #   Pydantic contracts (no diagnosis field)
@@ -488,35 +471,24 @@ what happened.
 
 ### 7.2 Progression forecaster (12-month horizon)
 
-Same baseline feature vector as the risk model; labels currently from the
-simulated follow-up (133 conversions / 16.6% prevalence; 640 train / 160 test
-subjects, stratified by conversion). Synthetic trajectories — see §13. Real
-ADNI follow-up labels are extracted and ready for the next retrain.
+Same baseline feature vector as the risk model. Labels are **real ADNI follow-up
+outcomes** — baseline visit paired with the subject's next visit (1,634 pairs,
+138 conversions, 8.45% prevalence; subject-level split 1,307 train / 327 test).
 
 | Model | Metric | Result |
 |---|---|---|
-| MMSE-delta regressor | test MAE | **0.611 pts** (mean-baseline 1.043) |
-| | test RMSE / R² | 0.741 / 0.679 |
-| Conversion classifier | test ROC AUC | **0.770** |
-| | test PR AUC | 0.465 (vs 0.169 prevalence ≈ 2.8× lift) |
-| | Brier score | 0.143 (calibration) |
-| | accuracy @0.5 | 0.800 (majority baseline 0.831) |
+| MMSE-delta regressor | test MAE | **1.549 pts** (mean-baseline 1.859) |
+| | test RMSE / R² | 2.217 / 0.297 |
+| Conversion classifier | 5-fold CV AUC | **0.819 ± 0.031** |
+| | held-out ROC AUC | **0.796** (Stage-1-only subgroup 0.822) |
+| | held-out PR AUC | 0.386 (vs 0.0845 prevalence ≈ 4.6× lift) |
+| | Brier score | 0.089 (calibration) |
+| | accuracy @0.5 | 0.878 (majority baseline 0.914 — see §13) |
 
 **Guardrails** (`artifacts/progression_report.txt`): subject-level holdout;
 same NaN = stage-not-ordered convention; imbalance via `scale_pos_weight` (5.04);
 the projected 12-month tier comes from re-scoring the **current risk model** on
 the projected future vector — one consistent model family end-to-end.
-
-### 7.3 Previous run — real OASIS-1 (cognitive + volume features only)
-
-| Metric | Value |
-|---|---|
-| 5-fold CV AUC | 0.898 ± 0.041 |
-| Held-out test AUC | 0.908 |
-
-Real OASIS-1 has no blood/PET columns, so that model scored on 11
-cognitive/volume features only. Re-run any time with
-`python scripts/train_model.py --data real` (after `python scripts/run_pipeline.py`).
 
 ---
 
@@ -543,13 +515,14 @@ cognitive/volume features only. Re-run any time with
 Contracts are Pydantic-validated; **no response model contains a diagnosis
 field**. Swagger at `/docs`. CORS allows the Vite dev server (+ `CORS_ORIGINS`).
 
-- **Data source resolution:** synthetic v2 cohort if present (default; 800
-  subjects) → legacy 500-subject cohort → real OASIS scores
-  (`OASIS_DATA_MODE=real` forces real) → 8-patient stub so the API demos before
-  any pipeline run. When a trained model exists, every subject is re-scored at
-  startup (vectorized SHAP batch) — the dashboard always shows the served
-  model's judgment. `/health` reports the resolved source (e.g. `synthetic`,
-  `real`, `real+postgres`); `/debug/env` shows deploy diagnostics.
+- **Data source resolution:** the real ADNI cohort file when present → the same
+  cohort from the database it was seeded into (`scripts/seed_db.py`) → placeholder
+  stubs only if neither exists. `PATIENT_DATA=adni` makes a missing cohort loud
+  instead of substituting stubs. When a trained model exists, every subject is
+  re-scored at startup (vectorized SHAP batch) — the dashboard always shows the
+  served model's judgment. `/health` reports the resolved source
+  (`adni`, `adni+postgres`, `postgres`, or `mock`); `/debug/env` shows deploy
+  diagnostics.
 - **In-process model serving:** `POST /patients/score` predicts on an arbitrary
   feature vector with `pipeline.joblib` + a cached SHAP TreeExplainer (this
   powers the what-if **Risk Simulator** in the UI, whose controls mirror the
@@ -560,7 +533,7 @@ field**. Swagger at `/docs`. CORS allows the Vite dev server (+ `CORS_ORIGINS`).
 
 | Endpoint | Behavior |
 |---|---|
-| `GET /health` | `{"status":"ok","data_source":"synthetic"}` |
+| `GET /health` | `{"status":"ok","data_source":"adni"}` (or `adni+postgres` / `postgres` / `mock` — see §11) |
 | `GET /debug/env` | Deploy diagnostics: `DATABASE_URL` presence/scheme, db layer enabled (no secret values) |
 | `GET /patients?tier=&q=&sort=&page=&limit=` | Ranked list; `sort`: `risk-desc` (default), `risk-asc`, `stage`; returns `{items, total, page, limit}` |
 | `GET /patients/{id}` | Full profile: `cognitive`, `blood`, `imaging`, `pet`, `factors` (all, with `feature` + `value`), `history` — no diagnosis field |
@@ -679,8 +652,8 @@ All env vars (see `.env.example`):
 | Variable | Default | Purpose |
 |---|---|---|
 | `HIGH_RISK_THRESHOLD` / `MEDIUM_RISK_THRESHOLD` | `0.7` / `0.4` | Tier bucketing (API + training) |
-| `OASIS_DATA_MODE` | `synthetic` | `real` forces the 150-subject OASIS cohort |
-| `DATABASE_URL` | unset | Enables PostgreSQL persistence (`backend/app/db.py`) |
+| `PATIENT_DATA` | `auto` | `adni` requires the real cohort (deployments); `mock` forces placeholder stubs |
+| `DATABASE_URL` | unset | PostgreSQL store (`backend/app/db.py`). The **store of record** in a deployment — seed it with `scripts/seed_db.py` |
 | `PROJECT_ROOT` | auto | Artifact/data root (override in Docker: `/app`) |
 | `RISK_SCORES_PATH` / `MODEL_PATH` / `MODEL_META_PATH` / `GLOBAL_IMPORTANCE_PATH` | `data/processed/…`, `artifacts/…` | Artifact locations |
 | `VITE_API_URL` | `http://127.0.0.1:8000` | API base URL for the frontend |
@@ -702,33 +675,65 @@ Integration docs: `FHIR_INTEGRATION.md` (HL7 FHIR R4, SMART on FHIR) and
 `ABDM_INTEGRATION.md` (ABDM HIU consent flow, Fidelius encryption, and what is
 verified versus what needs a sandbox account).
 
-PostgreSQL (optional): with `DATABASE_URL` set, `db.py` creates the blueprint
-schema (`patients`, `cognitive_assessments`, `comorbidities`, `lab_results`,
-`risk_factors`, `pipeline_history`), seeds from the same source, and persists
-stage advances across restarts. Verified on Railway: the single `Dockerfile`
-builds the React bundle (stage 1) and serves it from the FastAPI process
-alongside the API on `$PORT`; committed artifacts mean no re-training on boot.
+PostgreSQL (optional locally, **the store of record in a deployment**): with
+`DATABASE_URL` set, `db.py` creates the blueprint schema (`patients`,
+`cognitive_assessments`, `comorbidities`, `lab_results`, `risk_factors`,
+`pipeline_history`), seeds from the same source, and persists stage advances
+across restarts. Verified on Railway: the single `Dockerfile` builds the React
+bundle (stage 1) and serves it from the FastAPI process alongside the API on
+`$PORT`; committed artifacts mean no re-training on boot.
 (If you add a Railway Postgres plugin, `DATABASE_URL=${{Postgres.DATABASE_PRIVATE_URL}}`
 and the store activates automatically.)
+
+### Where the cohort lives in a deployment
+
+The served cohort is derived from ADNI, which is access-restricted under a Data
+Use Agreement. It is therefore **not committed, and not baked into the image** —
+a build from the repository has no cohort file to copy. The database carries it
+instead, seeded once from a machine that legitimately holds the data:
+
+```bash
+# once, and again after any retrain (the stored fingerprint folds in the served
+# model, so the derived score/tier/attributions are recomputed)
+DATABASE_URL='postgresql://user:pw@host:5432/railway' python scripts/seed_db.py
+```
+
+Set `PATIENT_DATA=adni` on the deployed service. A healthy boot then reads:
+
+```
+[api] data source: adni+postgres (2581 patients loaded)   # file + database
+[api] data source: postgres    (2581 patients loaded)     # cohort from the DB
+```
+
+Three rules protect the stored cohort, each written after a real deploy failure:
+
+* **An empty cohort never seeds.** A container that cannot find the cohort file
+  cannot wipe the database that still holds the last good cohort.
+* **Placeholder stubs never replace real patients.** If neither a cohort file nor
+  a seeded database is available, the API says so (`mock`) — it will not overwrite
+  Postgres with the demo stubs.
+* **A stored cohort that filters down to nothing is repaired from the file**, not
+  served as an empty dashboard (`0 patients` is never the intent).
+
+`scripts/seed_db.py` refuses to run without `DATABASE_URL` and refuses to seed
+stubs, so it can never be pointed at the wrong thing by accident.
 
 ---
 
 ## 12. Verification checklist (run this to prove it works)
 
 ```bash
-# 1. Data + risk model
-python scripts/generate_adni_like_v2.py
-python scripts/train_model.py
-#    expect: CV AUC ≈ 0.84, SHAP table, "[done] wrote: artifacts/…"
+# 0. Data (requires the ADNI drop in "ADNI DATA/")
+python scripts/inspect_adni_coverage.py   # per-modality coverage, read-only
 
-# 1b. Progression forecaster
-python scripts/simulate_followup.py
-python scripts/train_progression_model.py
-#    expect: delta MAE ≈ 0.61, conversion AUC ≈ 0.77, "[done] wrote: artifacts/progression_…"
+# 1. Ingest + risk model + progression forecaster
+python scripts/run_pipeline.py
+#    expect: ingest_adni writes data/processed/adni_*.{csv,json}, then the model
+#    cards print CV AUC / MAE / conversion AUC and "[done] wrote: artifacts/…"
 
 # 2. API
 cd backend && uvicorn app.main:app --reload
-curl http://127.0.0.1:8000/health                       # data_source: synthetic
+curl http://127.0.0.1:8000/health                       # data_source: adni (+ postgres if set)
 curl "http://127.0.0.1:8000/patients?limit=3"           # top-3 ranked subjects
 curl http://127.0.0.1:8000/patients/ADNI-0001/explain   # full attribution
 curl http://127.0.0.1:8000/patients/ADNI-0001/progression  # 12-mo forecast
@@ -737,8 +742,8 @@ curl -X POST http://127.0.0.1:8000/patients/ADNI-0001/advance-stage \
      -H "Content-Type: application/json" -d '{}'
 #    expect: order + auto result + rescored; a low-tier subject 409s
 
-# 3. API tests
-cd backend && pip install -r requirements-dev.txt && pytest    # 144 tests
+# 3. API tests (the in-memory store; DATABASE_URL is forced empty in conftest)
+cd backend && pip install -r requirements-dev.txt && pytest    # 152 tests
 
 # 3b. ABDM consent flow (no ABDM account needed — the mock CM+HIP run in-process)
 BASE=http://127.0.0.1:8000
@@ -841,7 +846,8 @@ npm install && npm run dev   # open :5173 → toggle Autonomous Triage;
 
 - CI / GitHub Actions (requested to skip)
 - Apache Airflow deployment (cron-friendly `run_pipeline.py` provided instead)
-- Real ADNI/OASIS-3 biomarker ingestion (requires registration + manual downloads)
+- OASIS-3 / other external cohorts (real ADNI ingestion **is** built; further
+  cohorts would need their own registration and ingestion path)
 - Authentication / multi-clinician accounts (demo prototype)
 
 ---

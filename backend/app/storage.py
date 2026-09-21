@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Optional
 
 from .config import (BIOMARKER_FEATURES, GLOBAL_IMPORTANCE_PATH, RISK_SCORES_PATH,
-                     PROJECT_ROOT, risk_tier)
+                     MISSING_DATA_SOURCE, PROJECT_ROOT, STUB_DATA_SOURCE, risk_tier)
 from .seed_data import MOCK_PATIENTS
 
 # Feature name -> human-readable explanation (blueprint section 4.4)
@@ -232,9 +232,14 @@ def _file_records() -> tuple[list[dict], str]:
     if mode == "adni":
         print(f"[storage] PATIENT_DATA=adni requested but {adni_path} is missing; "
               "run scripts/ingest_adni.py against the 'ADNI DATA' drop")
-        return [], "adni-missing"
+        return [], MISSING_DATA_SOURCE
 
-    return [copy.deepcopy(p) for p in MOCK_PATIENTS], "mock"
+    if not MOCK_PATIENTS:
+        print("[storage] no cohort file and no stubs available -- serving nothing")
+        return [], MISSING_DATA_SOURCE
+    print("[storage] no real cohort file -- falling back to placeholder stubs "
+          "(no measurements; a database holding real patients takes precedence)")
+    return [copy.deepcopy(p) for p in MOCK_PATIENTS], STUB_DATA_SOURCE
 
 
 def _only_patients_with_real_results(records: list[dict]) -> list[dict]:
@@ -262,32 +267,91 @@ def _only_patients_with_real_results(records: list[dict]) -> list[dict]:
     return kept
 
 
+def load_cohort_file() -> tuple[list[dict], str]:
+    """The cohort as read from disk -- no database involved.
+
+    Public because it is the source of truth for seeding a remote database
+    (scripts/seed_db.py) and for the self-heal path in load_patients().
+    """
+    records, source = _file_records()
+    return _only_patients_with_real_results(records), source
+
+
 def load_patients() -> tuple[dict[str, dict], str]:
     """Return (id -> record, data_source).
 
-    When DATABASE_URL is set, Postgres is seeded from the same source and becomes
-    the store of record (memory stays the read cache). Otherwise in-memory only.
+    When DATABASE_URL is set, Postgres is the STORE OF RECORD and memory stays
+    the read cache. This is the deployment path: the real cohort is under an ADNI
+    Data Use Agreement, so it is neither committed nor baked into the image --
+    it is seeded into the database once (scripts/seed_db.py) and the container
+    reads it back from there.
+
+    Which means a container normally has NO cohort file, and the placeholder
+    stubs must not be mistaken for the cohort. Three rules follow, all of them
+    written after seeing a real deploy go wrong:
+
+    1. Stubs are seeded ONLY when nothing else can serve -- never over a database
+       that already holds a real cohort (db.seed_if_empty enforces this too).
+    2. A stored cohort that filters down to nothing is REPAIRED from the file
+       instead of being served, because "0 patients" is never the intent.
+    3. The reported data_source says where the served rows actually came from, so
+       /health and the UI cannot claim a source that was not used.
     """
-    records, source = _file_records()
-    records = _only_patients_with_real_results(records)
+    records, source = load_cohort_file()
+    stubs = source == STUB_DATA_SOURCE
+
     from . import db
     if db.enabled():
-        print("[storage] DATABASE_URL detected — initializing database store...")
-    else:
-        print("[storage] DATABASE_URL not set — using in-memory store (no persistence)")
-    if db.enabled():
+        print("[storage] DATABASE_URL detected -- initializing database store...")
         try:
             db.init_db()
-            db.seed_if_empty(records, source)
-            loaded = db.load_all()
-            if loaded:
+            if not stubs:
+                db.seed_if_empty(records, source)
+            else:
+                print("[storage] no real cohort file; placeholder stubs are only used "
+                      "if the database has nothing to serve")
+            loaded = db.load_all() or []
+            served = _only_patients_with_real_results(loaded)
+            if not served and loaded:
+                # The database HAS rows but none survived the cohort filter: they
+                # were seeded by an older ingester whose slot payloads the current
+                # filter cannot read, or left behind by a degraded boot.
+                if records and not stubs:
+                    # A real cohort file is present, so repair from it -- the file
+                    # is the source of truth for the derived view.
+                    print(
+                        f"[storage] stored cohort is unusable ({len(loaded)} row(s), none "
+                        f"with a real result) -- re-seeding from the {source} cohort file"
+                    )
+                    db.seed_if_empty(records, source, force=True)
+                    repaired = _only_patients_with_real_results(db.load_all() or [])
+                    served = repaired or records
+                else:
+                    # Nothing here can repair it: the cohort file is absent (the
+                    # normal state in a container) or holds only stubs, and stubs
+                    # are not a cohort. Serving zero patients silently would look
+                    # like the app is simply empty, so name the cause and the one
+                    # command that fixes it.
+                    print(
+                        f"[storage] serving 0 patients: the database holds {len(loaded)} "
+                        "row(s) but none with a real blood/MRI/PET result, and no real "
+                        "cohort file is present to repair it from.\n"
+                        "          Seed the database from a machine that holds the cohort:\n"
+                        "            DATABASE_URL='<the deployment database>' "
+                        "python scripts/seed_db.py"
+                    )
+                    return {}, "unusable-cohort"
+            if served:
                 db_name = "sqlite" if (db.get_database_url() or "").startswith("sqlite") else "postgres"
-                # Re-applied after load: an existing database can still hold rows
-                # seeded before the filter existed.
-                served = _only_patients_with_real_results(loaded)
-                return {r["id"]: r for r in served}, f"{source}+{db_name}"
+                # `origin` describes the served rows, not the file: when the file
+                # was absent (or held stubs) and the database supplied the cohort,
+                # saying "adni-missing+postgres" would misreport a working deploy.
+                origin = source if (records and not stubs) else "postgres"
+                return {r["id"]: r for r in served}, f"{origin}+{db_name}"
         except Exception as exc:  # noqa: BLE001 -- DB down should not crash the API
             print(f"[storage] Database unavailable ({exc}); using in-memory store")
+    else:
+        print("[storage] DATABASE_URL not set -- using in-memory store (no persistence)")
     return {r["id"]: r for r in records}, source
 
 

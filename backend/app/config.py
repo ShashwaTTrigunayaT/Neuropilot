@@ -33,6 +33,21 @@ HIGH_THRESHOLD = float(os.getenv("HIGH_RISK_THRESHOLD", "0.7"))
 MEDIUM_THRESHOLD = float(os.getenv("MEDIUM_RISK_THRESHOLD", "0.4"))
 
 # --------------------------------------------------------------------------- #
+# Cohort-source vocabulary (storage.load_patients -> /health -> UI).
+#
+# Written down as constants because the distinction carries a safety rule: a
+# STUB cohort is placeholder text, and it must never be allowed to replace real
+# patient data that is already stored. -- see db.seed_if_empty.
+# --------------------------------------------------------------------------- #
+# The placeholder stubs in seed_data.py. Never carries measurements.
+STUB_DATA_SOURCE = "mock"
+# PATIENT_DATA=adni was requested but data/processed/adni_cohort.json is absent
+# (the normal state inside a container: the cohort is DUA-restricted, so it is
+# neither committed nor baked into the image and is seeded into the database
+# once instead -- see scripts/seed_db.py).
+MISSING_DATA_SOURCE = "adni-missing"
+
+# --------------------------------------------------------------------------- #
 # FHIR integration settings (Phases 3-4 of FHIR_INTEGRATION.md).
 #
 # FHIR_BASE_URL is the OUTBOUND hospital FHIR server: orders (ServiceRequest),

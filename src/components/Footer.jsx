@@ -22,6 +22,25 @@ import { NeuroPilotIcon } from './BrandLogo.jsx';
 import { MONO } from './widgets.jsx';
 
 /* ------------------------------------------------------------------ */
+/*  Cohort source label.                                                */
+/*                                                                      */
+/*  /health reports where the SERVED rows actually came from, which is   */
+/*  the first thing to check when a deployment looks wrong: `postgres`   */
+/*  means the container had no cohort file and read the seeded database, */
+/*  `mock` means the placeholder stubs are in play. Rendered verbatim     */
+/*  before, with a hardcoded fallback that still said OASIS-1 — a cohort */
+/*  that no longer exists anywhere in the system.                        */
+/* ------------------------------------------------------------------ */
+function cohortLabel(dataSource) {
+  if (!dataSource) return 'loading\u2026';
+  const db = dataSource.includes('postgres') || dataSource.includes('sqlite');
+  if (dataSource.startsWith('mock')) return 'placeholder stubs (no real cohort)';
+  if (db) return 'ADNI cohort \u00b7 database';
+  if (dataSource.startsWith('adni-missing')) return 'ADNI cohort file missing';
+  return 'ADNI cohort \u00b7 local file';
+}
+
+/* ------------------------------------------------------------------ */
 /*  Feature Contributions panel — the per-parameter breakdown of what   */
 /*  drives the risk score, driven by live GET /model/info data.         */
 /* ------------------------------------------------------------------ */
@@ -499,7 +518,7 @@ export default function Footer({
               <div className="flex justify-between">
                 <span className="text-muted dark:text-darkMuted">Cohort Source:</span>
                 <span style={MONO} className="font-semibold text-ink dark:text-darkText">
-                  {dataSource || 'OASIS-1 Longitudinal'}
+                  {cohortLabel(dataSource)}
                 </span>
               </div>
               <div className="flex justify-between">
