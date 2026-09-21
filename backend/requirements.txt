@@ -3,7 +3,6 @@ uvicorn[standard]>=0.30
 pydantic>=2.7
 
 # FHIR push/probe, SMART discovery, ABDM consent-flow calls + mock gateway
-callbacks (fhir_client.py, smart.py, abdm.py, abdm_mock.py)
 httpx>=0.27
 
 # In-process model serving (artifacts/pipeline.joblib)
