@@ -167,7 +167,7 @@ export default function Interoperability({ patients = [], initialPatientId, onTo
     run('push', async () => {
       const receipt = await api.fhirPush(patientId);
       const accepted = receipt.resourceType === 'Bundle' ? receipt.entry || [] : [];
-      const base = (overview.outbound_server?.base_url || '').replace(/\\/$/, '');
+      const base = (overview.outbound_server?.base_url || '').replace(/\/$/, '');
       setPushResult({
         ok: receipt.resourceType === 'Bundle',
         detail:
@@ -179,7 +179,7 @@ export default function Interoperability({ patients = [], initialPatientId, onTo
           status: entry.response?.status || 'accepted',
           location: entry.response?.location || '',
           url: entry.response?.location && base
-            ? `${base}/${entry.response.location.replace(/^\\//, '')}`
+            ? `${base}/${entry.response.location.replace(/^\//, '')}`
             : '',
         })),
       });
