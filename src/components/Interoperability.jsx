@@ -352,7 +352,7 @@ export default function Interoperability({ patients = [], initialPatientId, onTo
 
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <a
-              href={api.smartLaunchUrl({ format: 'redirect', patient: patientId })}
+              href={api.smartLaunchUrl({ format: 'redirect' })}
               className="inline-flex items-center gap-1.5 rounded-xl bg-accent px-3.5 py-2 text-[11px] font-bold text-white shadow-soft transition hover:bg-accentHover"
             >
               <Plug className="h-3.5 w-3.5" />

@@ -83,6 +83,10 @@ SMART_CLIENT_SECRET = os.getenv("SMART_CLIENT_SECRET", "")
 # Where the EHR sends the browser back to. Must match the registered redirect
 # URI byte-for-byte, which is why it is configuration and not a computed value.
 SMART_REDIRECT_URI = os.getenv("SMART_REDIRECT_URI", "")
+# Patient id in the selected SMART simulator/EHR for a standalone website launch.
+# This is intentionally separate from the local ADNI patient selector: an
+# external FHIR server cannot resolve identifiers such as ADNI-6891.
+SMART_LAUNCH_PATIENT_ID = os.getenv("SMART_LAUNCH_PATIENT_ID", "").strip()
 # The SPA the backend hands the browser back to once the token exchange is done.
 FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "").rstrip("/")
 # Minimum-necessary scope set: read the patient in context and their results,

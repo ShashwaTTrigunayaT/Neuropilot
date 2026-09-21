@@ -447,8 +447,12 @@ def fhir_smart_launch(
     from . import config, smart
 
     target = iss or config.FHIR_BASE_URL
+    # Standalone website launches use an id from the external SMART simulator or
+    # EHR, not the local ADNI selector. The env default keeps that identity out
+    # of the application code and lets the operator change simulations safely.
+    launch_patient = patient or config.SMART_LAUNCH_PATIENT_ID or None
     try:
-        started = smart.begin_launch(target, launch=launch, patient=patient)
+        started = smart.begin_launch(target, launch=launch, patient=launch_patient)
     except smart.SmartError as exc:
         return _json_fhir(fhir._operation_outcome("error", "login", exc.message))
     if format == "json":
