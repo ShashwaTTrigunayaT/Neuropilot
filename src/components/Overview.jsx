@@ -618,30 +618,7 @@ export default function Overview({
         </div>
       </section>
 
-      {/* How to leave the preview */}
-      <div className="w-full border-t border-line dark:border-darkBorder">
-        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-5 gap-y-2 px-6 py-5">
-          <a
-            href="#why"
-            className="inline-flex items-center gap-2 text-[11px] font-semibold text-muted transition hover:text-accent dark:text-darkMuted"
-          >
-            <ArrowDown className="h-3.5 w-3.5" />
-            Keep scrolling — the cohort's own numbers are below
-          </a>
-          <span className="hidden h-3.5 w-px bg-line sm:block dark:bg-darkBorder" />
-          <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2">
-            {JUMPS.map(([id, label]) => (
-              <a
-                key={id}
-                href={`#${id}`}
-                className="text-[11px] font-semibold text-muted transition hover:text-accent dark:text-darkMuted"
-              >
-                {label}
-              </a>
-            ))}
-          </div>
-        </div>
-      </div>
+      
 
       {/* ================================================================ */}
       {/* Live cohort state — numbers the preview does not carry            */}
