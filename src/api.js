@@ -76,6 +76,15 @@ export const api = {
   workupNext: () => request('/workup/next', { method: 'POST' }),
   workupRun: (maxSteps = 25) =>
     request('/workup/run', { method: 'POST', body: JSON.stringify({ max_steps: maxSteps }) }),
+  // Approval-gated triage: /workup/plan is read-only (it projects on copies),
+  // /workup/execute runs ONLY the subjects the clinician approved.
+  workupPlan: (limit = 8) =>
+    request('/workup/plan', { method: 'POST', body: JSON.stringify({ limit }) }),
+  workupExecute: (patientIds, planId = null, note = null) =>
+    request('/workup/execute', {
+      method: 'POST',
+      body: JSON.stringify({ patient_ids: patientIds, plan_id: planId, note }),
+    }),
   recordResult: (id, body = {}) =>
     request(`/patients/${encodeURIComponent(id)}/results`, {
       method: 'POST',

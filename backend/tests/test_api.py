@@ -70,6 +70,22 @@ _HIGH_POOL = [
 assert _HIGH_POOL, "cohort needs an evidence-backed high-tier patient below stage 4"
 READ_HIGH = _HIGH_POOL[0]
 
+# The approval-gated tests act on the TOP of the queue, which is where they must
+# therefore own subjects. Take the highest-scoring orderable subjects no other
+# test has claimed; "orderable" is approximated from the served recommendation
+# (the two routine-follow-up texts are the ones can_advance() refuses).
+_ROUTINE = ("Routine follow-up", "No structural concern")
+_TOP_ORDERABLE = [
+    i["id"]
+    for i in sorted(_ITEMS, key=lambda x: x["final_score"], reverse=True)
+    if i["stage"] < 4
+    and i["id"] not in _TAKEN
+    and not (i.get("recommended_next") or "").startswith(_ROUTINE)
+]
+assert len(_TOP_ORDERABLE) >= 2, "cohort needs >= 2 top-of-queue orderable subjects"
+PLAN_APPROVE_A, PLAN_APPROVE_B = _TOP_ORDERABLE[:2]
+_TAKEN |= {PLAN_APPROVE_A, PLAN_APPROVE_B}
+
 AUTO_LOW = _STOP_POOL[1]         # low tier, nothing to incorporate -> 409
 LOW_409 = _STOP_POOL[0]          # never mutated -- only a 409 is asserted
 LOW_OVERRIDE = _LOW_FRESH[0]     # advanced once via clinician override
@@ -376,6 +392,121 @@ def test_auto_workup_respects_inflight_progress():
 
 def test_auto_workup_unknown_patient_404():
     assert client.post("/patients/NOPE/auto-workup").status_code == 404
+
+
+# --------------------------------------------------------------------------- #
+# Approval-gated autonomous triage (propose -> approve -> execute)
+# --------------------------------------------------------------------------- #
+def test_workup_plan_is_read_only():
+    """A proposal projects on copies: asking what a batch WOULD do must never
+    order anything or move a single score, however many times it is asked."""
+    before = {i["id"]: (i["stage"], i["score"]) for i in _all_patients()}
+    r = client.post("/workup/plan", json={"limit": 5})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["plan_id"]
+    assert body["generated_at"]
+    assert len(body["actions"]) == 5, "an unworked cohort should propose a full batch"
+    client.post("/workup/plan", json={"limit": 5})
+    after = {i["id"]: (i["stage"], i["score"]) for i in _all_patients()}
+    assert before == after, "propose must not mutate the served store"
+
+
+def test_workup_plan_actions_carry_their_reasoning():
+    """Every proposed action answers the four questions an approver would ask."""
+    body = client.post("/workup/plan", json={"limit": 4}).json()
+    assert body["actions"]
+    for a in body["actions"]:
+        assert [r["label"] for r in a["rationale"]] == [
+            "Why this subject",
+            "Why this test",
+            "Cost to the patient",
+            "Expected effect",
+        ]
+        assert all(r["text"].strip() for r in a["rationale"])
+        assert a["stage_after"] == a["stage_before"] + 1
+        assert a["slot"] in ("blood", "imaging", "pet")
+        assert a["impact"] in ("order-only", "none", "marginal", "material", "reclassifies")
+        assert 0.0 <= a["priority_score"] <= 1.0
+        assert 0.0 <= a["projected_priority_score"] <= 1.0
+        if not a["result_on_file"]:
+            # An order returns nothing, so it cannot claim a measured effect.
+            assert a["impact"] == "order-only"
+            assert abs(a["projected_official_score"] - a["official_score"]) < 1e-9
+            assert "order only" in a["rationale"][3]["text"].lower()
+    ranks = [a["rank"] for a in body["actions"]]
+    assert ranks == sorted(ranks), "the plan walks the queue in priority order"
+    assert body["summary"]["proposed"] == len(body["actions"])
+    assert body["summary"]["no_cost"] + body["summary"]["orders_only"] == len(body["actions"])
+
+
+def test_workup_plan_clamps_the_batch_size():
+    assert len(client.post("/workup/plan", json={"limit": 999}).json()["actions"]) <= 25
+    assert len(client.post("/workup/plan", json={"limit": 0}).json()["actions"]) == 1
+
+
+def test_workup_execute_runs_only_approved_subjects():
+    """Approval is the gate: the approved subjects advance, and every other
+    member of the queue is left exactly where it was."""
+    plan = client.post("/workup/plan", json={"limit": 12}).json()
+    proposed = [a["patient_id"] for a in plan["actions"]]
+    assert PLAN_APPROVE_A in proposed and PLAN_APPROVE_B in proposed, (
+        "the dedicated top-of-queue subjects must appear in the proposed batch"
+    )
+    approved = [PLAN_APPROVE_A, PLAN_APPROVE_B]
+    before = {i["id"]: i["stage"] for i in _all_patients()}
+
+    r = client.post(
+        "/workup/execute", json={"patient_ids": approved, "plan_id": plan["plan_id"]}
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["applied"] is True
+    assert body["approved_count"] == 2
+    assert body["executed_count"] == 2
+    assert body["skipped_count"] == 0
+    assert [e["patient_id"] for e in body["executed"]] == approved  # approval order kept
+
+    after = {i["id"]: i["stage"] for i in _all_patients()}
+    moved = {pid for pid in before if before[pid] != after[pid]}
+    assert moved == set(approved), f"only the approved subjects may move — moved: {moved}"
+
+    for entry in body["executed"]:
+        assert entry["stage_after"] == entry["stage_before"] + 1
+        assert entry["slot"] in ("blood", "imaging", "pet")
+        assert entry["rank_after"] is not None
+        official_moved = abs(entry["official_score_after"] - entry["official_score_before"]) >= 1e-9
+        assert official_moved == entry["result_on_file"], (
+            "the official score may only move when a REAL result was incorporated"
+        )
+
+    # The approval is traceable: the plan id lands in each subject's audit trail.
+    for pid in approved:
+        history = client.get(f"/patients/{pid}").json()["history"]
+        assert any(plan["plan_id"] in (h.get("text") or "") for h in history), (
+            "an autonomous action must be traceable back to the human approval"
+        )
+
+
+def test_workup_execute_skips_a_subject_that_moved():
+    """A subject the rule engine no longer indicates a test for is SKIPPED with
+    the reason, instead of being advanced on a stale plan. LOW_409 is a stopped
+    low-tier subject no other test mutates."""
+    r = client.post(
+        "/workup/execute", json={"patient_ids": [LOW_409, "NOPE"], "plan_id": "stale-plan"}
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["applied"] is False
+    assert body["executed_count"] == 0
+    assert body["skipped_count"] == 2
+    reasons = {s["patient_id"]: s["reason"] for s in body["skipped"]}
+    assert "no test is indicated" in reasons[LOW_409]
+    assert "not found" in reasons["NOPE"].lower()
+
+
+def test_workup_execute_requires_an_approval():
+    assert client.post("/workup/execute", json={"patient_ids": []}).status_code == 422
 
 
 # --------------------------------------------------------------------------- #

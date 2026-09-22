@@ -15,6 +15,7 @@ import {
   SlidersHorizontal,
   Sun,
   Users,
+  Workflow,
   X,
 } from 'lucide-react';
 import { API_BASE } from '../api.js';
@@ -359,6 +360,22 @@ export default function Footer({
                   >
                     <Plug className="h-3.5 w-3.5 opacity-70" />
                     Interoperability (FHIR R4)
+                  </button>
+                </li>
+                <li>
+                  <button
+                    onClick={() => {
+                      onViewChange('autonomous');
+                      scrollToTop();
+                    }}
+                    className={`inline-flex items-center gap-2 transition hover:text-accent ${
+                      currentView === 'autonomous'
+                        ? 'font-bold text-accent'
+                        : 'text-ink dark:text-darkText'
+                    }`}
+                  >
+                    <Workflow className="h-3.5 w-3.5 opacity-70" />
+                    Autonomous Neuro
                   </button>
                 </li>
               </ul>
@@ -742,6 +759,7 @@ export default function Footer({
               { key: 'P', desc: 'Jump to Patient Cohort view' },
               { key: 'S', desc: 'Jump to Live Risk Simulator' },
               { key: 'F', desc: 'Jump to Interoperability (FHIR R4)' },
+              { key: 'A', desc: 'Jump to Autonomous Neuro' },
               { key: 'T', desc: 'Toggle Light / Dark mode' },
               { key: '?', desc: 'Open this keyboard shortcuts reference' },
             ].map((shortcut) => (

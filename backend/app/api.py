@@ -16,7 +16,11 @@ from .schemas import (
     CompareResponse,
     ExplainResponse,
     RefinedOutlookResponse,
+    WorkupExecuteRequest,
+    WorkupExecuteResponse,
     WorkupNextResponse,
+    WorkupPlanRequest,
+    WorkupPlanResponse,
     WorkupRunRequest,
     WorkupRunResponse,
     HealthResponse,
@@ -192,6 +196,7 @@ def workup_run(body: WorkupRunRequest) -> dict:
             continue
         steps.append(step["subject"])
     remaining = sum(1 for r in service.PATIENTS.values() if r["stage"] < 4 and (service.can_advance(r) or service.pending_evidence_beyond(r)))
+    # (see /workup/plan + /workup/execute for the approval-gated variant)
     return {
         "applied": len(steps) > 0,
         "steps": steps,
@@ -200,6 +205,32 @@ def workup_run(body: WorkupRunRequest) -> dict:
         "remaining": remaining,
         "total": len(service.PATIENTS),
     }
+
+
+@router.post("/workup/plan", response_model=WorkupPlanResponse, tags=["autonomous"])
+def workup_plan(body: WorkupPlanRequest) -> dict:
+    """**Read-only proposal.** The model walks the live priority queue and
+    returns the next batch of indicated tests, each with its reasoning — why
+    this subject, why this test, what is expected to move.
+
+    Nothing is ordered and no score changes here: the projections are computed on
+    copies. Approve a subset via `POST /workup/execute` to actually run it.
+    """
+    return service.propose_workup(limit=body.limit)
+
+
+@router.post("/workup/execute", response_model=WorkupExecuteResponse, tags=["autonomous"])
+def workup_execute(body: WorkupExecuteRequest) -> dict:
+    """Execute the **approved** subset of a proposed plan.
+
+    Only the listed subjects are touched. Each is re-checked against its live
+    state first: one whose pathway moved between proposal and approval is
+    skipped with the reason rather than advanced on a stale plan. Every executed
+    step records the approval in the audit trail.
+    """
+    if not body.patient_ids:
+        raise HTTPException(status_code=422, detail="patient_ids must name at least one approved subject.")
+    return service.execute_workup(body.patient_ids, plan_id=body.plan_id, note=body.note)
 
 
 @router.post(

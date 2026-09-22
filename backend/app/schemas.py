@@ -201,10 +201,30 @@ class AutoWorkupResponse(BaseModel):
 
 
 class WorkupSubject(BaseModel):
+    """One step the live loop took, with the reasoning behind it.
+
+    `rationale` and `expected` are the same shape the approvable batch proposal
+    uses, so an unattended step can be read back with the same questions answered
+    — the loop is not a black box just because nobody clicks between ticks.
+    """
+
     id: str
     stage_before: int
     stage_after: int
+    stage_before_name: Optional[str] = None
+    stage_after_name: Optional[str] = None
     slot: str
+    # Human label for the slot ("Blood biomarkers", "MRI volumetrics", …).
+    test: Optional[str] = None
+    # The rule engine's own recommendation text + button, verbatim.
+    summary: Optional[str] = None
+    button: Optional[str] = None
+    tier_before: Optional[str] = None
+    # Why this subject / why this test / cost to the patient / expected effect.
+    rationale: List[dict] = []
+    # What the model projected BEFORE acting, so a row can compare expectation
+    # against outcome rather than only narrating that something ran.
+    expected: dict = {}
     status: Optional[str] = None
     result_on_file: Optional[bool] = None
     outcome: Optional[str] = None
@@ -240,6 +260,76 @@ class WorkupRunResponse(BaseModel):
     steps_run: int
     done: bool
     remaining: int
+    total: int
+
+
+class WorkupPlanRequest(BaseModel):
+    """How many actions the model should propose in one plan."""
+
+    limit: int = 8
+
+
+class WorkupPlanAction(BaseModel):
+    """One proposed action, with the reasoning that justifies it.
+
+    `projected_*` are SIMULATED values computed on a copy of the record: they are
+    what the model expects, not what happened. Nothing here is written to the
+    served store until the action is approved and executed.
+    """
+
+    patient_id: str
+    rank: Optional[int] = None
+    stage_before: int
+    stage_after: int
+    stage_name: Optional[str] = None
+    slot: str
+    test: str
+    summary: str
+    button: Optional[str] = None
+    priority_score: Optional[float] = None
+    official_score: Optional[float] = None
+    tier_before: Optional[str] = None
+    tier_after: Optional[str] = None
+    projected_priority_score: Optional[float] = None
+    projected_official_score: Optional[float] = None
+    priority_delta: Optional[float] = None
+    projected_rank: Optional[int] = None
+    rank_delta: Optional[int] = None
+    result_on_file: bool = False
+    # order-only | none | marginal | material | reclassifies
+    impact: str = "order-only"
+    estimate_confidence: Optional[float] = None
+    rationale: List[dict] = []
+
+
+class WorkupPlanResponse(BaseModel):
+    plan_id: str
+    generated_at: str
+    actions: List[WorkupPlanAction]
+    summary: dict
+    cohort: dict
+    queue_remaining: int = 0
+    total: int = 0
+    reason: Optional[str] = None
+
+
+class WorkupExecuteRequest(BaseModel):
+    """The APPROVED subset of a plan. Only these subjects are touched."""
+
+    patient_ids: List[str]
+    plan_id: Optional[str] = None
+    note: Optional[str] = None
+
+
+class WorkupExecuteResponse(BaseModel):
+    applied: bool
+    plan_id: Optional[str] = None
+    approved_count: int
+    executed: List[dict]
+    skipped: List[dict]
+    executed_count: int
+    skipped_count: int
+    queue_remaining: int
     total: int
 
 

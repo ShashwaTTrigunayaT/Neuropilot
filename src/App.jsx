@@ -8,8 +8,10 @@ import {
   SlidersHorizontal,
   Sun,
   Users,
+  Workflow,
 } from 'lucide-react';
 import AllPatients from './components/AllPatients.jsx';
+import AutonomousTriage from './components/AutonomousTriage.jsx';
 import { NeuroPilotLogo } from './components/BrandLogo.jsx';
 import CompareView from './components/CompareView.jsx';
 import Footer from './components/Footer.jsx';
@@ -21,7 +23,7 @@ import RiskSimulator from './components/RiskSimulator.jsx';
 import { MONO, Toast } from './components/widgets.jsx';
 import { API_BASE, api } from './api.js';
 
-function Header({ theme, onToggleTheme, currentView, onViewChange, patientCount, isDetailOpen, autopilot, onToggleAutopilot, autoBusy }) {
+function Header({ theme, onToggleTheme, currentView, onViewChange, patientCount, isDetailOpen, autopilot, onStopAutopilot }) {
   return (
     <header className="sticky top-0 z-30 border-b border-line dark:border-darkBorder bg-white/85 dark:bg-darkCard/85 backdrop-blur-xl shadow-soft transition-colors">
       <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-x-6 gap-y-3 px-6 py-3">
@@ -87,16 +89,28 @@ function Header({ theme, onToggleTheme, currentView, onViewChange, patientCount,
           </button>
         </nav>
 
-        {/* Autonomous Triage + Theme Switcher */}
+        {/* Autonomous Neuro + Theme Switcher */}
         <div className="flex items-center gap-2.5">
+          {/*
+           * This button is the ONLY autonomous control that lives outside the
+           * view tree, on purpose: the loop refreshes data underneath it, so a
+           * stop control rendered inside a view can be unmounted mid-run. While
+           * the loop is on it becomes Stop, in the sticky header, whatever view
+           * you are on — and Esc does the same thing.
+           */}
           <button
-            onClick={onToggleAutopilot}
-            disabled={autoBusy && !autopilot}
-            title="The model ranks the cohort and autonomously performs the next indicated test on the top-priority subject, re-scoring after every result"
+            onClick={() => (autopilot ? onStopAutopilot() : onViewChange('autonomous'))}
+            title={
+              autopilot
+                ? 'Stop the supervised run (or press Esc)'
+                : 'The model proposes the next batch of tests with its reasoning; a clinician approves what actually runs'
+            }
             className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold shadow-soft transition active:scale-[0.97] ${
               autopilot
-                ? 'bg-accent text-white'
-                : 'border border-line dark:border-darkBorder bg-white dark:bg-darkCard text-ink dark:text-darkText hover:border-accent'
+                ? 'bg-tierHigh text-white hover:opacity-90'
+                : currentView === 'autonomous' && !isDetailOpen
+                  ? 'bg-accent text-white'
+                  : 'border border-line dark:border-darkBorder bg-white dark:bg-darkCard text-ink dark:text-darkText hover:border-accent'
             }`}
           >
             {autopilot ? (
@@ -105,14 +119,12 @@ function Header({ theme, onToggleTheme, currentView, onViewChange, patientCount,
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75" />
                   <span className="relative inline-flex h-2 w-2 rounded-full bg-white" />
                 </span>
-                Autonomous Triage ON
+                Stop
               </>
             ) : (
               <>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
-                </svg>
-                Autonomous Triage
+                <Workflow className="h-3 w-3" strokeWidth={2.4} />
+                Autonomous Neuro
               </>
             )}
           </button>
@@ -188,7 +200,8 @@ export default function App() {
   const [status, setStatus] = useState('loading');
   const [loadError, setLoadError] = useState('');
 
-  const [view, setView] = useState('overview'); // overview | all | simulator | interop | progression | compare
+  // overview | all | simulator | interop | autonomous | progression | compare
+  const [view, setView] = useState('overview');
   const [selectedId, setSelectedId] = useState(null);
   const [simulatedPatient, setSimulatedPatient] = useState(null);
   const [detail, setDetail] = useState(null);
@@ -216,8 +229,22 @@ export default function App() {
     }, 4000);
   };
 
-  const loadAll = useCallback(async () => {
-    setStatus('loading');
+  /*
+   * `silent` separates a FIRST load from a BACKGROUND refresh.
+   *
+   * The loading branch below replaces the whole view tree with a skeleton, and
+   * the ready branch re-mounts it with `animate-fade-up`. That is correct once,
+   * on boot — but the autopilot tick refreshes the cohort every ~1.4 s, so a
+   * non-silent refresh there collapsed and re-expanded the page on a loop and
+   * destroyed whatever control the user was reaching for (including Stop).
+   * A background refresh therefore updates the data in place and leaves the DOM
+   * — and the scroll position — alone.
+   */
+  const loadAll = useCallback(async (opts) => {
+    // `opts` can be a React click event (the Retry button passes it straight
+    // through), so only an explicit object flag counts.
+    const silent = typeof opts === 'object' && opts !== null && opts.silent === true;
+    if (!silent) setStatus('loading');
     setLoadError('');
     try {
       const [list, info, health] = await Promise.all([
@@ -232,6 +259,9 @@ export default function App() {
       setDataSource(health.data_source || '');
       setStatus('ready');
     } catch (err) {
+      // A failed background refresh must not tear down a view that is still
+      // usable: the next explicit action reports the error instead.
+      if (silent) return;
       setLoadError(err.message);
       setStatus('error');
     }
@@ -302,7 +332,7 @@ export default function App() {
     const priorityBefore = detail?.final_score ?? detail?.score;
     try {
       const res = await api.advanceStage(selectedId, { override, note: note || null });
-      await Promise.all([loadDetail(selectedId), loadAll()]);
+      await Promise.all([loadDetail(selectedId), loadAll({ silent: true })]);
       const scoreAfter = res?.new_score;
       const priorityAfter = res?.new_priority_score ?? scoreAfter;
       const officialMoved =
@@ -347,7 +377,8 @@ export default function App() {
     setAutoBusy(true);
     try {
       const step = await api.workupNext();
-      await loadAll();
+      // Silent: the loop must not remount the page (and its own Stop button).
+      await loadAll({ silent: true });
       if (step.applied && step.subject) {
         const s = step.subject;
         const rankNote =
@@ -356,10 +387,16 @@ export default function App() {
               ? ` ↑ climbed #${s.rank_before} → #${s.rank_after}`
               : ` ↓ slipped #${s.rank_before} → #${s.rank_after}`
             : '';
+        // Keep the WHOLE step, not just a formatted line: the console renders
+        // the same reasoning the approvable batch shows, so the loop is not a
+        // black box. `text` stays for the one-line global indicator strip.
+        // 60 entries is cheap now that the log lives in its own fixed-height
+        // scroll region instead of extending the page.
         setAutoLog((log) =>
           [
             {
               id: `${s.id}-${s.stage_after}-${Date.now()}`,
+              step: s,
               text: `${s.id} · ${s.slot.toUpperCase()} ${
                 s.result_on_file ? `${s.outcome} · real result incorporated` : 'no result · predicted stage used for priority only'
               } · priority ${s.priority_score_before?.toFixed(2) ?? s.score_before.toFixed(2)} → ${s.priority_score_after?.toFixed(2) ?? s.score_after.toFixed(2)}${
@@ -371,21 +408,21 @@ export default function App() {
               } · ${s.tier_after}${rankNote}`,
             },
             ...log,
-          ].slice(0, 4)
+          ].slice(0, 60)
         );
         return true; // more work likely remains
       }
       if (step.done) {
         setAutopilot(false);
-        showToast('Autonomous Triage Complete', step.reason ?? 'All pathways complete.', 'success');
+        showToast('Autonomous Neuro Complete', step.reason ?? 'All pathways complete.', 'success');
       } else {
         setAutopilot(false);
-        showToast('Autonomous Triage Stopped', step.reason ?? 'No further test indicated.', 'error');
+        showToast('Autonomous Neuro Stopped', step.reason ?? 'No further test indicated.', 'error');
       }
       return false;
     } catch (err) {
       setAutopilot(false);
-      showToast('Autonomous Triage Failed', err.message, 'error');
+      showToast('Autonomous Neuro Failed', err.message, 'error');
       return false;
     } finally {
       setAutoBusy(false);
@@ -419,7 +456,7 @@ export default function App() {
         values: body.values || {},
         note: body.note || null,
       });
-      await Promise.all([loadDetail(selectedId), loadAll()]);
+      await Promise.all([loadDetail(selectedId), loadAll({ silent: true })]);
       const scoreAfter = res?.new_score;
       const moved =
         typeof scoreBefore === 'number' && typeof scoreAfter === 'number' && Math.abs(scoreAfter - scoreBefore) >= 0.005;
@@ -478,6 +515,12 @@ export default function App() {
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      // Escape stops a running loop FIRST: the surest way out of a page that is
+      // updating underneath you is a key that cannot be scrolled away from.
+      if (e.key === 'Escape' && autopilot) {
+        setAutopilot(false);
+        return;
+      }
       if (e.key === 'Escape' && view === 'compare') {
         setView('all');
         return;
@@ -497,12 +540,13 @@ export default function App() {
         if (e.key === 'p' || e.key === 'P') handleNavChange('all');
         if (e.key === 's' || e.key === 'S') handleNavChange('simulator');
         if (e.key === 'f' || e.key === 'F') handleNavChange('interop');
+        if (e.key === 'a' || e.key === 'A') handleNavChange('autonomous');
         if (e.key === 't' || e.key === 'T') toggleTheme();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedId, view, hasPrev, hasNext, currentIndex]);
+  }, [selectedId, view, hasPrev, hasNext, currentIndex, autopilot]);
 
   const handleNavChange = (targetView) => {
     if (targetView !== 'progression') setSelectedId(null);
@@ -528,35 +572,42 @@ export default function App() {
         patientCount={patients.length}
         isDetailOpen={Boolean(selectedId)}
         autopilot={autopilot}
-        onToggleAutopilot={() => {
-          if (!autopilot) setAutoLog([]);
-          setAutopilot((a) => !a);
-        }}
-        autoBusy={autoBusy}
+        onStopAutopilot={() => setAutopilot(false)}
       />
 
-      <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-8">
-        {autopilot && (
-          <div className="mb-6 rounded-2xl border border-accent/40 bg-accent/5 dark:bg-accent/10 px-5 py-3.5 animate-fade-up">
-            <div className="flex items-center gap-2.5">
-              <span className="relative flex h-2.5 w-2.5 shrink-0">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-60" />
-                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-accent" />
-              </span>
-              <p className="text-xs font-bold text-accent">Autonomous Triage running — the model is working the priority queue</p>
-              {autoBusy && <span className="text-[10.5px] font-medium text-muted dark:text-darkMuted">processing step…</span>}
-            </div>
-            {autoLog.length > 0 && (
-              <ul className="mt-2.5 space-y-1">
-                {autoLog.map((l) => (
-                  <li key={l.id} style={MONO} className="text-[10.5px] leading-relaxed text-muted dark:text-darkMuted">
-                    {l.text}
-                  </li>
-                ))}
-              </ul>
+      {/*
+       * Global loop indicator. The console owns the full step log, but a loop
+       * that is mutating the cohort must be visible from every view. Height is
+       * fixed to one line, so it never reflows the page while running — the
+       * whole point of the silent refresh underneath it.
+       */}
+      {autopilot && view !== 'autonomous' && (
+        <div className="border-b border-accent/30 bg-accent/[0.06] dark:bg-accent/10">
+          <div className="mx-auto flex w-full max-w-6xl items-center gap-2.5 px-6 py-2">
+            <span className="relative flex h-2.5 w-2.5 shrink-0">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-60" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-accent" />
+            </span>
+            <p className="shrink-0 text-[11.5px] font-bold text-accent">Autonomous Neuro running</p>
+            {autoLog[0] && (
+              <p
+                style={MONO}
+                className="min-w-0 flex-1 truncate text-[10.5px] text-muted dark:text-darkMuted"
+              >
+                {autoLog[0].text}
+              </p>
             )}
+            <button
+              onClick={() => setAutopilot(false)}
+              className="ml-auto shrink-0 rounded-lg bg-tierHigh px-2.5 py-1 text-[10.5px] font-bold text-white transition hover:opacity-90"
+            >
+              Stop (Esc)
+            </button>
           </div>
-        )}
+        </div>
+      )}
+
+      <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-8">
         {status === 'loading' && !selectedId && <CohortSkeleton />}
         {status === 'loading' && selectedId && <DetailSkeleton />}
 
@@ -590,6 +641,7 @@ export default function App() {
                   onSelect={openPatient}
                   onShowAll={() => setView('all')}
                   onOpenSimulator={() => setView('simulator')}
+                  onViewChange={setView}
                 />
               )}
 
@@ -614,6 +666,21 @@ export default function App() {
                   patients={patients}
                   initialPatientId={selectedId}
                   onToast={showToast}
+                />
+              )}
+
+              {view === 'autonomous' && (
+                <AutonomousTriage
+                  onOpenPatient={openPatient}
+                  onToast={showToast}
+                  onRefresh={() => loadAll({ silent: true })}
+                  autopilot={autopilot}
+                  onToggleAutopilot={() => {
+                    if (!autopilot) setAutoLog([]);
+                    setAutopilot((a) => !a);
+                  }}
+                  autoBusy={autoBusy}
+                  autoLog={autoLog}
                 />
               )}
             </div>

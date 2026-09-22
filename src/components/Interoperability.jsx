@@ -16,7 +16,18 @@ import {
 } from 'lucide-react';
 import { API_BASE, api } from '../api.js';
 import AbdmPanel from './AbdmPanel.jsx';
-import { CopyableRow, MONO, Pill, Row, SectionLabel, shortId } from './widgets.jsx';
+import {
+  Btn,
+  CopyableRow,
+  MONO,
+  PANEL,
+  PANEL_PAD,
+  Pill,
+  RibbonStat,
+  Row,
+  SectionLabel,
+  shortId,
+} from './widgets.jsx';
 
 /**
  * Interoperability — the HL7 FHIR R4 surface (FHIR_INTEGRATION.md Phases 1-4).
@@ -27,11 +38,6 @@ import { CopyableRow, MONO, Pill, Row, SectionLabel, shortId } from './widgets.j
  * ServiceRequest, and what the inbound ingestion path actually does with a
  * bundle — including refusing one.
  */
-
-const PANEL =
-  'rounded-2xl border border-line dark:border-darkBorder bg-white dark:bg-darkCard shadow-soft';
-
-const PANEL_PAD = `${PANEL} p-5`;
 
 const PHASE_KEYS = ['1_export', '2_inbound', '3_bidirectional', '4_smart'];
 const PHASE_TITLES = {
@@ -63,50 +69,6 @@ const SAMPLE_BUNDLE = (patientId) => ({
     },
   ],
 });
-
-/** One cell of the top status ribbon. */
-function Stat({ icon: Icon, label, value, tone = 'muted', hint }) {
-  const toneRing = {
-    ok: 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10',
-    warn: 'text-amber-600 dark:text-amber-400 bg-amber-500/10',
-    muted: 'text-muted dark:text-darkMuted bg-tint dark:bg-darkBorderSubtle',
-    accent: 'text-accent bg-accent/10',
-  };
-  return (
-    <div className="flex items-start gap-3 px-4 py-3.5">
-      <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${toneRing[tone]}`}>
-        <Icon className="h-3.5 w-3.5" />
-      </span>
-      <div className="min-w-0">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted dark:text-darkMuted">
-          {label}
-        </p>
-        <p className="mt-0.5 truncate text-[12px] font-bold text-ink dark:text-darkText">{value}</p>
-        {hint && <p className="mt-0.5 truncate text-[10px] text-muted dark:text-darkMuted">{hint}</p>}
-      </div>
-    </div>
-  );
-}
-
-function Btn({ tone = 'ghost', icon: Icon, children, ...rest }) {
-  const tones = {
-    primary:
-      'bg-accent text-white shadow-soft hover:bg-accentHover border border-transparent',
-    ghost:
-      'border border-line dark:border-darkBorder bg-white dark:bg-darkCard text-ink dark:text-darkText hover:border-accent/40',
-    quiet:
-      'border border-line dark:border-darkBorder bg-white dark:bg-darkCard text-muted dark:text-darkMuted hover:text-ink dark:hover:text-darkText',
-  };
-  return (
-    <button
-      {...rest}
-      className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-semibold disabled:opacity-50 ${tones[tone]}`}
-    >
-      {Icon && <Icon className="h-3.5 w-3.5" />}
-      {children}
-    </button>
-  );
-}
 
 export default function Interoperability({ patients = [], initialPatientId, onToast }) {
   const [status, setStatus] = useState('loading');
@@ -321,7 +283,7 @@ export default function Interoperability({ patients = [], initialPatientId, onTo
       {/* ── Status ribbon: one panel instead of four competing cards ── */}
       <div className={`${PANEL} divide-y divide-line dark:divide-darkBorder sm:grid sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4`}>
         <div className="sm:border-r sm:border-line dark:sm:border-darkBorder">
-          <Stat
+          <RibbonStat
             icon={Server}
             label="Hospital server"
             value={outbound.reachable ? outbound.software || 'Reachable' : 'Not connected'}
@@ -330,7 +292,7 @@ export default function Interoperability({ patients = [], initialPatientId, onTo
           />
         </div>
         <div className="lg:border-r lg:border-line dark:lg:border-darkBorder">
-          <Stat
+          <RibbonStat
             icon={Plug}
             label="SMART session"
             value={smart?.connected ? 'Bound' : 'No session'}
@@ -339,7 +301,7 @@ export default function Interoperability({ patients = [], initialPatientId, onTo
           />
         </div>
         <div className="sm:border-r sm:border-line dark:sm:border-darkBorder">
-          <Stat
+          <RibbonStat
             icon={Upload}
             label="Outbound push"
             value={overview.push_orders_on_order ? 'Enabled' : 'Disabled'}
@@ -348,7 +310,7 @@ export default function Interoperability({ patients = [], initialPatientId, onTo
           />
         </div>
         <div>
-          <Stat
+          <RibbonStat
             icon={Activity}
             label="Exchange surface"
             value={`${(surface.patients ?? 0).toLocaleString()} patients`}

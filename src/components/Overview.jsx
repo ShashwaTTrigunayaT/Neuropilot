@@ -1,17 +1,35 @@
 import { useMemo } from 'react';
-import { LayoutDashboard } from 'lucide-react';
+import {
+  Activity,
+  AlertCircle,
+  ArrowRight,
+  CheckCircle2,
+  Gauge,
+  ShieldCheck,
+  Siren,
+  Users,
+} from 'lucide-react';
 import FeatureRadarChart from './FeatureRadarChart.jsx';
 import RiskDistributionChart from './RiskDistributionChart.jsx';
 import StageProgressionChart from './StageProgressionChart.jsx';
 import {
-  CohortSummary,
+  Btn,
+  JOINED_GRID,
   MONO,
+  PANEL,
   PatientTable,
+  Pill,
+  RibbonStat,
   SectionLabel,
+  TIER_HEX,
 } from './widgets.jsx';
+import { fmtScore } from '../lib.js';
 
 const SHORTLIST_SIZE = 8;
 const TIER_RANK = { high: 0, medium: 1, low: 2 };
+const STAGE_ORDER = ['1', '2', '3', '4'];
+
+const auc = (v) => (typeof v === 'number' ? v.toFixed(2) : '—');
 
 export default function Overview({
   patients,
@@ -19,6 +37,7 @@ export default function Overview({
   onSelect,
   onShowAll,
   onOpenSimulator,
+  onViewChange,
 }) {
   const counts = useMemo(() => {
     const c = { high: 0, medium: 0, low: 0 };
@@ -34,7 +53,7 @@ export default function Overview({
   );
 
   // Priority list: tier FIRST, then score inside a tier. A patient whose score is
-  // high but whose tier is capped (no biomarker on file yet — "awaiting
+  // high but whose tier is capped (no biomarker on file yet -- "awaiting
   // confirmation") must not lead a list labelled "Top Priority", or the ordering
   // contradicts the tier printed next to it.
   const shortlist = useMemo(
@@ -46,103 +65,212 @@ export default function Overview({
     [patients]
   );
 
-  const highCount = counts.high;
   const total = patients.length;
+  const elevated = counts.high + counts.medium;
+  const elevatedPct = total ? Math.round((elevated / total) * 100) : 0;
 
   // Attribution of the model the API actually serves, read straight from its
   // card -- so this panel can never describe a different model family than the
   // one producing the scores on the page.
   const servedImportance = modelInfo?.global_importance || [];
+  const featureCount = modelInfo?.features?.length || servedImportance.length;
+  const stageShare = STAGE_ORDER
+    .map((k) => modelInfo?.stage_importance?.[k])
+    .filter((s) => s && typeof s.share_pct === 'number');
 
   return (
-    <div className="space-y-12 animate-fade-up">
-      {/* Premium Title Header */}
-      <div className="relative pb-6 border-b border-line/80 dark:border-darkBorder/80">
-        <div className="flex flex-wrap items-center justify-between gap-6">
-          <div className="flex items-center gap-3.5">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-accent/20 to-accent/5 dark:from-accent/25 dark:to-accent/10 border border-accent/25 text-accent shadow-sm">
-              <LayoutDashboard className="h-5 w-5" />
-            </div>
-            <div>
-              <h1 className="text-[28px] sm:text-[32px] font-black tracking-tight text-ink dark:text-darkText leading-none">
-                Cohort Overview
-              </h1>
-              <p className="mt-1.5 text-[13px] text-muted dark:text-darkMuted flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                <span>Multi-stage diagnostic tracking</span>
-                <span className="text-line dark:text-darkBorder font-light">/</span>
-                <span><strong style={MONO} className="font-semibold text-ink dark:text-darkText">{total}</strong> longitudinal subjects</span>
-                <span className="text-line dark:text-darkBorder font-light">/</span>
-                <span>Active Risk Stratification</span>
-              </p>
-            </div>
+    <div className="space-y-11 animate-fade-up">
+      {/* ---------------------------------------------------------------- */}
+      {/* Hero: what this is and what it is for                             */}
+      {/* ---------------------------------------------------------------- */}
+      <section className={`${PANEL} relative overflow-hidden`}>
+        <div
+          className="pointer-events-none absolute inset-x-0 -top-24 h-56"
+          style={{ background: 'radial-gradient(55% 100% at 50% 0%, rgba(13,130,130,0.14), transparent 72%)' }}
+        />
+        <div className="relative p-7 lg:p-9">
+          <div className="flex flex-wrap items-center gap-2">
+            <Pill tone="accent">
+              <Activity className="h-3 w-3" /> Cohort overview
+            </Pill>
+            <Pill tone="muted">
+              <ShieldCheck className="h-3 w-3" /> Decision support · non-diagnostic
+            </Pill>
+          </div>
+
+          <h1 className="mt-5 max-w-3xl text-[31px] font-black leading-[1.08] tracking-tight text-ink dark:text-darkText sm:text-[40px]">
+            Who needs the next test — and why.
+          </h1>
+
+          <p className="mt-4 max-w-2xl text-[13.5px] leading-relaxed text-muted dark:text-darkMuted">
+            NeuroPilot ranks the cohort by refined progression risk across the four diagnostic
+            stages — cognition, blood biomarkers, MRI volumetrics and PET — and explains every
+            point of the score. Specialists work a ranked queue instead of re-reading charts, and
+            each subject carries the evidence behind its position.
+          </p>
+
+          <div className="mt-7 flex flex-wrap items-center gap-2.5">
+            <Btn tone="primary" onClick={onShowAll} className="px-4 py-2.5 text-[12px]">
+              Review the priority queue
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Btn>
+            {onViewChange && (
+              <Btn tone="ghost" onClick={() => onViewChange('autonomous')} className="px-4 py-2.5 text-[12px]">
+                Autonomous Neuro
+              </Btn>
+            )}
+            {onOpenSimulator && (
+              <Btn tone="quiet" onClick={onOpenSimulator} className="px-4 py-2.5 text-[12px]">
+                Risk simulator
+              </Btn>
+            )}
           </div>
         </div>
-      </div>
-       
+      </section>
 
-      
+      {/* ---------------------------------------------------------------- */}
+      {/* Cohort at a glance: one ribbon, five cells, hairline dividers     */}
+      {/* ---------------------------------------------------------------- */}
+      <section className="space-y-3">
+        <SectionLabel
+          right={
+            <span className="text-[11px] text-muted dark:text-darkMuted">
+              <strong style={MONO} className="font-semibold text-ink dark:text-darkText">{elevatedPct}%</strong> elevated
+            </span>
+          }
+        >
+          Cohort at a glance
+        </SectionLabel>
 
+        <div className={`${JOINED_GRID} sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5`}>
+          <div className="bg-white dark:bg-darkCard">
+            <RibbonStat
+              icon={Users}
+              label="Subjects"
+              value={total.toLocaleString()}
+              hint="scored by the refined model"
+            />
+          </div>
+          <div className="bg-white dark:bg-darkCard">
+            <RibbonStat
+              icon={Siren}
+              label="High priority"
+              value={counts.high.toLocaleString()}
+              tone="bad"
+              hint="biomarker evidence on file"
+            />
+          </div>
+          <div className="bg-white dark:bg-darkCard">
+            <RibbonStat
+              icon={AlertCircle}
+              label="Medium"
+              value={counts.medium.toLocaleString()}
+              tone="warn"
+              hint="awaiting the next stage"
+            />
+          </div>
+          <div className="bg-white dark:bg-darkCard">
+            <RibbonStat
+              icon={CheckCircle2}
+              label="Low"
+              value={counts.low.toLocaleString()}
+              tone="ok"
+              hint="stable on current evidence"
+            />
+          </div>
+          <div className="bg-white dark:bg-darkCard">
+            <RibbonStat
+              icon={Gauge}
+              label="Mean refined risk"
+              value={fmtScore(meanRisk)}
+              tone="accent"
+              hint="cohort average, 0–1"
+            />
+          </div>
+        </div>
+      </section>
 
-
-
-      {/* Cohort KPIs */}
-      <CohortSummary counts={counts} meanRisk={meanRisk} total={total} />
-
-      {/* Visual Analytics - Untrapped Side by Side with 1:1 Height Parity */}
-      <div className="border-t border-line dark:border-darkBorder pt-8">
-        <div className="grid gap-10 lg:grid-cols-2 items-stretch">
+      {/* ---------------------------------------------------------------- */}
+      {/* Analytics: the two charts, untrapped, sharing a row               */}
+      {/* ---------------------------------------------------------------- */}
+      <section className="border-t border-line pt-8 dark:border-darkBorder">
+        <div className="grid items-stretch gap-10 lg:grid-cols-2">
           <RiskDistributionChart patients={patients} />
           <StageProgressionChart patients={patients} />
         </div>
-      </div>
+      </section>
 
+      {/* ---------------------------------------------------------------- */}
+      {/* Feature attribution, straight from the served card                */}
+      {/* ---------------------------------------------------------------- */}
       {servedImportance.length > 0 && (
-        <div className="border-t border-line dark:border-darkBorder pt-8">
-          <div className="flex items-baseline justify-between gap-2 mb-3">
-            <SectionLabel>{modelInfo?.label || 'Refined model'} — feature attribution</SectionLabel>
-          </div>
-          <FeatureRadarChart data={servedImportance} />
-        </div>
-      )}
-      
-
-      
-
-      {/* Highest Priority Shortlist */}
-      <div className="border-t border-line dark:border-darkBorder pt-8">
-        <div className="flex items-baseline justify-between gap-4">
-          <SectionLabel>
-            Top Priority Patients
-          </SectionLabel>
-          <button
-            onClick={onShowAll}
-            className="group inline-flex items-center gap-1 text-xs font-semibold text-accent hover:underline transition"
+        <section className="space-y-4 border-t border-line pt-8 dark:border-darkBorder">
+          <SectionLabel
+            right={
+              <div className="flex flex-wrap items-center gap-2">
+                <Pill tone="muted">{featureCount} features</Pill>
+                <Pill tone="accent">{auc(modelInfo?.test_auc)} AUROC</Pill>
+              </div>
+            }
           >
-            View all {total} patients
-            <svg
-              className="transition group-hover:translate-x-0.5"
-              width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-            >
-              <path d="m9 6 6 6-6 6" />
-            </svg>
-          </button>
-        </div>
-        <p className="mt-1 text-xs text-muted dark:text-darkMuted">
-          Top {Math.min(SHORTLIST_SIZE, shortlist.length)} by tier, then refined score {highCount > SHORTLIST_SIZE ? `(${highCount} total in High tier)` : ''}
+            {modelInfo?.label || 'Refined model'} — feature attribution
+          </SectionLabel>
+
+          <FeatureRadarChart data={servedImportance} />
+
+          {/* Per-stage share of attribution: the same weighting the score was
+              built from, aggregated to the stage a clinician can order. */}
+          {stageShare.length > 0 && (
+            <p className="flex flex-wrap items-baseline gap-x-4 gap-y-1 px-1 text-[10.5px] text-dust dark:text-darkMuted">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.12em]">
+                Stage share of attribution
+              </span>
+              {stageShare.map((s, i) => (
+                <span key={s.name || i} className="flex items-baseline gap-1.5">
+                  <span style={MONO} className="text-[9px]">0{i + 1}</span>
+                  {s.name}
+                  <span style={MONO} className="font-semibold text-muted dark:text-darkMuted">
+                    {s.share_pct}%
+                  </span>
+                </span>
+              ))}
+            </p>
+          )}
+        </section>
+      )}
+
+      {/* ---------------------------------------------------------------- */}
+      {/* Priority shortlist                                                */}
+      {/* ---------------------------------------------------------------- */}
+      <section className="space-y-4 border-t border-line pt-8 dark:border-darkBorder">
+        <SectionLabel
+          right={
+            <Btn tone="quiet" onClick={onShowAll}>
+              View all {total.toLocaleString()}
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Btn>
+          }
+        >
+          Top priority patients
+        </SectionLabel>
+
+        <p className="text-[11.5px] leading-relaxed text-muted dark:text-darkMuted">
+          Ordered by tier first, then by refined score — so the tier printed beside a subject always
+          matches its position.{' '}
+          <strong style={{ ...MONO, color: TIER_HEX.high }} className="font-semibold">
+            {counts.high.toLocaleString()}
+          </strong>{' '}
+          in High tier.
         </p>
-        <div className="mt-4 rounded-2xl border border-line dark:border-darkBorder bg-white/70 dark:bg-darkCard/70 overflow-hidden">
+
+        <div className={`${PANEL} overflow-hidden`}>
           {shortlist.length === 0 ? (
             <p className="px-5 py-16 text-center text-xs text-muted dark:text-darkMuted">No patients loaded.</p>
           ) : (
             <PatientTable rows={shortlist} compact onSelect={onSelect} />
           )}
         </div>
-      </div>
-  
-
-  {/* Global explainability - Radar Web (Clean & Untrapped) */}
-      
+      </section>
     </div>
   );
-   }
-      
+}

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import uuid
 from datetime import datetime
 
 import numpy as np
@@ -826,6 +827,52 @@ def workup_next() -> dict:
     official_before = subject["score"]
     tier_before = risk_tier(official_before, has_biomarker_evidence(subject))
     stage_before = subject["stage"]
+    subject_rank_before = rank_before.get(subject_id)
+    action = next_action_for(subject)
+
+    # Describe the step BEFORE taking it, and on a COPY: the live loop reports the
+    # same reasoning the approvable batch does (why this subject, why this test,
+    # what it expects to move) plus what it expected, so the row can compare
+    # expectation against outcome instead of just narrating that something ran.
+    expected: dict = {}
+    rationale: list[dict] = []
+    projected_step = _simulate_next_step(subject)
+    if projected_step is not None:
+        projected = projected_step["projected"]
+        records = list(PATIENTS.values())
+        projected_tier = risk_tier(projected["score"], has_biomarker_evidence(projected))
+        projected_priority = _priority_score(projected)
+        projected_rank = _projected_rank(projected_priority, records, subject_id)
+        rationale = _step_rationale(
+            subject,
+            projected_step,
+            rank_before=subject_rank_before or 0,
+            rank_after=projected_rank,
+            total=len(records),
+            is_top=True,
+            tier_before=tier_before,
+            tier_after=projected_tier,
+            priority_before=score_before,
+            priority_after=projected_priority,
+            official_before=float(official_before),
+            official_after=float(projected["score"]),
+        )
+        expected = {
+            "phase": STAGES_FULL[stage_before - 1],
+            "stage_name": STAGES_FULL[stage_before - 1],
+            "test": RESULT_SLOT_LABEL[projected_step["slot"]],
+            "summary": action["summary"] if action else None,
+            "button": action["button"] if action else None,
+            "result_on_file": bool(projected_step["on_file"]),
+            "projected_priority_score": round(projected_priority, 4),
+            "projected_official_score": round(float(projected["score"]), 4),
+            "projected_tier": projected_tier,
+            "projected_rank": projected_rank,
+            "impact": _plan_impact(
+                projected_step["on_file"], tier_before, projected_tier,
+                projected_priority - score_before,
+            ),
+        }
 
     payload, error = advance_stage(subject_id)
     if payload is None:
@@ -837,7 +884,6 @@ def workup_next() -> dict:
 
     now_ranked = sorted(PATIENTS.values(), key=_priority_score, reverse=True)
     rank_after = {r["id"]: i + 1 for i, r in enumerate(now_ranked)}
-    subject_rank_before = rank_before.get(subject_id)
     subject_rank_after = rank_after.get(subject_id)
 
     return {
@@ -847,7 +893,12 @@ def workup_next() -> dict:
             "id": subject_id,
             "stage_before": stage_before,
             "stage_after": payload["pipeline"]["current_stage"],
+            "stage_before_name": STAGES_FULL[stage_before - 1],
+            "stage_after_name": payload["pipeline"]["stage_name"],
             "slot": payload["result"]["slot"],
+            "test": RESULT_SLOT_LABEL.get(payload["result"]["slot"], payload["result"]["slot"]),
+            "summary": action["summary"] if action else None,
+            "button": action["button"] if action else None,
             "status": payload["result"].get("status"),
             "result_on_file": payload["result"].get("carried_forward"),
             "outcome": payload["result"]["outcome"],
@@ -858,12 +909,397 @@ def workup_next() -> dict:
             "priority_changed": abs(_priority_score(PATIENTS[subject_id]) - score_before) >= 0.00005,
             "official_score_before": official_before,
             "official_score_after": payload["new_score"],
+            "tier_before": tier_before,
             "tier_after": payload["new_tier"],
             "rank_before": subject_rank_before,
             "rank_after": subject_rank_after,
+            "rationale": rationale,
+            "expected": expected,
         },
         "queue_remaining": sum(1 for r in PATIENTS.values() if r["stage"] < 4 and (can_advance(r) or pending_evidence_beyond(r))),
         "total": len(PATIENTS),
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Approval-gated autonomous triage (propose -> approve -> execute)
+#
+# The loop above acts immediately. This one splits the decision in two: a
+# PROPOSAL is computed on deep copies and mutates nothing, and execution happens
+# only for the subjects a human explicitly approved. Every proposal carries its
+# own reasoning -- why this subject, why this test, what is expected to move --
+# so the approval is an informed one rather than a rubber stamp.
+# --------------------------------------------------------------------------- #
+
+_PLAN_MAX_ACTIONS = 25
+
+
+def _cohort_state() -> dict:
+    """Headline counters for the autonomous console (pure read)."""
+    records = list(PATIENTS.values())
+    tier_counts = {"high": 0, "medium": 0, "low": 0}
+    stage_counts: dict[str, int] = {}
+    for record in records:
+        tier_counts[risk_tier(record["score"], has_biomarker_evidence(record))] += 1
+        key = str(record["stage"])
+        stage_counts[key] = stage_counts.get(key, 0) + 1
+    return {
+        "total": len(records),
+        "awaiting_workup": sum(
+            1 for r in records if r["stage"] < 4 and (can_advance(r) or pending_evidence_beyond(r))
+        ),
+        "complete": sum(1 for r in records if r["stage"] >= 4),
+        "tier_counts": tier_counts,
+        "stage_counts": stage_counts,
+    }
+
+
+def _simulate_next_step(record: dict) -> Optional[dict]:
+    """Project a record's next indicated test WITHOUT touching the served store.
+
+    Mirrors advance_stage's state transition on a DEEP COPY: attach the result
+    (a real one already on file, or a bare order), re-score, re-derive the
+    priority score. Nothing is written back, so asking "what would this change?"
+    can never change it.
+    """
+    if record["stage"] >= 4:
+        return None
+    if not can_advance(record) and not pending_evidence_beyond(record):
+        return None
+
+    projected = copy.deepcopy(record)
+    to_stage = projected["stage"] + 1
+    slot = RESULT_SLOT[to_stage]
+    # _result_for_slot returns the payload to attach; on the copy this is a
+    # detached dict, so an on-file result cannot be mutated back into PATIENTS.
+    result, on_file = _result_for_slot(projected, slot)
+    projected[slot] = result
+    projected["stage"] = to_stage
+    projected["beyond_stage"] = _beyond_stage(projected)
+    _rescore(projected)
+    _refresh_priority_scores([projected])
+    return {
+        "slot": slot,
+        "stage_after": to_stage,
+        "result": result,
+        "on_file": on_file,
+        "projected": projected,
+    }
+
+
+def _projected_rank(score: float, records: list[dict], patient_id: str) -> int:
+    """Position a projected score would hold against the CURRENT cohort."""
+    return 1 + sum(
+        1 for r in records if r["id"] != patient_id and _priority_score(r) > score
+    )
+
+
+def _plan_impact(on_file: bool, tier_before: str, tier_after: str, delta: float) -> str:
+    """One-word verdict on what a proposed action is expected to do."""
+    if not on_file:
+        return "order-only"
+    if tier_after != tier_before:
+        return "reclassifies"
+    if abs(delta) >= 0.05:
+        return "material"
+    if abs(delta) >= 0.01:
+        return "marginal"
+    return "none"
+
+
+def _step_rationale(
+    record: dict,
+    step: dict,
+    *,
+    rank_before: int,
+    rank_after: int,
+    total: int,
+    is_top: bool,
+    tier_before: str,
+    tier_after: str,
+    priority_before: float,
+    priority_after: float,
+    official_before: float,
+    official_after: float,
+) -> list[dict]:
+    """The four reasons behind ONE next step, in the console's own words.
+
+    Shared by the batch proposal and the live loop, so a step the model takes on
+    its own explains itself exactly as a step a clinician is asked to approve
+    does. The loop is not exempt from explaining itself just because nobody
+    clicks between ticks.
+    """
+    action = next_action_for(record)
+    label = RESULT_SLOT_LABEL[step["slot"]]
+    delta = priority_after - priority_before
+
+    rank_note = (
+        " Every subject above it holds no indicated test, so this is the top of the queue."
+        if is_top
+        else f" Ranked #{rank_before} on the live queue."
+    )
+
+    if step["on_file"]:
+        # A real measurement is being incorporated, so the OFFICIAL score moves
+        # too -- say by how much, since that is the only number with clinical
+        # standing here (the priority score also blends the model's estimate).
+        official_note = (
+            f" Official score {official_before:.2f} → {official_after:.2f}."
+            if abs(official_after - official_before) >= 1e-9
+            else f" Official score stays {official_before:.2f}."
+        )
+        effect_text = (
+            f"Priority score {priority_before:.2f} → {priority_after:.2f} "
+            f"({delta:+.2f}), {tier_before} → {tier_after} tier, queue position "
+            f"#{rank_before} → #{rank_after}.{official_note}"
+        )
+    else:
+        effect_text = (
+            f"Order only — the official score stays {official_before:.2f} until a "
+            f"result returns. The priority score is recalculated from the predicted "
+            f"stage alone ({priority_before:.2f} → {priority_after:.2f}), and no "
+            f"measured evidence is implied by it."
+        )
+
+    return [
+        {
+            "label": "Why this subject",
+            "text": (
+                f"Rank #{rank_before} of {total} by priority score "
+                f"{priority_before:.2f} — {tier_before} tier, "
+                f"{STAGES_FULL[record['stage'] - 1]}.{rank_note}"
+            ),
+        },
+        {
+            "label": "Why this test",
+            "text": (
+                f"The rule engine gates the escalation on the current score: {action['summary']}"
+                if action
+                else f"The pathway's next step is {label}."
+            ),
+        },
+        {
+            "label": "Cost to the patient",
+            "text": (
+                f"A real {label} result is already on file "
+                f"({step['result'].get('outcome')}) — incorporating it requires "
+                f"no new order and no new measurement."
+                if step["on_file"]
+                else f"No {label} result exists in this cohort, so this is an "
+                     f"order only. Nothing is invented to fill the gap."
+            ),
+        },
+        {"label": "Expected effect", "text": effect_text},
+    ]
+
+
+def propose_workup(limit: int = 8) -> dict:
+    """Propose the next batch of tests in priority order -- READ ONLY.
+
+    Walks the live queue from the top, projecting each candidate's next indicated
+    test on a copy, and returns them with the reasoning behind every pick. No
+    order is placed and no score moves until POST /workup/execute approves the
+    batch. The candidate selection policy is deliberately unchanged from the
+    live loop (highest priority first); what is added is the reasoning and the
+    ability to refuse.
+    """
+    limit = max(1, min(int(limit), _PLAN_MAX_ACTIONS))
+    records = list(PATIENTS.values())
+    ranked = sorted(records, key=_priority_score, reverse=True)
+    rank_of = {r["id"]: i + 1 for i, r in enumerate(ranked)}
+    total = len(records)
+
+    actions: list[dict] = []
+    for record in ranked:
+        if len(actions) >= limit:
+            break
+        step = _simulate_next_step(record)
+        if step is None:
+            continue
+
+        action = next_action_for(record)
+        projected = step["projected"]
+        slot = step["slot"]
+        priority_before = _priority_score(record)
+        priority_after = _priority_score(projected)
+        official_before = float(record["score"])
+        official_after = float(projected["score"])
+        tier_before = risk_tier(official_before, has_biomarker_evidence(record))
+        tier_after = risk_tier(official_after, has_biomarker_evidence(projected))
+        rank_before = rank_of[record["id"]]
+        rank_after = _projected_rank(priority_after, records, record["id"])
+        delta = priority_after - priority_before
+        impact = _plan_impact(step["on_file"], tier_before, tier_after, delta)
+        label = RESULT_SLOT_LABEL[slot]
+
+        actions.append(
+            {
+                "patient_id": record["id"],
+                "rank": rank_before,
+                "stage_before": record["stage"],
+                "stage_after": step["stage_after"],
+                "stage_name": STAGES_FULL[record["stage"] - 1],
+                "slot": slot,
+                "test": label,
+                "summary": action["summary"] if action else f"Next indicated step: {label}",
+                "button": action["button"] if action else label,
+                "priority_score": round(priority_before, 4),
+                "official_score": round(official_before, 4),
+                "tier_before": tier_before,
+                "tier_after": tier_after,
+                "projected_priority_score": round(priority_after, 4),
+                "projected_official_score": round(official_after, 4),
+                "priority_delta": round(delta, 4),
+                "projected_rank": rank_after,
+                "rank_delta": rank_before - rank_after,
+                "result_on_file": bool(step["on_file"]),
+                "impact": impact,
+                "estimate_confidence": record.get("estimate_confidence", 0.0),
+                "rationale": _step_rationale(
+                    record,
+                    step,
+                    rank_before=rank_before,
+                    rank_after=rank_after,
+                    total=total,
+                    is_top=len(actions) == 0,
+                    tier_before=tier_before,
+                    tier_after=tier_after,
+                    priority_before=priority_before,
+                    priority_after=priority_after,
+                    official_before=official_before,
+                    official_after=official_after,
+                ),
+            }
+        )
+
+    state = _cohort_state()
+    if not actions:
+        reason = (
+            "No test is currently indicated for any subject in this cohort — every "
+            "pathway is either complete or the rule engine recommends routine follow-up."
+        )
+    else:
+        reason = None
+
+    return {
+        "plan_id": uuid.uuid4().hex[:12],
+        "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "actions": actions,
+        "summary": {
+            "proposed": len(actions),
+            "no_cost": sum(1 for a in actions if a["result_on_file"]),
+            "orders_only": sum(1 for a in actions if not a["result_on_file"]),
+            "reclassifications": sum(1 for a in actions if a["impact"] == "reclassifies"),
+            "queue_promotions": sum(1 for a in actions if a["rank_delta"] > 0),
+            "largest_priority_move": round(
+                max((abs(a["priority_delta"]) for a in actions), default=0.0), 4
+            ),
+        },
+        "cohort": state,
+        "queue_remaining": state["awaiting_workup"],
+        "total": state["total"],
+        "reason": reason,
+    }
+
+
+def execute_workup(
+    patient_ids: list[str],
+    plan_id: Optional[str] = None,
+    note: Optional[str] = None,
+) -> dict:
+    """Execute an APPROVED batch, then report what actually happened.
+
+    Approval is the gate: only the subjects listed here are touched. Each subject
+    is re-checked against its live state first, so one whose pathway moved between
+    proposal and approval is SKIPPED with the reason instead of advanced on a
+    stale plan. Every executed step writes the approval into the audit trail, so
+    an autonomous action can always be traced back to a human decision.
+    """
+    approved: list[str] = []
+    seen: set[str] = set()
+    for raw in patient_ids or []:
+        key = str(raw).strip()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        approved.append(key)
+
+    audit_note = (note or "").strip() or (
+        f"approved autonomous plan {plan_id}" if plan_id else "approved autonomous action"
+    )
+
+    rank_before = {
+        r["id"]: i + 1
+        for i, r in enumerate(sorted(PATIENTS.values(), key=_priority_score, reverse=True))
+    }
+    executed: list[dict] = []
+    skipped: list[dict] = []
+
+    for pid in approved:
+        record = PATIENTS.get(pid)
+        if record is None:
+            skipped.append({"patient_id": pid, "reason": "Not found in the served cohort."})
+            continue
+        stage_before = record["stage"]
+        if stage_before >= 4:
+            skipped.append({
+                "patient_id": pid,
+                "reason": "Pathway already complete — no further test indicated.",
+            })
+            continue
+        if not (can_advance(record) or pending_evidence_beyond(record)):
+            skipped.append({
+                "patient_id": pid,
+                "reason": "Live state moved since the plan was proposed: no test is indicated now.",
+            })
+            continue
+
+        official_before = float(record["score"])
+        priority_before = _priority_score(record)
+        tier_before = risk_tier(official_before, has_biomarker_evidence(record))
+        payload, error = advance_stage(pid, note=audit_note)
+        if payload is None:
+            skipped.append({"patient_id": pid, "reason": error or "Could not advance this subject."})
+            continue
+
+        executed.append(
+            {
+                "patient_id": pid,
+                "stage_before": stage_before,
+                "stage_after": payload["pipeline"]["current_stage"],
+                "slot": payload["result"]["slot"],
+                "test": RESULT_SLOT_LABEL.get(payload["result"]["slot"], payload["result"]["slot"]),
+                "status": payload["result"].get("status"),
+                "outcome": payload["result"].get("outcome"),
+                "result_on_file": bool(payload["result"].get("carried_forward")),
+                "official_score_before": official_before,
+                "official_score_after": payload["new_score"],
+                "priority_score_before": priority_before,
+                "priority_score_after": payload["new_priority_score"],
+                "tier_before": tier_before,
+                "tier_after": payload["new_tier"],
+                "rank_before": rank_before.get(pid),
+            }
+        )
+
+    rank_after = {
+        r["id"]: i + 1
+        for i, r in enumerate(sorted(PATIENTS.values(), key=_priority_score, reverse=True))
+    }
+    for item in executed:
+        item["rank_after"] = rank_after.get(item["patient_id"])
+
+    state = _cohort_state()
+    return {
+        "applied": bool(executed),
+        "plan_id": plan_id,
+        "approved_count": len(approved),
+        "executed": executed,
+        "skipped": skipped,
+        "executed_count": len(executed),
+        "skipped_count": len(skipped),
+        "queue_remaining": state["awaiting_workup"],
+        "total": state["total"],
     }
 
 

@@ -35,8 +35,9 @@ stage test was completed.
 | Leakage & robustness audit | Run & verified | FAQ (diagnosis-derived, like CDR) dropped from the feature set; early stopping moved off the test set; APOE encoding benchmarked; complete-case cross-check agrees (ρ = 0.82) — `artifacts/model_audit.txt` |
 | Progression forecaster trained | Run & verified (real ADNI follow-up) | XGBRegressor + XGBClassifier on 1,634 real pairs; MMSE-delta MAE **1.549 pts** (baseline 1.859, R² 0.297), conversion 5-fold CV AUC **0.819 ± 0.031**, held-out AUC **0.796** at 8.45% prevalence |
 | Explainability | Run & verified | Global SHAP **with per-stage rollup** (`stage_importance.csv`) + full per-subject attribution; both an overall and a measured-only view, so a rarely-ordered test (PET) is not diluted to zero |
-| Escalation rule engine | 42 pytest cases | Deterministic stage gates; **evidence-gated High tier** (blocked, not just advised, by `has_biomarker_evidence`); clinician-in-the-loop via `override: true`; results loop via `POST /results`; **ordering gaps handled** — the stage stops at the first missing test and already-measured later slots are carried forward, never overwritten |
+| Escalation rule engine | 42 pytest cases | Deterministic stage gates; **evidence-gated High tier** (blocked, not just advised, by `has_biomarker_evidence`); clinician-in-the-loop via `override: true`; results return via `POST /results`; **ordering gaps handled** — the stage stops at the first missing test and already-measured later slots are carried forward, never overwritten |
 | Autonomous triage | Run & verified (browser E2E) | `POST /workup/next` / `/workup/run`: model picks subject → orders test → re-scores → re-ranks; live rank movements (e.g. `#12 → #2` after an abnormal blood panel) |
+| Approval-gated triage console | Run & verified (165 pytest cases) | A dedicated **Autonomous Neuro** view that splits the decision in two. `POST /workup/plan` is **read-only** — every projection is computed on a deep copy, so asking what a batch would do cannot do it. Each proposal carries its reasoning (why this subject · why this test · cost to the patient · expected effect) and a blunt impact verdict (`order only` / `no change` / `changes tier`). `POST /workup/execute` acts on **only the approved subjects**, re-checks each against its live state (one that moved is skipped with the reason rather than advanced on a stale plan), and writes the plan id into the subject's audit trail |
 | Progression forecast served | Run & verified (local + Railway) | `GET /patients/{id}/progression` → trajectory, conversion probability with SHAP drivers, projected tier, stage-completion score checkpoints |
 | Backend API | Run & verified | FastAPI + Swagger at `/docs`; `/health` reports `data_source` — `adni` (local cohort file), `adni+postgres` / `postgres` (served from the seeded database), or `mock` if only placeholder stubs could be found; live scoring via `pipeline.joblib` |
 | Frontend dashboard | Run & verified (headless Chrome) | Zero mock data; ranked cohort, detail view, full-page progression view, risk simulator rebuilt on the model's real 15 features; production build clean, zero console errors |
@@ -147,7 +148,7 @@ database rather than shipped in the image (§11).
    hardcoded data anywhere in `src/`. Clinicians scan a ranked cohort, open a
    subject, read score + full attribution + pipeline position + audit trail.
 8. **Model-driven cascade (`POST /patients/{id}/auto-workup`).** Per-subject
-   loop: the rule engine orders the next test from the current tier, a
+   cascade: the rule engine orders the next test from the current tier, a
    clinically-plausible result is derived, the **trained model re-scores
    immediately**, and the updated tier gates the next step. Stops (409) when
    the tier indicates no further testing.
@@ -155,10 +156,35 @@ database rather than shipped in the image (§11).
    at all: the system ranks **all** subjects by current score, picks the
    highest-priority one whose tier still indicates a test, performs exactly one
    step, re-scores, and re-ranks — priorities genuinely shift as results land.
-   The dashboard's **Autonomous Triage** header toggle runs this loop live
-   (~1.4 s/step) with a banner showing subject · test · outcome · score path ·
-   rank movement.
-10. **12-month progression forecast (`GET /patients/{id}/progression`).** A
+   Each step returns the **same reasoning an approvable proposal carries** (why
+   this subject · why this test · cost to the patient · expected effect) plus
+   what the model **projected before acting**, so an unattended step can be read
+   back with the questions answered instead of only narrated. The dashboard's
+   **Autonomous Neuro** view runs this live (~1.4 s/step), streaming a
+   per-step row: subject, stage transition, test, priority and official score
+   before → after, tier change, queue movement, **expected vs actual** ("✓ as
+   projected" when they agree), and an expandable rationale. The log **outlives
+   the run** — stopping it keeps the rows so the run can be reviewed.
+   Background ticks refresh the cohort **in place**: the view is never replaced
+   by a skeleton mid-run, so the page cannot collapse under the cursor and the
+   Stop control (header, card, or `Esc`) is always reachable.
+10. **Approval-gated triage console (`POST /workup/plan`, `POST /workup/execute`).**
+    The same policy with a human signature on each batch. `/workup/plan` walks the
+    live queue and returns the next batch of indicated tests **without mutating
+    anything** — every projection runs on a deep copy of the record. Each action
+    states its reasoning: why this subject (rank, score, tier), why this test
+    (the rule engine's own gate), the cost to the patient (a result already on
+    file is zero-cost; an order changes nothing until a result returns), and the
+    expected effect (projected priority score, tier movement, queue position).
+    The verdict is deliberately blunt — `order only`, `no change`, `changes tier`
+    — so a batch that would spend tests without moving anyone is visible *before*
+    approval rather than after. `/workup/execute` acts on **only the approved
+    subjects**; each is re-checked against its live state first, so a subject
+    whose pathway moved between proposal and approval is skipped with the reason
+    instead of advanced on a stale plan. Every executed step writes the plan id
+    into the subject's audit trail, so an autonomous action is always traceable
+    back to the human decision that authorised it.
+11. **12-month progression forecast (`GET /patients/{id}/progression`).** A
     full-page view behind the patient header's **Progression Probability**
     button: observed MMSE trajectory → predicted trajectory with uncertainty
     band, annotated with the pipeline stage reached today; conversion
@@ -208,24 +234,26 @@ trajectory (−0.05) at 2%.
 ┌───────────────────────────────────────────────────────────────────────┐
 │ API — backend/ (FastAPI)                                              │
 │   storage: ADNI cohort + startup batch rescore │ SQLite/Postgres      │
-│   ordering gaps: stage stops at the first missing test, later results  │
-│   stay on file and are never overwritten by a simulated one            │
+│   ordering gaps: stage stops at the first missing test, later results │
+│   stay on file and are never overwritten by a simulated one           │
 │   escalation.py: deterministic stage rules · model_service.py: SHAP   │
 │   progression.py: forecast + stage-completion score checkpoints       │
 │   /patients · /patients/{id} · /explain · /pipeline · /advance-stage  │
 │   /patients/{id}/auto-workup · /workup/next · /workup/run · /results  │
+│   /workup/plan (read-only) · /workup/execute (approved subset only)   │
 │   /patients/{id}/progression · /patients/score · /model/info · /health│
 └───────────────────────────────┬───────────────────────────────────────┘
                                 ▼
 ┌───────────────────────────────────────────────────────────────────────┐
 │ UI — src/ (React + Vite + Tailwind) — NO mock data                    │
-│   Overview: tier strip · risk histogram · stage funnel · top-8 list   │
+│   Overview: hero + cohort ribbon · risk & stage charts · top-8 list   │
 │   Patients: ranked table, filters, search, pagination                 │
 │   Detail: score gauge · 4-stage attribution radar · pipeline stepper  │
 │           · audit trail · Progression Probability button              │
 │   Progression (full page): observed-vs-predicted trajectory chart     │
 │           with stage-score lane · conversion probability · drivers    │
 │   Simulator: what-if workbench on the model's real 15 features        │
+│   Autonomous console: reasoned proposals · approval gate · ledger     │
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -297,10 +325,10 @@ trajectory (−0.05) at 2%.
 │
 ├── src/                         # React dashboard (pure API client)
 │   ├── api.js                   #   fetch client — the ONLY data source
-│   ├── App.jsx                  #   views, flows, Autonomous Triage loop
+│   ├── App.jsx                  #   views, flows, Autonomous Neuro console
 │   ├── lib.js · index.css · main.jsx
 │   └── components/
-│       ├── Overview.jsx         #   dashboard: strip, charts, top-8, SHAP panel
+│       ├── Overview.jsx         #   landing: hero, ribbon, charts, top-8, SHAP 
 │       ├── AllPatients.jsx      #   ranked table: filters, search, pagination
 │       ├── PatientDetail.jsx    #   detail: score, attribution radar, actions, trail
 │       ├── ProgressionView.jsx  #   full-page 12-month forecast
@@ -422,7 +450,7 @@ tiers go `1628 / 687 / 1321` → `~1173 / ~1135 / ~1328`.
 Two things this deliberately does **not** do:
 
 - **It does not weaken triage.** At Stage 1 both Medium and High order the blood
-  panel, so the autonomous loop behaves identically — a cognition-only patient is
+  panel, so autonomous triage behaves identically — a cognition-only patient is
   still the *first* to be tested. They simply cannot be labelled High until the
   result lands, at which point they are promoted automatically.
 - **It does not touch the model's attribution.** ADAS-Cog 13 and MMSE stay the
@@ -545,6 +573,8 @@ field**. Swagger at `/docs`. CORS allows the Vite dev server (+ `CORS_ORIGINS`).
 | `POST /patients/{id}/auto-workup` | Per-subject cascade: tier-gated blood → MRI → PET with re-score each step. 409 + reason when the tier indicates no test. |
 | `POST /workup/next` | **One autonomous step**: ranks the cohort, picks the top subject whose tier indicates a test, orders → result → re-score → re-rank. Returns `{subject: {id, slot, outcome, score_before, score_after, rank_before, rank_after, ...}, queue_remaining, done, reason}` |
 | `POST /workup/run` | Body `{"max_steps": 25}` → runs up to N autonomous steps; `{steps_run, done, remaining, total}` |
+| `POST /workup/plan` | **Read-only proposal.** Body `{"limit": 8}` (1–25) → walks the live priority queue and returns the next batch of indicated tests with `rationale` (4 labelled reasons), `impact` (`order-only`\|`none`\|`marginal`\|`material`\|`reclassifies`), `projected_priority_score`, `projected_rank`, `rank_delta`, `result_on_file`, plus a `summary` and a `cohort` snapshot. **Changes nothing** — projections are computed on copies |
+| `POST /workup/execute` | Body `{"patient_ids": [...], "plan_id": "...", "note": null}` → executes **only the approved subset**. Each subject is re-checked first; one no longer indicating a test is skipped with the reason. 422 on an empty list. Returns `{executed: [{stage_before/after, slot, result_on_file, official_score_before/after, priority_score_before/after, tier_before/after, rank_before/after}], skipped: [{patient_id, reason}], executed_count, skipped_count, queue_remaining, total}` |
 | `POST /patients/score` | Body `{"features": {...}}` → `{score, risk_tier, factors, model_type}`. 503 if no model artifact |
 | `GET /model/info` | Model card: type, features, trained_at, thresholds, CV/test AUC, global SHAP importance |
 | `GET /fhir/metadata` | FHIR R4 `CapabilityStatement` — resources, `transaction` interaction, SMART security block |
@@ -590,10 +620,11 @@ Example attribution factor (grouped by stage in the UI):
 
 - **Zero mock data.** `src/api.js` is the only data source; if the API is down
   the UI shows an error + Retry, never fake rows.
-- **Overview** — summary strip (tier counts, mean risk, % elevated), risk
-  histogram + pipeline-stage funnel, top-8 highest-priority shortlist ranked by
-  progression probability, global SHAP panel with live model provenance from
-  `GET /model/info`.
+- **Overview (landing page)** — a hero stating what the product does, with the three ways in
+  (priority queue, autonomous triage, risk simulator); a joined cohort ribbon (subjects,
+  high/medium/low, mean refined risk) behind hairline dividers; risk and stage charts side by side at
+  equal height; the attribution radar with the served model's real per-stage share; and the top-8
+  shortlist, ordered tier-then-score so the tier beside a subject always matches its position.
 - **Patients** — complete ranked table: tier/stage segmented filters, ID search,
   sort by risk/stage, pagination (15/page), page state preserved when opening a
   subject and returning.
@@ -615,9 +646,39 @@ Example attribution factor (grouped by stage in the UI):
   probability (color-graded ≥60% red / 30–60% amber / <30% green), projected
   risk gauge, and top forecast drivers; back navigation returns to the same
   patient's record, `Esc` exits to the cohort.
-- **Autonomous Triage** — header toggle drives the whole cohort: a step banner
-  shows `SUBJECT · TEST outcome · 0.68 → 0.81 (high) ↑ #12 → #2`; auto-stops
-  when every pathway is complete.
+- **Autonomous Neuro** — a dedicated view (`A` shortcut) built the way a
+  clinician would actually sign off on automation. It opens with the cohort
+  state (awaiting workup · pathway complete · tier split) and a **proposed
+  batch** the model derives from the live queue. Each proposal shows the subject
+  and its rank, the test, priority `0.83 → 0.91` with the delta, the tier
+  transition, the queue movement, and a blunt impact verdict; beneath it, the
+  four reasons — *why this subject · why this test · cost to the patient ·
+  expected effect* — are stated inline, not hidden behind a tooltip. Every
+  action is independently approve/reject-able (the batch starts fully selected;
+  deselecting is the point), and a sticky bar reports `N of M approved` before
+  **Approve & execute**. Execution returns a **ledger**: each subject with its
+  stage, priority and official score before → after, tier, queue movement, and
+  whether a real result was incorporated or an order merely placed — plus every
+  skipped subject with the reason, since a plan whose premise expired must be
+  refused visibly rather than silently. Below it, the **supervised instant mode**
+  keeps the ungated mode available (start/stop + live log, auto-stops when every
+  pathway is complete) for when you want to watch the policy run rather than
+  approve it. Its log is **not a black box**, and it is not inline either:
+  a **side-by-side layout** puts the explanation and its single control on the
+  left and the log on the right, in a **fixed-height scroll region of its own**.
+  The document height is therefore identical at step 1 and step 50 (measured:
+  one value across a whole run), so it cannot push the page around — and
+  the log gets real vertical room rather than a few hundred pixels crammed under
+  the copy. Rows read oldest → newest like a terminal and auto-follow the tail,
+  but only while you are already at the bottom, so scrolling up to study a step
+  is never yanked away by the next tick (a **Jump to latest** control appears
+  instead). Each row carries the same facts a proposal card does — the subject
+  and its rank, the stage transition, the test, priority *and* official score
+  before → after, the tier change, the queue movement, whether a real result was
+  incorporated or an order merely placed — with **what the model projected before
+  acting** beside what actually happened (`✓ as projected` when they agree), and
+  the full four-part reasoning one click away. Rows persist after Stop, so a run
+  stays reviewable.
 - **Risk Simulator** — what-if workbench on the live model with its real 15
   features: demographics + APOE ε4, MMSE + change + ADAS-Cog 13 (always
   measured), p-tau217 / Aβ42/40 / NfL / GFAP (blood), hippocampal volume + ICV
@@ -659,7 +720,7 @@ All env vars (see `.env.example`):
 | `VITE_API_URL` | `http://127.0.0.1:8000` | API base URL for the frontend |
 | `CORS_ORIGINS` | unset | Comma-separated extra allowed origins |
 | `FHIR_BASE_URL` | unset | Outbound hospital FHIR server (e.g. `http://localhost:8090/fhir`). Unset = not configured, and every outbound call says so |
-| `FHIR_PUSH_ORDERS` | `false` | Push each newly placed order as a `ServiceRequest`, best-effort (never blocks the triage loop; failures go to the audit trail) |
+| `FHIR_PUSH_ORDERS` | `false` | Push each newly placed order as a `ServiceRequest`, best-effort (never blocks triage; failures go to the audit trail) |
 | `FHIR_AUTH_TOKEN` / `FHIR_TIMEOUT_SECONDS` | unset / `8` | Static bearer token for a non-SMART server; outbound timeout |
 | `SMART_CLIENT_ID` / `SMART_CLIENT_SECRET` | `neuropilot-demo` / unset | SMART app registration (issued by the EHR sandbox; public clients have no secret) |
 | `SMART_REDIRECT_URI` | `http://localhost:8000/fhir/smart/callback` | Must match the registered redirect URI byte-for-byte |
@@ -755,7 +816,7 @@ curl -s -X POST $BASE/abdm/consent/$S/records
 curl -s $BASE/abdm/consent/$S      # RECEIVED + the post-ingest scores
 
 # 4. Dashboard
-npm install && npm run dev   # open :5173 → toggle Autonomous Triage;
+npm install && npm run dev   # open :5173 → toggle Autonomous Neuro;
                              # open a patient → "Progression Probability" → full-page forecast
 ```
 

@@ -35,9 +35,101 @@ export const MONO = { fontFamily: "'JetBrains Mono', ui-monospace, SFMono-Regula
 export const controlBase =
   'h-9 rounded-xl border border-line dark:border-darkBorder bg-white dark:bg-darkCard px-3.5 text-xs text-ink dark:text-darkText shadow-soft outline-none transition placeholder:text-muted dark:placeholder:text-darkMuted focus:border-accent dark:focus:border-accent focus:ring-1 focus:ring-accent';
 
+/*
+ * The card surface, in one place.
+ *
+ * Views that each spell out their own border/background/shadow drift apart by
+ * a shade or a radius, and the page reads as several products. These are the
+ * two constants every full-width panel is built from: `PANEL` is the shell,
+ * `PANEL_PAD` adds the standard interior spacing.
+ */
+export const PANEL =
+  'rounded-2xl border border-line dark:border-darkBorder bg-white dark:bg-darkCard shadow-soft';
+
+export const PANEL_PAD = `${PANEL} p-5`;
+
+/* The interior of a joined grid (status ribbon, phase rail): hairline dividers
+ * come from the gap showing a line-coloured backdrop through it. */
+export const JOINED_GRID =
+  'grid gap-px overflow-hidden rounded-xl border border-line/70 dark:border-darkBorder/70 bg-line/60 dark:bg-darkBorder/60';
+
 /* ------------------------------------------------------------------ */
 /*  Structural primitives                                              */
 /* ------------------------------------------------------------------ */
+
+/**
+ * Button with the page's three weights.
+ *
+ * `primary` is the one action a panel exists for, `ghost` is a normal action,
+ * `quiet` is navigation-ish, `danger` is stop/undo. Tones live here so two
+ * views cannot invent two different primaries.
+ */
+export function Btn({ tone = 'ghost', icon: Icon, children, className = '', ...rest }) {
+  const tones = {
+    primary: 'bg-accent text-white shadow-soft hover:bg-accentHover border border-transparent',
+    ghost:
+      'border border-line dark:border-darkBorder bg-white dark:bg-darkCard text-ink dark:text-darkText hover:border-accent/40',
+    quiet:
+      'border border-line dark:border-darkBorder bg-white dark:bg-darkCard text-muted dark:text-darkMuted hover:text-ink dark:hover:text-darkText',
+    danger: 'bg-tierHigh text-white shadow-soft hover:opacity-90 border border-transparent',
+  };
+  return (
+    <button
+      {...rest}
+      className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 ${tones[tone]} ${className}`}
+    >
+      {Icon && <Icon className="h-3.5 w-3.5" />}
+      {children}
+    </button>
+  );
+}
+
+/** One cell of a status ribbon: icon tile, label, value, optional hint. */
+export function RibbonStat({ icon: Icon, label, value, tone = 'muted', hint, dot }) {
+  const tones = {
+    ok: 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10',
+    warn: 'text-amber-600 dark:text-amber-400 bg-amber-500/10',
+    bad: 'text-tierHigh bg-tierHighSoft',
+    muted: 'text-muted dark:text-darkMuted bg-tint dark:bg-darkBorderSubtle',
+    accent: 'text-accent bg-accent/10',
+  };
+  return (
+    <div className="flex items-start gap-3 px-4 py-3.5">
+      <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${tones[tone]}`}>
+        {dot ? (
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-60" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-current" />
+          </span>
+        ) : (
+          Icon && <Icon className="h-3.5 w-3.5" />
+        )}
+      </span>
+      <div className="min-w-0">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted dark:text-darkMuted">
+          {label}
+        </p>
+        <p className="mt-0.5 truncate text-[12px] font-bold text-ink dark:text-darkText">{value}</p>
+        {hint && <p className="mt-0.5 truncate text-[10px] text-muted dark:text-darkMuted">{hint}</p>}
+      </div>
+    </div>
+  );
+}
+
+/** A small metric tile (label over a monospace value). */
+export function MetricTile({ label, value, hint }) {
+  return (
+    <div className="rounded-xl border border-line/70 dark:border-darkBorder/70 bg-tint/50 px-3 py-2 dark:bg-darkBorderSubtle">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted dark:text-darkMuted">
+        {label}
+      </p>
+      <p style={MONO} className="mt-1 text-lg font-bold text-ink dark:text-darkText">
+        {value ?? '—'}
+      </p>
+      {hint && <p className="mt-0.5 text-[10px] text-muted dark:text-darkMuted">{hint}</p>}
+    </div>
+  );
+}
 
 export function SectionLabel({ children, right, size = 'md' }) {
   const labelProps = size === 'sm'
@@ -383,34 +475,6 @@ export function Segment({ label, count, active, onClick, size = 'sm' }) {
     >
       {label} <span style={MONO} className={active ? 'text-accent dark:text-accent font-semibold' : 'text-dust dark:text-darkMuted'}>{count}</span>
     </button>
-  );
-}
-
-export function StatBlock({ label, value, suffix, tone }) {
-  return (
-    <div className="group flex flex-col gap-1.5 transition-transform duration-300 hover:-translate-y-0.5 cursor-default">
-      <p className="text-[11px] font-medium text-muted dark:text-darkMuted transition-colors group-hover:text-ink dark:group-hover:text-darkText">{label}</p>
-      <div className="flex items-baseline gap-1.5">
-        <span style={MONO} className="text-[28px] font-bold leading-none tracking-tight transition-transform duration-300 group-hover:scale-[1.03] inline-block">
-          <span style={{ color: tone || undefined }} className={!tone ? 'text-ink dark:text-darkText' : ''}>{value}</span>
-        </span>
-        {suffix && <span style={MONO} className="text-[11px] text-muted dark:text-darkMuted">{suffix}</span>}
-      </div>
-    </div>
-  );
-}
-
-export function CohortSummary({ counts, meanRisk, total }) {
-  const elevated = counts.high + counts.medium;
-  const pct = total ? Math.round((elevated / total) * 100) : 0;
-  return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-6 border-b border-line dark:border-darkBorder pb-7">
-      <StatBlock label="High priority" value={counts.high} tone={TIER_HEX.high} />
-      <StatBlock label="Medium priority" value={counts.medium} tone={TIER_HEX.medium} />
-      <StatBlock label="Low priority" value={counts.low} tone={TIER_HEX.low} />
-      <StatBlock label="Mean risk" value={fmtScore(meanRisk)} suffix="/ 1.0" />
-      <StatBlock label="Elevated risk" value={elevated} suffix={`${pct}% of cohort`} tone={ACCENT} />
-    </div>
   );
 }
 

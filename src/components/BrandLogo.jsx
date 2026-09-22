@@ -81,9 +81,14 @@ export function NeuroPilotLogo({ size = 'md', showSubtitle = true, onClick }) {
     >
       <NeuroPilotIcon size={size} />
       <div className="leading-tight">
-        <h1 className="text-[16px] font-black tracking-tight text-ink dark:text-darkText">
+        {/*
+         * A wordmark, not a heading. As an <h1> this competed with the page's own
+         * title -- the landing page ended up with two top-level headings, the
+         * brand and the actual subject of the page.
+         */}
+        <p className="text-[16px] font-black tracking-tight text-ink dark:text-darkText">
           NeuroPilot
-        </h1>
+        </p>
         {showSubtitle && (
           <p className="text-[10.5px] font-medium text-muted dark:text-darkMuted">
             Clinical Decision Support & Risk Triage
