@@ -1,4 +1,5 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { Copy } from 'lucide-react';
 import { STAGES_FULL, STAGES_SHORT, fmtScore } from '../lib.js';
 import TierTag from './TierTag.jsx';
 
@@ -65,6 +66,116 @@ export function Card({ children, className = '', hover = false }) {
       } ${className}`}
     >
       {children}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Value rows                                                        */
+/* ------------------------------------------------------------------ */
+/*
+ * Rows describe machine facts (IDs, URLs, codes) about a live connection.
+ * Two rules keep them readable rather than looking like terminal output:
+ * monospace is reserved for values a developer would copy-paste, and long
+ * identifiers are shown as their recognisable skeleton instead of wrapping
+ * across several lines.
+ */
+
+export function Pill({ tone = 'muted', children }) {
+  const tones = {
+    ok: 'border-emerald-500/35 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+    warn: 'border-amber-500/35 bg-amber-500/10 text-amber-600 dark:text-amber-400',
+    bad: 'border-red-500/35 bg-red-500/10 text-red-600 dark:text-red-400',
+    muted: 'border-line dark:border-darkBorder bg-tint dark:bg-darkBorderSubtle text-muted dark:text-darkMuted',
+    accent: 'border-accent/35 bg-accent/10 text-accent',
+  };
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] ${tones[tone]}`}
+    >
+      {children}
+    </span>
+  );
+}
+
+export function Row({ label, value, mono = false }) {
+  return (
+    <div className="flex items-start justify-between gap-4 border-b border-line/60 dark:border-darkBorder/60 py-2 last:border-b-0">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted dark:text-darkMuted">
+        {label}
+      </span>
+      <span
+        style={mono ? MONO : undefined}
+        className="max-w-[62%] break-words text-right text-[11px] leading-relaxed text-ink dark:text-darkText"
+      >
+        {value ?? '—'}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * A full FHIR issuer is ~110 characters and wrapped across two lines reads as
+ * debug output. Show host + the meaningful path segments; the whole value stays
+ * available on hover and on copy.
+ */
+export function shortUrl(raw) {
+  if (!raw) return null;
+  let host = raw;
+  let path = '';
+  try {
+    const parsed = new URL(raw);
+    host = parsed.hostname;
+    path = parsed.pathname === '/' ? '' : parsed.pathname;
+  } catch {
+    return raw.length > 44 ? `${raw.slice(0, 20)}…${raw.slice(-14)}` : raw;
+  }
+  const full = `${host}${path}`;
+  if (full.length <= 56) return full;
+  const segments = path.split('/').filter(Boolean);
+  if (segments.length <= 2) return full;
+  return `${host}/${segments.slice(0, 2).join('/')}/…/${segments[segments.length - 1]}`;
+}
+
+export const shortId = (raw) => (raw && raw.length > 13 ? `${raw.slice(0, 8)}…` : raw);
+
+/** A Row for a machine value: truncated display, full value on hover and copy. */
+export function CopyableRow({ label, value, display }) {
+  const [copied, setCopied] = useState(false);
+  const shown = display ?? value;
+
+  if (!value) return <Row label={label} value="—" />;
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    } catch {
+      // The clipboard needs a secure context; the tooltip still carries the value.
+    }
+  };
+
+  return (
+    <div className="flex items-start justify-between gap-4 border-b border-line/60 dark:border-darkBorder/60 py-2 last:border-b-0">
+      <span className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted dark:text-darkMuted">
+        {label}
+      </span>
+      <button
+        type="button"
+        onClick={copy}
+        title={value}
+        className="group flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-0.5 text-right transition hover:bg-tint dark:hover:bg-darkBorderSubtle"
+      >
+        <span style={MONO} className="truncate text-[11px] text-ink dark:text-darkText">
+          {shown}
+        </span>
+        {copied ? (
+          <span className="shrink-0 text-[10px] font-bold text-accent">copied</span>
+        ) : (
+          <Copy className="h-3 w-3 shrink-0 text-muted opacity-0 transition group-hover:opacity-100" />
+        )}
+      </button>
     </div>
   );
 }

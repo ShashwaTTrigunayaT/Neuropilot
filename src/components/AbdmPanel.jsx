@@ -9,7 +9,7 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { api } from '../api.js';
-import { MONO, SectionLabel } from './widgets.jsx';
+import { CopyableRow, MONO, Pill, Row, SectionLabel, shortId, shortUrl } from './widgets.jsx';
 
 /**
  * ABDM consent flow (India) — the HIU side, live (FHIR plan.md Phases 4-5).
@@ -37,39 +37,6 @@ const STATUS_TONE = {
   DENIED: 'bad',
   FAILED: 'bad',
 };
-
-function Pill({ tone = 'muted', children }) {
-  const tones = {
-    ok: 'border-emerald-500/35 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-    warn: 'border-amber-500/35 bg-amber-500/10 text-amber-600 dark:text-amber-400',
-    bad: 'border-red-500/35 bg-red-500/10 text-red-600 dark:text-red-400',
-    muted: 'border-line dark:border-darkBorder bg-tint dark:bg-darkBorderSubtle text-muted dark:text-darkMuted',
-    accent: 'border-accent/35 bg-accent/10 text-accent',
-  };
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] ${tones[tone]}`}
-    >
-      {children}
-    </span>
-  );
-}
-
-function Row({ label, value, mono = true }) {
-  return (
-    <div className="flex items-start justify-between gap-4 border-b border-line/60 dark:border-darkBorder/60 py-2 last:border-b-0">
-      <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted dark:text-darkMuted">
-        {label}
-      </span>
-      <span
-        style={mono ? MONO : undefined}
-        className="max-w-[62%] break-words text-right text-[11px] leading-relaxed text-ink dark:text-darkText"
-      >
-        {value ?? '—'}
-      </span>
-    </div>
-  );
-}
 
 const STEP_LABEL = {
   CONSENT_REQUESTED: 'Consent requested',
@@ -210,13 +177,38 @@ export default function AbdmPanel({ patients = [], initialPatientId, onToast }) 
             <ShieldCheck className="h-3.5 w-3.5 text-accent" /> Consent Manager &amp; crypto
           </p>
           <div className="mt-2">
-            <Row label="CM base URL" value={status?.cm_base_url || 'not configured'} />
-            <Row label="CM id" value={status?.hiu_id} />
-            <Row label="Reachable" value={String(status?.cm_reachable)} />
-            <Row label="Data push URL" value={status?.data_push_url} />
-            <Row label="Curve" value={fidelius?.curve} mono={false} />
-            <Row label="KDF / cipher" value={`${fidelius?.kdf} · ${fidelius?.cipher}`} mono={false} />
-            <Row label="Reference vectors" value={fidelius?.reference_vectors} mono={false} />
+            {status?.cm_base_url ? (
+              <CopyableRow
+                label="CM base URL"
+                value={status.cm_base_url}
+                display={shortUrl(status.cm_base_url)}
+              />
+            ) : (
+              <Row label="CM base URL" value="not configured" />
+            )}
+            <Row label="CM id" value={status?.hiu_id} mono />
+            <Row
+              label="Reachable"
+              value={
+                status?.cm_reachable ? (
+                  <Pill tone="ok">Reachable</Pill>
+                ) : (
+                  <Pill tone="warn">Unreachable</Pill>
+                )
+              }
+            />
+            {status?.data_push_url ? (
+              <CopyableRow
+                label="Data push URL"
+                value={status.data_push_url}
+                display={shortUrl(status.data_push_url)}
+              />
+            ) : (
+              <Row label="Data push URL" value="not configured" />
+            )}
+            <Row label="Curve" value={fidelius?.curve} />
+            <Row label="KDF / cipher" value={`${fidelius?.kdf} · ${fidelius?.cipher}`} />
+            <Row label="Reference vectors" value={fidelius?.reference_vectors} />
           </div>
           <p className="mt-2 text-[10.5px] leading-relaxed text-muted dark:text-darkMuted">
             The curve is BouncyCastle&apos;s <span className="font-semibold">short-Weierstrass</span> Curve25519 —
@@ -257,14 +249,33 @@ export default function AbdmPanel({ patients = [], initialPatientId, onToast }) 
 
           {session && (
             <div className="mt-3">
-              <Row label="Session" value={session.session_id} />
-              <Row label="Status" value={<Pill tone={STATUS_TONE[session.status] || 'muted'}>{session.status}</Pill>} mono={false} />
-              <Row label="Consent artefact" value={session.consent_id} />
-              <Row label="Transaction" value={session.transaction_id} />
+              <CopyableRow label="Session" value={session.session_id} display={shortId(session.session_id)} />
               <Row
-                label="HIU key (public)"
-                value={session.key_material?.public_key ? `${session.key_material.public_key.slice(0, 28)}…` : (session.key_material_retired ? 'retired after the pull' : '—')}
+                label="Status"
+                value={<Pill tone={STATUS_TONE[session.status] || 'muted'}>{session.status}</Pill>}
               />
+              <CopyableRow
+                label="Consent artefact"
+                value={session.consent_id}
+                display={shortId(session.consent_id)}
+              />
+              <CopyableRow
+                label="Transaction"
+                value={session.transaction_id}
+                display={shortId(session.transaction_id)}
+              />
+              {session.key_material?.public_key ? (
+                <CopyableRow
+                  label="HIU key (public)"
+                  value={session.key_material.public_key}
+                  display={shortId(session.key_material.public_key)}
+                />
+              ) : (
+                <Row
+                  label="HIU key (public)"
+                  value={session.key_material_retired ? 'retired after the pull' : '—'}
+                />
+              )}
             </div>
           )}
 

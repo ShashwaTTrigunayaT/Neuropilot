@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Activity,
   AlertTriangle,
   CheckCircle2,
   ExternalLink,
@@ -7,6 +8,7 @@ import {
   Link2,
   Plug,
   RefreshCw,
+  Server,
   Send,
   ShieldCheck,
   Upload,
@@ -14,7 +16,7 @@ import {
 } from 'lucide-react';
 import { API_BASE, api } from '../api.js';
 import AbdmPanel from './AbdmPanel.jsx';
-import { MONO, SectionLabel } from './widgets.jsx';
+import { CopyableRow, MONO, Pill, Row, SectionLabel, shortId, shortUrl } from './widgets.jsx';
 
 /**
  * Interoperability — the HL7 FHIR R4 surface (FHIR_INTEGRATION.md Phases 1-4).
@@ -28,6 +30,8 @@ import { MONO, SectionLabel } from './widgets.jsx';
 
 const PANEL =
   'rounded-2xl border border-line dark:border-darkBorder bg-white dark:bg-darkCard shadow-soft';
+
+const PANEL_PAD = `${PANEL} p-5`;
 
 const PHASE_KEYS = ['1_export', '2_inbound', '3_bidirectional', '4_smart'];
 const PHASE_TITLES = {
@@ -60,36 +64,47 @@ const SAMPLE_BUNDLE = (patientId) => ({
   ],
 });
 
-function Pill({ tone = 'muted', children }) {
-  const tones = {
-    ok: 'border-emerald-500/35 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-    warn: 'border-amber-500/35 bg-amber-500/10 text-amber-600 dark:text-amber-400',
-    bad: 'border-red-500/35 bg-red-500/10 text-red-600 dark:text-red-400',
-    muted: 'border-line dark:border-darkBorder bg-tint dark:bg-darkBorderSubtle text-muted dark:text-darkMuted',
-    accent: 'border-accent/35 bg-accent/10 text-accent',
+/** One cell of the top status ribbon. */
+function Stat({ icon: Icon, label, value, tone = 'muted', hint }) {
+  const toneRing = {
+    ok: 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10',
+    warn: 'text-amber-600 dark:text-amber-400 bg-amber-500/10',
+    muted: 'text-muted dark:text-darkMuted bg-tint dark:bg-darkBorderSubtle',
+    accent: 'text-accent bg-accent/10',
   };
   return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] ${tones[tone]}`}
-    >
-      {children}
-    </span>
+    <div className="flex items-start gap-3 px-4 py-3.5">
+      <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${toneRing[tone]}`}>
+        <Icon className="h-3.5 w-3.5" />
+      </span>
+      <div className="min-w-0">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted dark:text-darkMuted">
+          {label}
+        </p>
+        <p className="mt-0.5 truncate text-[12px] font-bold text-ink dark:text-darkText">{value}</p>
+        {hint && <p className="mt-0.5 truncate text-[10px] text-muted dark:text-darkMuted">{hint}</p>}
+      </div>
+    </div>
   );
 }
 
-function Row({ label, value, mono = true }) {
+function Btn({ tone = 'ghost', icon: Icon, children, ...rest }) {
+  const tones = {
+    primary:
+      'bg-accent text-white shadow-soft hover:bg-accentHover border border-transparent',
+    ghost:
+      'border border-line dark:border-darkBorder bg-white dark:bg-darkCard text-ink dark:text-darkText hover:border-accent/40',
+    quiet:
+      'border border-line dark:border-darkBorder bg-white dark:bg-darkCard text-muted dark:text-darkMuted hover:text-ink dark:hover:text-darkText',
+  };
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-line/60 dark:border-darkBorder/60 py-2 last:border-b-0">
-      <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted dark:text-darkMuted">
-        {label}
-      </span>
-      <span
-        style={mono ? MONO : undefined}
-        className="max-w-[62%] break-words text-right text-[11px] leading-relaxed text-ink dark:text-darkText"
-      >
-        {value ?? '—'}
-      </span>
-    </div>
+    <button
+      {...rest}
+      className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-semibold disabled:opacity-50 ${tones[tone]}`}
+    >
+      {Icon && <Icon className="h-3.5 w-3.5" />}
+      {children}
+    </button>
   );
 }
 
@@ -178,9 +193,10 @@ export default function Interoperability({ patients = [], initialPatientId, onTo
         resources: accepted.map((entry) => ({
           status: entry.response?.status || 'accepted',
           location: entry.response?.location || '',
-          url: entry.response?.location && base
-            ? `${base}/${entry.response.location.replace(/^\//, '')}`
-            : '',
+          url:
+            entry.response?.location && base
+              ? `${base}/${entry.response.location.replace(/^\//, '')}`
+              : '',
         })),
       });
     });
@@ -223,7 +239,7 @@ export default function Interoperability({ patients = [], initialPatientId, onTo
   if (status === 'loading') {
     return (
       <div className="animate-pulse space-y-4">
-        <div className="h-24 rounded-2xl bg-tint dark:bg-darkCard" />
+        <div className="h-20 rounded-2xl bg-tint dark:bg-darkCard" />
         <div className="h-64 rounded-2xl bg-tint dark:bg-darkCard" />
       </div>
     );
@@ -246,10 +262,28 @@ export default function Interoperability({ patients = [], initialPatientId, onTo
 
   const outbound = overview.outbound_server || {};
   const surface = overview.surface || {};
+  const phasesLive = PHASE_KEYS.filter((k) => overview.phases?.[k]?.implemented).length;
+
+  // A raw server-local timestamp forces the viewer to do timezone maths. Prefer a
+  // scannable state, built from the authoritative `expires_in` duration.
+  const tokenExpiry = (() => {
+    if (!smart?.connected) return null;
+    if (smart.expired) return <Pill tone="bad">Token expired</Pill>;
+    const seconds = smart.expires_in;
+    if (seconds == null) return null;
+    const minutes = Math.floor(seconds / 60);
+    const label =
+      minutes < 1 ? '<1m left' : minutes < 60 ? `${minutes}m left` : `${Math.round(minutes / 60)}h left`;
+    return (
+      <Pill tone={minutes < 10 ? 'warn' : 'ok'}>
+        <span title={smart.expires_at || ''}>{label}</span>
+      </Pill>
+    );
+  })();
 
   return (
     <div className="animate-fade-up space-y-6">
-      {/* Header */}
+      {/* ── Header ─────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <SectionLabel>Interoperability</SectionLabel>
@@ -258,9 +292,9 @@ export default function Interoperability({ patients = [], initialPatientId, onTo
           </h1>
           <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-muted dark:text-darkMuted">
             NeuroPilot is a system of engagement layered on the hospital&apos;s system of record. Model
-            output travels as <span className="font-semibold text-ink dark:text-darkText">RiskAssessment</span> —
-            decision support by definition — never as a <code style={MONO}>Condition</code>. This instance
-            serves a synthetic cohort, not real PHI.
+            output travels as{' '}
+            <span className="font-semibold text-ink dark:text-darkText">RiskAssessment</span> — decision
+            support by definition — never as a <code style={MONO}>Condition</code>.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -284,80 +318,160 @@ export default function Interoperability({ patients = [], initialPatientId, onTo
         </div>
       </div>
 
-      {/* Phase strip */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {PHASE_KEYS.map((key, i) => {
-          const phase = overview.phases?.[key] || {};
-          return (
-            <div key={key} className={`${PANEL} p-4`}>
-              <div className="flex items-center justify-between">
-                <span style={MONO} className="text-[10px] font-bold text-dust dark:text-darkMuted">
-                  PHASE {i + 1}
-                </span>
-                {phase.implemented ? (
-                  <Pill tone="ok">
-                    <CheckCircle2 className="h-3 w-3" /> Live
-                  </Pill>
-                ) : (
-                  <Pill tone="muted">Planned</Pill>
-                )}
-              </div>
-              <p className="mt-2 text-sm font-bold text-ink dark:text-darkText">{PHASE_TITLES[key]}</p>
-              <p className="mt-1 text-[10.5px] leading-relaxed text-muted dark:text-darkMuted">
-                {phase.detail}
-              </p>
-            </div>
-          );
-        })}
+      {/* ── Status ribbon: one panel instead of four competing cards ── */}
+      <div className={`${PANEL} divide-y divide-line dark:divide-darkBorder sm:grid sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4`}>
+        <div className="sm:border-r sm:border-line dark:sm:border-darkBorder">
+          <Stat
+            icon={Server}
+            label="Hospital server"
+            value={outbound.reachable ? outbound.software || 'Reachable' : 'Not connected'}
+            tone={outbound.reachable ? 'ok' : 'warn'}
+            hint={outbound.reachable ? `FHIR ${outbound.fhir_version || 'R4'}` : 'FHIR_BASE_URL unset'}
+          />
+        </div>
+        <div className="lg:border-r lg:border-line dark:lg:border-darkBorder">
+          <Stat
+            icon={Plug}
+            label="SMART session"
+            value={smart?.connected ? 'Bound' : 'No session'}
+            tone={smart?.connected ? 'ok' : 'muted'}
+            hint={smart?.patient || 'launch from the EHR'}
+          />
+        </div>
+        <div className="sm:border-r sm:border-line dark:sm:border-darkBorder">
+          <Stat
+            icon={Upload}
+            label="Outbound push"
+            value={overview.push_orders_on_order ? 'Enabled' : 'Disabled'}
+            tone={overview.push_orders_on_order ? 'accent' : 'muted'}
+            hint="on order placement"
+          />
+        </div>
+        <div>
+          <Stat
+            icon={Activity}
+            label="Exchange surface"
+            value={`${(surface.patients ?? 0).toLocaleString()} patients`}
+            tone="accent"
+            hint={`${(surface.observations ?? 0).toLocaleString()} observations`}
+          />
+        </div>
       </div>
 
+      {/* ── Phases: a compact rail, not four full cards ─────────── */}
+      <div className={`${PANEL} px-5 py-4`}>
+        <div className="flex items-baseline justify-between gap-4">
+          <SectionLabel size="sm">FHIR R4 capability phases</SectionLabel>
+          <Pill tone={phasesLive === PHASE_KEYS.length ? 'ok' : 'warn'}>
+            {phasesLive}/{PHASE_KEYS.length} live
+          </Pill>
+        </div>
+        <div className="mt-3 grid gap-px overflow-hidden rounded-xl border border-line/70 dark:border-darkBorder/70 bg-line/60 dark:bg-darkBorder/60 sm:grid-cols-2 lg:grid-cols-4">
+          {PHASE_KEYS.map((key, i) => {
+            const phase = overview.phases?.[key] || {};
+            return (
+              <div key={key} className="bg-white p-3.5 dark:bg-darkCard">
+                <div className="flex items-center justify-between gap-2">
+                  <span style={MONO} className="text-[10px] font-bold text-dust dark:text-darkMuted">
+                    0{i + 1}
+                  </span>
+                  {phase.implemented ? (
+                    <Pill tone="ok">
+                      <CheckCircle2 className="h-3 w-3" /> Live
+                    </Pill>
+                  ) : (
+                    <Pill tone="muted">Planned</Pill>
+                  )}
+                </div>
+                <p className="mt-2 text-[12px] font-bold text-ink dark:text-darkText">
+                  {PHASE_TITLES[key]}
+                </p>
+                <p className="mt-1 text-[10.5px] leading-relaxed text-muted dark:text-darkMuted">
+                  {phase.detail}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Connection detail ──────────────────────────────────── */}
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Outbound server */}
-        <div className={`${PANEL} p-5`}>
+        <div className={PANEL_PAD}>
           <SectionLabel
-            right={
-              outbound.reachable ? <Pill tone="ok">Reachable</Pill> : <Pill tone="warn">Offline</Pill>
-            }
+            right={outbound.reachable ? <Pill tone="ok">Reachable</Pill> : <Pill tone="warn">Offline</Pill>}
           >
             Outbound hospital server
           </SectionLabel>
           <div className="mt-3">
-            <Row label="Base URL" value={outbound.base_url || 'not configured'} />
-            <Row label="FHIR version" value={outbound.fhir_version} />
+            {outbound.base_url ? (
+              <CopyableRow
+                label="Base URL"
+                value={outbound.base_url}
+                display={shortUrl(outbound.base_url)}
+              />
+            ) : (
+              <Row label="Base URL" value="not configured" />
+            )}
+            <Row label="FHIR version" value={outbound.fhir_version} mono />
             <Row label="Server" value={outbound.software} />
-            <Row label="Detail" value={outbound.detail} mono={false} />
+            <Row label="Detail" value={outbound.detail} />
             <Row
               label="Push on order"
               value={overview.push_orders_on_order ? 'enabled (FHIR_PUSH_ORDERS)' : 'disabled'}
             />
           </div>
           <p className="mt-3 text-[10.5px] leading-relaxed text-muted dark:text-darkMuted">
-            Set <code style={MONO}>FHIR_BASE_URL</code> (e.g. a local HAPI server at
-            <code style={MONO}> http://localhost:8090/fhir</code>) to enable live order and result
-            exchange. Pushing is a deliberate act, never a default.
+            {outbound.reachable
+              ? 'Connected to the configured FHIR server. Push is a deliberate act, never a default.'
+              : 'Set FHIR_BASE_URL to connect an external FHIR server for live order and result exchange.'}
           </p>
         </div>
 
-        {/* SMART on FHIR */}
-        <div className={`${PANEL} p-5`}>
+        <div className={PANEL_PAD}>
           <SectionLabel
             right={
-              smart?.connected ? (
-                <Pill tone="ok">Session bound</Pill>
-              ) : (
-                <Pill tone="muted">No session</Pill>
-              )
+              <span className="flex items-center gap-1.5">
+                {smart?.connected ? (
+                  <Pill tone="ok">Session bound</Pill>
+                ) : (
+                  <Pill tone="muted">No session</Pill>
+                )}
+                {tokenExpiry}
+              </span>
             }
           >
             SMART on FHIR
           </SectionLabel>
           <div className="mt-3">
-            <Row label="Client ID" value={smart?.client_id} />
-            <Row label="Redirect URI" value={smart?.redirect_uri} />
-            <Row label="Patient in context" value={smart?.patient} />
-            <Row label="Issuer (iss)" value={smart?.iss} />
-            <Row label="Token expires" value={smart?.expires_at} />
-            <Row label="Scopes" value={(smart?.scopes || []).join(' · ')} mono={false} />
+            <CopyableRow label="Client ID" value={smart?.client_id} />
+            <CopyableRow
+              label="Redirect URI"
+              value={smart?.redirect_uri}
+              display={shortUrl(smart?.redirect_uri)}
+            />
+            <CopyableRow
+              label="Patient in context"
+              value={smart?.patient}
+              display={shortId(smart?.patient)}
+            />
+            <CopyableRow label="Issuer (iss)" value={smart?.iss} display={shortUrl(smart?.iss)} />
+            <Row
+              label="Scopes"
+              value={
+                <span className="flex flex-wrap justify-end gap-1">
+                  {(smart?.scopes || []).map((scope) => (
+                    <span
+                      key={scope}
+                      style={MONO}
+                      className="rounded-md border border-line dark:border-darkBorder bg-tint/60 dark:bg-darkBorderSubtle px-1.5 py-0.5 text-[10px] text-ink dark:text-darkText"
+                    >
+                      {scope}
+                    </span>
+                  ))}
+                </span>
+              }
+            />
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -370,33 +484,26 @@ export default function Interoperability({ patients = [], initialPatientId, onTo
             </a>
             {smart?.connected && (
               <>
-                <button
-                  onClick={doRefreshSmart}
-                  disabled={busy === 'smart-refresh'}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-line dark:border-darkBorder bg-white dark:bg-darkCard px-3 py-2 text-[11px] font-semibold text-ink dark:text-darkText disabled:opacity-50"
-                >
-                  <RefreshCw className={`h-3.5 w-3.5 ${busy === 'smart-refresh' ? 'animate-spin' : ''}`} />
+                <Btn icon={RefreshCw} onClick={doRefreshSmart} disabled={busy === 'smart-refresh'}>
                   Renew token
-                </button>
-                <button
-                  onClick={doLogout}
-                  disabled={busy === 'smart-logout'}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-line dark:border-darkBorder bg-white dark:bg-darkCard px-3 py-2 text-[11px] font-semibold text-muted dark:text-darkMuted disabled:opacity-50"
-                >
-                  <XCircle className="h-3.5 w-3.5" /> Disconnect
-                </button>
+                </Btn>
+                <Btn icon={XCircle} tone="quiet" onClick={doLogout} disabled={busy === 'smart-logout'}>
+                  Disconnect
+                </Btn>
               </>
             )}
           </div>
           <p className="mt-3 flex items-start gap-1.5 text-[10.5px] leading-relaxed text-muted dark:text-darkMuted">
             <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
-            Tokens are held server-side and never handed to the browser. A real launch needs a client
-            id registered with the EHR sandbox — an unregistered client is rejected by the EHR, not here.
+            Tokens are held server-side and never handed to the browser. A real launch needs a client id
+            registered with the EHR sandbox — an unregistered client is rejected by the EHR, not here.
           </p>
         </div>
+      </div>
 
-        {/* Surface */}
-        <div className={`${PANEL} p-5`}>
+      {/* ── Exchange surface + export/push ─────────────────────── */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <div className={PANEL_PAD}>
           <SectionLabel>Exchange surface</SectionLabel>
           <div className="mt-3 grid grid-cols-2 gap-3">
             {[
@@ -420,12 +527,12 @@ export default function Interoperability({ patients = [], initialPatientId, onTo
             ))}
           </div>
           <p className="mt-3 text-[10.5px] leading-relaxed text-muted dark:text-darkMuted">
-            {overview.note}
+            Live resource counts from the NeuroPilot store. FHIR is the exchange boundary; triage remains
+            internal.
           </p>
         </div>
 
-        {/* Export / push */}
-        <div className={`${PANEL} p-5`}>
+        <div className={PANEL_PAD}>
           <SectionLabel>Export &amp; push a patient</SectionLabel>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <select
@@ -439,21 +546,12 @@ export default function Interoperability({ patients = [], initialPatientId, onTo
                 </option>
               ))}
             </select>
-            <button
-              onClick={doExport}
-              disabled={!patientId || busy === 'export'}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-line dark:border-darkBorder bg-white dark:bg-darkCard px-3 py-2 text-[11px] font-semibold text-ink dark:text-darkText disabled:opacity-50"
-            >
-              <Layers className={`h-3.5 w-3.5 ${busy === 'export' ? 'animate-pulse' : ''}`} />
+            <Btn icon={Layers} onClick={doExport} disabled={!patientId || busy === 'export'}>
               Preview $everything
-            </button>
-            <button
-              onClick={doPush}
-              disabled={!patientId || busy === 'push'}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-accent px-3 py-2 text-[11px] font-bold text-white disabled:opacity-50"
-            >
-              <Upload className="h-3.5 w-3.5" /> Push to hospital
-            </button>
+            </Btn>
+            <Btn tone="primary" icon={Upload} onClick={doPush} disabled={!patientId || busy === 'push'}>
+              Push to hospital
+            </Btn>
           </div>
 
           {exported && (
@@ -521,7 +619,10 @@ export default function Interoperability({ patients = [], initialPatientId, onTo
                   </summary>
                   <div className="mt-2 max-h-52 space-y-1 overflow-auto rounded-lg border border-emerald-500/20 bg-white/50 p-2 dark:bg-black/10">
                     {pushResult.resources.map((resource, index) => (
-                      <div key={`${resource.location}-${index}`} className="flex items-center justify-between gap-2 text-[10px]">
+                      <div
+                        key={`${resource.location}-${index}`}
+                        className="flex items-center justify-between gap-2 text-[10px]"
+                      >
                         <span style={MONO} className="truncate">
                           {resource.location || `resource-${index + 1}`}
                         </span>
@@ -548,18 +649,16 @@ export default function Interoperability({ patients = [], initialPatientId, onTo
         </div>
       </div>
 
-      {/* Inbound bundle tester */}
-      <div className={`${PANEL} p-5`}>
-        <SectionLabel
-          right={<Pill tone="accent">atomic — all or nothing</Pill>}
-        >
+      {/* ── Inbound bundle tester ──────────────────────────────── */}
+      <div className={PANEL_PAD}>
+        <SectionLabel right={<Pill tone="accent">atomic — all or nothing</Pill>}>
           Inbound ingestion — POST /fhir/Bundle
         </SectionLabel>
         <p className="mt-2 text-[11px] leading-relaxed text-muted dark:text-darkMuted">
-          Paste any FHIR R4 transaction/collection Bundle. A recognised result is mapped, the served
-          model re-scores the patient, and unknown codes are reported rather than dropped. A wrong UCUM
-          unit or an unmappable resource rejects the <span className="font-semibold">whole</span> bundle
-          with an OperationOutcome naming every offender — no partial writes.
+          Paste any FHIR R4 transaction/collection Bundle. A recognised result is mapped, the served model
+          re-scores the patient, and unknown codes are reported rather than dropped. A wrong UCUM unit or an
+          unmappable resource rejects the <span className="font-semibold">whole</span> bundle with an
+          OperationOutcome naming every offender — no partial writes.
         </p>
 
         <textarea
@@ -572,23 +671,19 @@ export default function Interoperability({ patients = [], initialPatientId, onTo
         />
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <button
-            onClick={doIngest}
-            disabled={busy === 'ingest'}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-accent px-3.5 py-2 text-[11px] font-bold text-white disabled:opacity-50"
-          >
-            <Send className="h-3.5 w-3.5" /> Send bundle
-          </button>
-          <button
+          <Btn tone="primary" icon={Send} onClick={doIngest} disabled={busy === 'ingest'}>
+            Send bundle
+          </Btn>
+          <Btn
+            icon={RefreshCw}
             onClick={() => {
               setBundleText(JSON.stringify(SAMPLE_BUNDLE(patientId), null, 2));
               setIngestResult(null);
               setIngestIssues([]);
             }}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-line dark:border-darkBorder bg-white dark:bg-darkCard px-3 py-2 text-[11px] font-semibold text-ink dark:text-darkText"
           >
-            <RefreshCw className="h-3.5 w-3.5" /> Reset sample
-          </button>
+            Reset sample
+          </Btn>
         </div>
 
         {ingestIssues.length > 0 && (
@@ -598,7 +693,11 @@ export default function Interoperability({ patients = [], initialPatientId, onTo
             </p>
             <ul className="mt-2 space-y-1">
               {ingestIssues.map((issue) => (
-                <li key={issue} style={MONO} className="text-[10.5px] leading-relaxed text-red-700 dark:text-red-300">
+                <li
+                  key={issue}
+                  style={MONO}
+                  className="text-[10.5px] leading-relaxed text-red-700 dark:text-red-300"
+                >
                   {issue}
                 </li>
               ))}
@@ -613,7 +712,11 @@ export default function Interoperability({ patients = [], initialPatientId, onTo
             </p>
             <ul className="mt-2 space-y-1">
               {(ingestResult.extension || []).map((ext) => (
-                <li key={ext.url + ext.valueString} style={MONO} className="text-[10.5px] leading-relaxed text-emerald-800 dark:text-emerald-300">
+                <li
+                  key={ext.url + ext.valueString}
+                  style={MONO}
+                  className="text-[10.5px] leading-relaxed text-emerald-800 dark:text-emerald-300"
+                >
                   {ext.valueString}
                 </li>
               ))}

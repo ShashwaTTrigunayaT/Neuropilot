@@ -385,15 +385,21 @@ def context() -> dict:
             ),
         }
     expires_at = _SESSION.get("expires_at")
+    now = time.time()
     return {
         "connected": True,
         "iss": _SESSION["iss"],
         "patient": _SESSION.get("patient"),
         "encounter": _SESSION.get("encounter"),
         "scope": _SESSION.get("scope"),
+        # `expires_at` is server-local wall clock with no offset, so a browser
+        # cannot parse it reliably (the container is UTC, the clinician is not).
+        # `expires_in` is the authoritative duration taken from the same epoch,
+        # which is what a countdown should be built from.
         "expires_at": (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(expires_at))
                        if expires_at else None),
-        "expired": bool(expires_at and time.time() >= float(expires_at)),
+        "expires_in": (max(0, int(float(expires_at) - now)) if expires_at else None),
+        "expired": bool(expires_at and now >= float(expires_at)),
     }
 
 
