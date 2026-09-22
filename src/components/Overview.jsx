@@ -255,7 +255,7 @@ export default function Overview({
           icon: ptIcon(Layers),
           label: 'The measurement vector',
           value: String(featureCount),
-          detail: `${featureCount} features across four modalities: ${featsOf(1, 'the cognitive and clinical baseline')} from cognition and demographics; ${featsOf(2, 'plasma assays')} from blood; ${featsOf(3, 'structural volumetry')} from MRI; ${featsOf(4, 'molecular imaging')} from PET. A missing measurement stays missing — the model is NaN-native, so it never sees an invented value.`,
+          detail: `${featureCount} features across four modalities: ${featsOf(1, 'the cognitive and clinical baseline')} from cognition and demographics; ${featsOf(2, 'plasma assays')} from blood; ${featsOf(3, 'structural volumetry')} from MRI; ${featsOf(4, 'molecular imaging')} from PET.`,
         },
         {
           icon: ptIcon(GraduationCap),
