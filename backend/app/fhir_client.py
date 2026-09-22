@@ -94,7 +94,7 @@ def probe(base_url: str | None = None, client: httpx.Client | None = None) -> di
             "configured": False,
             "base_url": None,
             "reachable": False,
-            "detail": "Set FHIR_BASE_URL to enable outbound order/result exchange.",
+            "detail": "No hospital server connected.",
         }
     base = (base_url or config.FHIR_BASE_URL).rstrip("/")
     try:

@@ -9,7 +9,7 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { api } from '../api.js';
-import { CopyableRow, MONO, Pill, Row, SectionLabel, shortId, shortUrl } from './widgets.jsx';
+import { CopyableRow, MONO, Pill, Row, SectionLabel, shortId } from './widgets.jsx';
 
 /**
  * ABDM consent flow (India) — the HIU side, live (FHIR plan.md Phases 4-5).
@@ -181,7 +181,6 @@ export default function AbdmPanel({ patients = [], initialPatientId, onToast }) 
               <CopyableRow
                 label="CM base URL"
                 value={status.cm_base_url}
-                display={shortUrl(status.cm_base_url)}
               />
             ) : (
               <Row label="CM base URL" value="not configured" />
@@ -198,11 +197,7 @@ export default function AbdmPanel({ patients = [], initialPatientId, onToast }) 
               }
             />
             {status?.data_push_url ? (
-              <CopyableRow
-                label="Data push URL"
-                value={status.data_push_url}
-                display={shortUrl(status.data_push_url)}
-              />
+              <CopyableRow label="Data push URL" value={status.data_push_url} />
             ) : (
               <Row label="Data push URL" value="not configured" />
             )}
@@ -249,7 +244,11 @@ export default function AbdmPanel({ patients = [], initialPatientId, onToast }) 
 
           {session && (
             <div className="mt-3">
-              <CopyableRow label="Session" value={session.session_id} display={shortId(session.session_id)} />
+              <CopyableRow
+                label="Session"
+                value={session.session_id}
+                display={session.session_id ? shortId(session.session_id) : null}
+              />
               <Row
                 label="Status"
                 value={<Pill tone={STATUS_TONE[session.status] || 'muted'}>{session.status}</Pill>}
@@ -257,12 +256,12 @@ export default function AbdmPanel({ patients = [], initialPatientId, onToast }) 
               <CopyableRow
                 label="Consent artefact"
                 value={session.consent_id}
-                display={shortId(session.consent_id)}
+                display={session.consent_id ? shortId(session.consent_id) : null}
               />
               <CopyableRow
                 label="Transaction"
                 value={session.transaction_id}
-                display={shortId(session.transaction_id)}
+                display={session.transaction_id ? shortId(session.transaction_id) : null}
               />
               {session.key_material?.public_key ? (
                 <CopyableRow

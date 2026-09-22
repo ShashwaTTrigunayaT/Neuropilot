@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { API_BASE, api } from '../api.js';
 import AbdmPanel from './AbdmPanel.jsx';
-import { CopyableRow, MONO, Pill, Row, SectionLabel, shortId, shortUrl } from './widgets.jsx';
+import { CopyableRow, MONO, Pill, Row, SectionLabel, shortId } from './widgets.jsx';
 
 /**
  * Interoperability — the HL7 FHIR R4 surface (FHIR_INTEGRATION.md Phases 1-4).
@@ -326,7 +326,7 @@ export default function Interoperability({ patients = [], initialPatientId, onTo
             label="Hospital server"
             value={outbound.reachable ? outbound.software || 'Reachable' : 'Not connected'}
             tone={outbound.reachable ? 'ok' : 'warn'}
-            hint={outbound.reachable ? `FHIR ${outbound.fhir_version || 'R4'}` : 'FHIR_BASE_URL unset'}
+            hint={outbound.reachable ? `FHIR ${outbound.fhir_version || 'R4'}` : 'No hospital server connected'}
           />
         </div>
         <div className="lg:border-r lg:border-line dark:lg:border-darkBorder">
@@ -405,26 +405,24 @@ export default function Interoperability({ patients = [], initialPatientId, onTo
           </SectionLabel>
           <div className="mt-3">
             {outbound.base_url ? (
-              <CopyableRow
-                label="Base URL"
-                value={outbound.base_url}
-                display={shortUrl(outbound.base_url)}
-              />
+              <CopyableRow label="Base URL" value={outbound.base_url} />
             ) : (
               <Row label="Base URL" value="not configured" />
             )}
             <Row label="FHIR version" value={outbound.fhir_version} mono />
             <Row label="Server" value={outbound.software} />
-            <Row label="Detail" value={outbound.detail} />
+            {/* Only meaningful once something is configured — otherwise the row, the
+                Base URL row and the paragraph all restate "nothing connected". */}
+            {outbound.configured && <Row label="Detail" value={outbound.detail} />}
             <Row
               label="Push on order"
-              value={overview.push_orders_on_order ? 'enabled (FHIR_PUSH_ORDERS)' : 'disabled'}
+              value={overview.push_orders_on_order ? 'Enabled' : 'Disabled'}
             />
           </div>
           <p className="mt-3 text-[10.5px] leading-relaxed text-muted dark:text-darkMuted">
             {outbound.reachable
               ? 'Connected to the configured FHIR server. Push is a deliberate act, never a default.'
-              : 'Set FHIR_BASE_URL to connect an external FHIR server for live order and result exchange.'}
+              : 'Not yet connected to a hospital system. Once connected, orders and results can flow automatically.'}
           </p>
         </div>
 
@@ -444,18 +442,14 @@ export default function Interoperability({ patients = [], initialPatientId, onTo
             SMART on FHIR
           </SectionLabel>
           <div className="mt-3">
-            <CopyableRow label="Client ID" value={smart?.client_id} />
-            <CopyableRow
-              label="Redirect URI"
-              value={smart?.redirect_uri}
-              display={shortUrl(smart?.redirect_uri)}
-            />
+            <CopyableRow label="Client ID" value={smart?.client_id} display={smart?.client_id} />
+            <CopyableRow label="Redirect URI" value={smart?.redirect_uri} />
             <CopyableRow
               label="Patient in context"
               value={smart?.patient}
-              display={shortId(smart?.patient)}
+              display={smart?.patient ? shortId(smart.patient) : null}
             />
-            <CopyableRow label="Issuer (iss)" value={smart?.iss} display={shortUrl(smart?.iss)} />
+            <CopyableRow label="Issuer (iss)" value={smart?.iss} />
             <Row
               label="Scopes"
               value={
@@ -547,7 +541,7 @@ export default function Interoperability({ patients = [], initialPatientId, onTo
               ))}
             </select>
             <Btn icon={Layers} onClick={doExport} disabled={!patientId || busy === 'export'}>
-              Preview $everything
+              Preview full record
             </Btn>
             <Btn tone="primary" icon={Upload} onClick={doPush} disabled={!patientId || busy === 'push'}>
               Push to hospital
@@ -652,7 +646,13 @@ export default function Interoperability({ patients = [], initialPatientId, onTo
       {/* ── Inbound bundle tester ──────────────────────────────── */}
       <div className={PANEL_PAD}>
         <SectionLabel right={<Pill tone="accent">atomic — all or nothing</Pill>}>
-          Inbound ingestion — POST /fhir/Bundle
+          Inbound ingestion
+          <span
+            style={MONO}
+            className="ml-1.5 rounded-md border border-line dark:border-darkBorder bg-tint/70 dark:bg-darkBorderSubtle px-1.5 py-0.5 text-[10px] font-medium tracking-normal text-muted dark:text-darkMuted"
+          >
+            POST /fhir/Bundle
+          </span>
         </SectionLabel>
         <p className="mt-2 text-[11px] leading-relaxed text-muted dark:text-darkMuted">
           Paste any FHIR R4 transaction/collection Bundle. A recognised result is mapped, the served model

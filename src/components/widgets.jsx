@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Copy } from 'lucide-react';
+import { Check, Copy } from 'lucide-react';
 import { STAGES_FULL, STAGES_SHORT, fmtScore } from '../lib.js';
 import TierTag from './TierTag.jsx';
 
@@ -114,35 +114,19 @@ export function Row({ label, value, mono = false }) {
   );
 }
 
-/**
- * A full FHIR issuer is ~110 characters and wrapped across two lines reads as
- * debug output. Show host + the meaningful path segments; the whole value stays
- * available on hover and on copy.
- */
-export function shortUrl(raw) {
-  if (!raw) return null;
-  let host = raw;
-  let path = '';
-  try {
-    const parsed = new URL(raw);
-    host = parsed.hostname;
-    path = parsed.pathname === '/' ? '' : parsed.pathname;
-  } catch {
-    return raw.length > 44 ? `${raw.slice(0, 20)}…${raw.slice(-14)}` : raw;
-  }
-  const full = `${host}${path}`;
-  if (full.length <= 56) return full;
-  const segments = path.split('/').filter(Boolean);
-  if (segments.length <= 2) return full;
-  return `${host}/${segments.slice(0, 2).join('/')}/…/${segments[segments.length - 1]}`;
-}
-
 export const shortId = (raw) => (raw && raw.length > 13 ? `${raw.slice(0, 8)}…` : raw);
 
-/** A Row for a machine value: truncated display, full value on hover and copy. */
+/**
+ * A Row for a machine value.
+ *
+ * URLs are never printed: a FHIR issuer is ~114 characters, and every attempt to
+ * compress one for display (`host/…/last-segment`) is less readable than the row
+ * label it sits beside. A URL row therefore renders the value as a copy button,
+ * with the full string available on hover. Short scalars (an id, a client id)
+ * still read as text, because their short form is the useful part.
+ */
 export function CopyableRow({ label, value, display }) {
   const [copied, setCopied] = useState(false);
-  const shown = display ?? value;
 
   if (!value) return <Row label={label} value="—" />;
 
@@ -157,25 +141,37 @@ export function CopyableRow({ label, value, display }) {
   };
 
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-line/60 dark:border-darkBorder/60 py-2 last:border-b-0">
+    <div className="flex items-center justify-between gap-4 border-b border-line/60 dark:border-darkBorder/60 py-2 last:border-b-0">
       <span className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted dark:text-darkMuted">
         {label}
       </span>
-      <button
-        type="button"
-        onClick={copy}
-        title={value}
-        className="group flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-0.5 text-right transition hover:bg-tint dark:hover:bg-darkBorderSubtle"
-      >
-        <span style={MONO} className="truncate text-[11px] text-ink dark:text-darkText">
-          {shown}
-        </span>
-        {copied ? (
-          <span className="shrink-0 text-[10px] font-bold text-accent">copied</span>
-        ) : (
-          <Copy className="h-3 w-3 shrink-0 text-muted opacity-0 transition group-hover:opacity-100" />
+      <div className="group relative flex min-w-0 items-center gap-2">
+        {display && (
+          <span style={MONO} className="truncate text-[11px] text-ink dark:text-darkText">
+            {display}
+          </span>
         )}
-      </button>
+        <button
+          type="button"
+          onClick={copy}
+          aria-label={`Copy ${label}: ${value}`}
+          className={`flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] transition ${
+            copied
+              ? 'border-accent/40 bg-accent/10 text-accent'
+              : 'border-line dark:border-darkBorder bg-white dark:bg-darkCard text-muted dark:text-darkMuted hover:border-accent/40 hover:text-accent'
+          }`}
+        >
+          {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+        {/* Only rendered on hover, so it never affects the row's resting layout. */}
+        <span
+          className="pointer-events-none absolute right-0 top-[calc(100%+5px)] z-30 hidden max-w-[26rem] break-all rounded-lg border border-ink/10 bg-ink px-2.5 py-1.5 text-[10.5px] leading-relaxed text-white shadow-lift group-hover:block dark:border-darkBorder dark:bg-darkCard dark:text-darkText"
+          style={MONO}
+        >
+          {value}
+        </span>
+      </div>
     </div>
   );
 }

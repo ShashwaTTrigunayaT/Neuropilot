@@ -201,8 +201,8 @@ def _post_to_cm(path: str, body: dict) -> dict:
     base = cm_base_url()
     if not base:
         raise AbdmError(
-            "No Consent Manager configured. Set ABDM_CM_BASE_URL, or enable the "
-            "in-process mock gateway with ABDM_USE_MOCK_GATEWAY=true.",
+            "No Consent Manager is configured, so no consent request can be sent. "
+            "Connect a Consent Manager, or run against the in-process mock gateway.",
             status_code=503,
         )
     url = f"{base}/api/{CM_API}/{path}"
