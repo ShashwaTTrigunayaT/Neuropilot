@@ -4,7 +4,7 @@ import { MONO } from './widgets.jsx';
 // The served model's 15-feature ADNI contract, mapped onto the four pipeline
 // stages the product actually escalates through. (The legacy OASIS names are
 // gone -- this chart was still labelling spokes with nwbv / etiv / ses.)
-const STAGE_OF = {
+export const STAGE_OF = {
   adas_cog_13: 1, mmse: 1, mmse_change: 1, age: 1, sex: 1, education_years: 1, apoe_e4: 1,
   ptau217: 2, abeta4240: 2, nfl: 2, gfap: 2,
   hippocampal_volume: 3, hippocampal_icv_ratio: 3,
@@ -18,8 +18,9 @@ const STAGE_LABEL = {
 };
 
 // Display names for the served 15-feature ADNI contract (the legacy OASIS map
-// was still labelling spokes with nwbv / etiv / ses).
-const FEATURE_LABEL = {
+// was still labelling spokes with nwbv / etiv / ses). Exported so the landing
+// page can name the features of each stage without a second copy of this map.
+export const FEATURE_LABEL = {
   adas_cog_13: 'ADAS-Cog 13',
   mmse: 'MMSE',
   mmse_change: 'MMSE change',

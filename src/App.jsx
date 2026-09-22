@@ -1,20 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import {
-  AlertCircle,
-  LayoutDashboard,
-  Moon,
-  Plug,
-  RefreshCw,
-  SlidersHorizontal,
-  Sun,
-  Users,
-  Workflow,
-} from 'lucide-react';
+import { AlertCircle, RefreshCw } from 'lucide-react';
 import AllPatients from './components/AllPatients.jsx';
 import AutonomousTriage from './components/AutonomousTriage.jsx';
-import { NeuroPilotLogo } from './components/BrandLogo.jsx';
 import CompareView from './components/CompareView.jsx';
 import Footer from './components/Footer.jsx';
+import Header from './components/Header.jsx';
 import Interoperability from './components/Interoperability.jsx';
 import Overview from './components/Overview.jsx';
 import PatientDetail from './components/PatientDetail.jsx';
@@ -22,129 +12,6 @@ import ProgressionView from './components/ProgressionView.jsx';
 import RiskSimulator from './components/RiskSimulator.jsx';
 import { MONO, Toast } from './components/widgets.jsx';
 import { API_BASE, api } from './api.js';
-
-function Header({ theme, onToggleTheme, currentView, onViewChange, patientCount, isDetailOpen, autopilot, onStopAutopilot }) {
-  return (
-    <header className="sticky top-0 z-30 border-b border-line dark:border-darkBorder bg-white/85 dark:bg-darkCard/85 backdrop-blur-xl shadow-soft transition-colors">
-      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-x-6 gap-y-3 px-6 py-3">
-        {/* Brand & App Icon */}
-        <NeuroPilotLogo onClick={() => onViewChange('overview')} />
-
-        {/* Shifted Main Navigation Tabs */}
-        <nav className="flex items-center gap-1 rounded-2xl border border-line dark:border-darkBorder bg-[#F7F5F1] dark:bg-darkBorderSubtle p-1 shadow-soft">
-          <button
-            onClick={() => onViewChange('overview')}
-            className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-semibold transition active:scale-[0.97] ${
-              currentView === 'overview' && !isDetailOpen
-                ? 'bg-white dark:bg-darkCard text-ink dark:text-darkText shadow-soft'
-                : 'text-muted dark:text-darkMuted hover:text-ink dark:hover:text-darkText'
-            }`}
-          >
-            <LayoutDashboard className="h-3.5 w-3.5" />
-            Dashboard
-          </button>
-          <button
-            onClick={() => onViewChange('all')}
-            className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-semibold transition active:scale-[0.97] ${
-              currentView === 'all' || isDetailOpen
-                ? 'bg-white dark:bg-darkCard text-ink dark:text-darkText shadow-soft'
-                : 'text-muted dark:text-darkMuted hover:text-ink dark:hover:text-darkText'
-            }`}
-          >
-            <Users className="h-3.5 w-3.5" />
-            Patients
-            <span
-              style={MONO}
-              className={`rounded-full px-1.5 py-0.2 text-[10px] ${
-                currentView === 'all' || isDetailOpen
-                  ? 'bg-accent/15 text-accent font-bold'
-                  : 'bg-tint dark:bg-darkCard text-muted'
-              }`}
-            >
-              {patientCount}
-            </span>
-          </button>
-          <button
-            onClick={() => onViewChange('simulator')}
-            className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-semibold transition active:scale-[0.97] ${
-              currentView === 'simulator' && !isDetailOpen
-                ? 'bg-white dark:bg-darkCard text-accent shadow-soft font-bold'
-                : 'text-muted dark:text-darkMuted hover:text-ink dark:hover:text-darkText'
-            }`}
-          >
-            <SlidersHorizontal className="h-3.5 w-3.5" />
-            Risk Simulator
-          </button>
-          <button
-            onClick={() => onViewChange('interop')}
-            title="HL7 FHIR R4 exchange — export, inbound ingestion, orders/results and SMART launch"
-            className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-semibold transition active:scale-[0.97] ${
-              currentView === 'interop'
-                ? 'bg-white dark:bg-darkCard text-accent shadow-soft font-bold'
-                : 'text-muted dark:text-darkMuted hover:text-ink dark:hover:text-darkText'
-            }`}
-          >
-            <Plug className="h-3.5 w-3.5" />
-            Interoperability
-          </button>
-        </nav>
-
-        {/* Autonomous Neuro + Theme Switcher */}
-        <div className="flex items-center gap-2.5">
-          {/*
-           * This button is the ONLY autonomous control that lives outside the
-           * view tree, on purpose: the loop refreshes data underneath it, so a
-           * stop control rendered inside a view can be unmounted mid-run. While
-           * the loop is on it becomes Stop, in the sticky header, whatever view
-           * you are on — and Esc does the same thing.
-           */}
-          <button
-            onClick={() => (autopilot ? onStopAutopilot() : onViewChange('autonomous'))}
-            title={
-              autopilot
-                ? 'Stop the supervised run (or press Esc)'
-                : 'The model proposes the next batch of tests with its reasoning; a clinician approves what actually runs'
-            }
-            className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold shadow-soft transition active:scale-[0.97] ${
-              autopilot
-                ? 'bg-tierHigh text-white hover:opacity-90'
-                : currentView === 'autonomous' && !isDetailOpen
-                  ? 'bg-accent text-white'
-                  : 'border border-line dark:border-darkBorder bg-white dark:bg-darkCard text-ink dark:text-darkText hover:border-accent'
-            }`}
-          >
-            {autopilot ? (
-              <>
-                <span className="relative flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-white" />
-                </span>
-                Stop
-              </>
-            ) : (
-              <>
-                <Workflow className="h-3 w-3" strokeWidth={2.4} />
-                Autonomous Neuro
-              </>
-            )}
-          </button>
-          <button
-            onClick={onToggleTheme}
-            aria-label="Toggle theme"
-            className="flex h-8 w-8 items-center justify-center rounded-xl border border-line dark:border-darkBorder bg-white dark:bg-darkCard text-ink dark:text-darkText shadow-soft hover:border-accent transition"
-            title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-          >
-            {theme === 'dark' ? (
-              <Sun className="h-4 w-4 text-amber-500" />
-            ) : (
-              <Moon className="h-4 w-4 text-slate-700" />
-            )}
-          </button>
-        </div>
-      </div>
-    </header>
-  );
-}
 
 function CohortSkeleton() {
   return (
@@ -562,6 +429,10 @@ export default function App() {
     setView('overview');
   };
 
+  // Full-bleed only once the cohort is on screen: the loading skeleton still
+  // belongs on the dashboard rail, and a patient record always does.
+  const landing = view === 'overview' && !selectedId && status === 'ready';
+
   return (
     <div className="flex min-h-screen flex-col bg-paper dark:bg-darkBg text-ink dark:text-darkText transition-colors duration-300">
       <Header
@@ -607,7 +478,12 @@ export default function App() {
         </div>
       )}
 
-      <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-8">
+      {/*
+       * The landing page is a full-length, full-bleed page: its bands span the
+       * viewport and lay out their own padding, so it must not be nested inside
+       * the dashboard rail. Every other view keeps the constrained column.
+       */}
+      <main className={landing ? 'w-full flex-1' : 'mx-auto w-full max-w-6xl flex-1 px-6 py-8'}>
         {status === 'loading' && !selectedId && <CohortSkeleton />}
         {status === 'loading' && selectedId && <DetailSkeleton />}
 
@@ -638,6 +514,7 @@ export default function App() {
                 <Overview
                   patients={patients}
                   modelInfo={modelInfo}
+                  dataSource={dataSource}
                   onSelect={openPatient}
                   onShowAll={() => setView('all')}
                   onOpenSimulator={() => setView('simulator')}

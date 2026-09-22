@@ -9,6 +9,15 @@ html {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* The landing page is navigated by in-page anchors; smooth scrolling there is
+   the difference between a jump and a scroll. Skipped when the reader has asked
+   for reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
 body {
   background-color: #FAF8F4;
   color: #13151A;

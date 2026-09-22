@@ -246,7 +246,7 @@ trajectory (−0.05) at 2%.
                                 ▼
 ┌───────────────────────────────────────────────────────────────────────┐
 │ UI — src/ (React + Vite + Tailwind) — NO mock data                    │
-│   Overview: hero + cohort ribbon · risk & stage charts · top-8 list   │
+│   Overview: full-screen capability preview · ribbon · charts · top-8   │
 │   Patients: ranked table, filters, search, pagination                 │
 │   Detail: score gauge · 4-stage attribution radar · pipeline stepper  │
 │           · audit trail · Progression Probability button              │
@@ -328,7 +328,9 @@ trajectory (−0.05) at 2%.
 │   ├── App.jsx                  #   views, flows, Autonomous Neuro console
 │   ├── lib.js · index.css · main.jsx
 │   └── components/
-│       ├── Overview.jsx         #   landing: hero, ribbon, charts, top-8, SHAP 
+│       ├── Overview.jsx         #   landing: preview, ribbon, charts, top-8, SHAP
+│       ├── AutoScrollShowcase.jsx  # self-advancing full-screen preview rail
+│       ├── Header.jsx           #   sticky chrome: brand · nav · run control · theme
 │       ├── AllPatients.jsx      #   ranked table: filters, search, pagination
 │       ├── PatientDetail.jsx    #   detail: score, attribution radar, actions, trail
 │       ├── ProgressionView.jsx  #   full-page 12-month forecast
@@ -620,11 +622,18 @@ Example attribution factor (grouped by stage in the UI):
 
 - **Zero mock data.** `src/api.js` is the only data source; if the API is down
   the UI shows an error + Retry, never fake rows.
-- **Overview (landing page)** — a hero stating what the product does, with the three ways in
-  (priority queue, autonomous triage, risk simulator); a joined cohort ribbon (subjects,
-  high/medium/low, mean refined risk) behind hairline dividers; risk and stage charts side by side at
-  equal height; the attribution radar with the served model's real per-stage share; and the top-8
-  shortlist, ordered tier-then-score so the tier beside a subject always matches its position.
+- **Overview (landing page)** — opens on the preview: ten full-screen panels that advance on
+  their own, one capability each (the system itself, the real ADNI cohort, the four stages, the three
+  scores, attribution, the patient record, the simulator, autonomous triage, the outlook, FHIR).
+  Each panel is a slide — a tinted summary column in the brand accent beside the full explanation —
+  and double-clicking the stage returns to the lead panel and restarts its dwell. Below it a joined
+  cohort ribbon (subjects, high/medium/low, mean refined risk) behind hairline dividers; risk and
+  stage charts side by side at equal height; and the top-8 shortlist, ordered tier-then-score so the
+  tier beside a subject always matches its position.
+- **Header** (`components/Header.jsx`) — the only chrome on every view: brand lockup with the
+  gradient rule and a live data-source chip, one segmented nav whose four tabs share a single
+  definition of the active state, the autonomous run/stop control (deliberately outside the view
+  tree so a running step cannot unmount it), and the theme toggle.
 - **Patients** — complete ranked table: tier/stage segmented filters, ID search,
   sort by risk/stage, pagination (15/page), page state preserved when opening a
   subject and returning.

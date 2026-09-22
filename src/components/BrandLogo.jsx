@@ -72,7 +72,14 @@ export function NeuroPilotIcon({ size = 'md', className = '' }) {
   );
 }
 
-export function NeuroPilotLogo({ size = 'md', showSubtitle = true, onClick }) {
+export function NeuroPilotLogo({
+  size = 'md',
+  showSubtitle = true,
+  // The full descriptor is the default; the header passes a shorter form because
+  // the long one cost ~80px of a header row that has a hard width budget.
+  subtitle = 'Clinical Decision Support & Risk Triage',
+  onClick,
+}) {
   const Comp = onClick ? 'button' : 'div';
   return (
     <Comp
@@ -90,9 +97,7 @@ export function NeuroPilotLogo({ size = 'md', showSubtitle = true, onClick }) {
           NeuroPilot
         </p>
         {showSubtitle && (
-          <p className="text-[10.5px] font-medium text-muted dark:text-darkMuted">
-            Clinical Decision Support & Risk Triage
-          </p>
+          <p className="text-[10.5px] font-medium text-muted dark:text-darkMuted">{subtitle}</p>
         )}
       </div>
     </Comp>

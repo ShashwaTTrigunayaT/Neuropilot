@@ -84,8 +84,16 @@ export function Btn({ tone = 'ghost', icon: Icon, children, className = '', ...r
   );
 }
 
-/** One cell of a status ribbon: icon tile, label, value, optional hint. */
-export function RibbonStat({ icon: Icon, label, value, tone = 'muted', hint, dot }) {
+/**
+ * One cell of a status ribbon: icon tile, label, a large value, an optional
+ * proportion bar, and a hint.
+ *
+ * The value is the point of the cell, so it is set at 24px in tabular figures —
+ * the earlier 12px version stacked three lines of text and then made the number
+ * the smallest thing in the row. The bar is optional because only counts that
+ * are a share of a whole have something honest to show.
+ */
+export function RibbonStat({ icon: Icon, label, value, tone = 'muted', hint, dot, bar }) {
   const tones = {
     ok: 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10',
     warn: 'text-amber-600 dark:text-amber-400 bg-amber-500/10',
@@ -93,25 +101,49 @@ export function RibbonStat({ icon: Icon, label, value, tone = 'muted', hint, dot
     muted: 'text-muted dark:text-darkMuted bg-tint dark:bg-darkBorderSubtle',
     accent: 'text-accent bg-accent/10',
   };
+  const accents = {
+    ok: '#1EB980',
+    warn: '#D9822B',
+    bad: '#E04836',
+    muted: '#6E7175',
+    accent: '#0D8282',
+  };
+
   return (
-    <div className="flex items-start gap-3 px-4 py-3.5">
-      <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${tones[tone]}`}>
-        {dot ? (
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-60" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-current" />
-          </span>
-        ) : (
-          Icon && <Icon className="h-3.5 w-3.5" />
-        )}
-      </span>
-      <div className="min-w-0">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted dark:text-darkMuted">
-          {label}
-        </p>
-        <p className="mt-0.5 truncate text-[12px] font-bold text-ink dark:text-darkText">{value}</p>
-        {hint && <p className="mt-0.5 truncate text-[10px] text-muted dark:text-darkMuted">{hint}</p>}
+    <div className="group relative flex h-full flex-col gap-2.5 px-5 py-4 transition-colors hover:bg-tint/40 dark:hover:bg-darkCardHover/50">
+      <div className="flex items-center gap-2.5">
+        <span
+          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset ring-black/[0.04] dark:ring-white/[0.06] ${tones[tone]}`}
+        >
+          {dot ? (
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-60" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-current" />
+            </span>
+          ) : (
+            Icon && <Icon className="h-3.5 w-3.5" />
+          )}
+        </span>
+        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted dark:text-darkMuted">{label}</p>
       </div>
+
+      <p
+        style={MONO}
+        className="text-[24px] font-bold leading-none tracking-tight text-ink tabular-nums dark:text-darkText"
+      >
+        {value}
+      </p>
+
+      {bar != null && (
+        <div className="h-1 w-full overflow-hidden rounded-full bg-line/60 dark:bg-darkBorder">
+          <div
+            className="h-full rounded-full transition-all duration-700"
+            style={{ width: `${Math.max(2, Math.min(100, bar))}%`, background: accents[tone] }}
+          />
+        </div>
+      )}
+
+      {hint && <p className="text-[10.5px] leading-snug text-muted dark:text-darkMuted">{hint}</p>}
     </div>
   );
 }
