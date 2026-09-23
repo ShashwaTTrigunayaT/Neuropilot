@@ -328,7 +328,7 @@ trajectory (−0.05) at 2%.
 │   ├── App.jsx                  #   views, flows, Autonomous Neuro console
 │   ├── lib.js · index.css · main.jsx
 │   └── components/
-│       ├── Overview.jsx         #   landing: preview, ribbon, charts, top-8, SHAP
+│       ├── Overview.jsx         #   landing: preview, ribbon, top-8, SHAP
 │       ├── AutoScrollShowcase.jsx  # self-advancing full-screen preview rail
 │       ├── Header.jsx           #   sticky chrome: brand · nav · run control · theme
 │       ├── AllPatients.jsx      #   ranked table: filters, search, pagination
@@ -627,16 +627,20 @@ Example attribution factor (grouped by stage in the UI):
   scores, attribution, the patient record, the simulator, autonomous triage, the outlook, FHIR).
   Each panel is a slide — a tinted summary column in the brand accent beside the full explanation —
   and double-clicking the stage returns to the lead panel and restarts its dwell. Below it a joined
-  cohort ribbon (subjects, high/medium/low, mean refined risk) behind hairline dividers; risk and
-  stage charts side by side at equal height; and the top-8 shortlist, ordered tier-then-score so the
-  tier beside a subject always matches its position.
+  cohort ribbon (subjects, high/medium/low, mean refined risk) behind hairline dividers, the served
+  model's attribution radar, and the top-8 shortlist, ordered tier-then-score so the tier beside a
+  subject always matches its position. Every summary column wears the same brand-accent surface — a
+  panel's own accent is used only in the detail column, where it marks stage identity.
 - **Header** (`components/Header.jsx`) — the only chrome on every view: brand lockup with the
   gradient rule and a live data-source chip, one segmented nav whose four tabs share a single
   definition of the active state, the autonomous run/stop control (deliberately outside the view
   tree so a running step cannot unmount it), and the theme toggle.
-- **Patients** — complete ranked table: tier/stage segmented filters, ID search,
-  sort by risk/stage, pagination (15/page), page state preserved when opening a
-  subject and returning.
+- **Patients** — opens on the cohort's shape, then the worklist: **risk-density and
+  stage-occupancy charts** at equal height (moved here from the landing page, where
+  they sat between the attribution radar and the closing call to action), the
+  stage-gate pills immediately above the table they filter, then the complete ranked
+  table: tier/stage segmented filters, ID search, sort by risk/stage, pagination
+  (15/page), page state preserved when opening a subject and returning.
 - **Detail view** — score gauge with 0.4/0.7 threshold markers; **Clinical Risk
   Attribution** grouped by pipeline stage (Cognition / Blood / MRI / PET) with
   signed bars, measured values, and `model default` badges + footnote for

@@ -40,8 +40,6 @@ import {
 } from 'lucide-react';
 import AutoScrollShowcase from './AutoScrollShowcase.jsx';
 import FeatureRadarChart, { FEATURE_LABEL, STAGE_OF } from './FeatureRadarChart.jsx';
-import RiskDistributionChart from './RiskDistributionChart.jsx';
-import StageProgressionChart from './StageProgressionChart.jsx';
 import {
   Btn,
   JOINED_GRID,
@@ -64,10 +62,7 @@ const STAGE_TITLE = {
 
 // The bands below the preview. Anything the preview already explains in full is
 // deliberately not repeated here — these are the cohort's own numbers.
-const JUMPS = [
-  ['attribution', 'Attribution'],
-  ['cohort', 'Distribution'],
-];
+const JUMPS = [['attribution', 'Attribution']];
 
 const auc = (v) => (typeof v === 'number' ? v.toFixed(2) : '—');
 
@@ -699,26 +694,6 @@ export default function Overview({
           </div>
         </Band>
       )}
-
-      {/* ================================================================ */}
-      {/* Where the cohort actually sits                                    */}
-      {/* ================================================================ */}
-      <Band id="cohort">
-        <BandHead
-          wide
-          eyebrow="Distribution"
-          title="Where the cohort actually sits."
-          lede="Risk density on the left, stage occupancy on the right — the same data the queue is built from. The long tail below the Medium cut-off is the point: most of a real cohort is not high risk, and a system that says otherwise is not usable."
-        />
-        <div className="mt-10 grid items-stretch gap-6 lg:grid-cols-2">
-          <div className={`${PANEL} p-5`}>
-            <RiskDistributionChart patients={patients} />
-          </div>
-          <div className={`${PANEL} p-5`}>
-            <StageProgressionChart patients={patients} />
-          </div>
-        </div>
-      </Band>
 
       {/* ================================================================ */}
       {/* Closing                                                           */}

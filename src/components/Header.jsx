@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { LayoutDashboard, Moon, Plug, SlidersHorizontal, Sun, Users, Workflow } from 'lucide-react';
 import { NeuroPilotLogo } from './BrandLogo.jsx';
 import { MONO } from './widgets.jsx';
@@ -102,8 +103,36 @@ export default function Header({
   const dark = theme === 'dark';
   const autonomousView = currentView === 'autonomous' && !isDetailOpen;
 
+  /*
+   * Publish the header's real height to CSS.
+   *
+   * Anything else that has to pin below this bar needs the number, and the bar
+   * changes height with the viewport (it wraps to two rows under ~1024px). A
+   * hard-coded offset would silently overlap the moment either changed, so the
+   * height is measured and re-measured on resize instead of guessed.
+   */
+  const barRef = useRef(null);
+  useEffect(() => {
+    const node = barRef.current;
+    if (!node) return undefined;
+    const publish = () => {
+      document.documentElement.style.setProperty('--app-header-h', `${Math.round(node.getBoundingClientRect().height)}px`);
+    };
+    publish();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(publish) : null;
+    ro?.observe(node);
+    window.addEventListener('resize', publish);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener('resize', publish);
+    };
+  }, []);
+
   return (
-    <header className="sticky top-0 z-30 select-none border-b border-line/80 bg-white/80 shadow-soft backdrop-blur-xl transition-colors dark:border-darkBorder dark:bg-darkCard/85">
+    <header
+      ref={barRef}
+      className="sticky top-0 z-30 select-none border-b border-line/80 bg-white/80 shadow-soft backdrop-blur-xl transition-colors dark:border-darkBorder dark:bg-darkCard/85"
+    >
       {/* A warm wash over the surface — the header sits on the same paper as the
           page, so a flat white bar looked pasted on top of it. */}
       <span

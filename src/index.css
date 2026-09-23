@@ -77,15 +77,36 @@ body {
   background: transparent;
 }
 
-/* Tables scroll inside a container; sticky headers */
-.sticky-th {
-  background-color: rgba(255, 255, 255, 0.94);
-  backdrop-filter: blur(8px);
+/*
+ * Tables scroll inside a container, so the header has to stay put while they do.
+ *
+ * This class previously only painted a background: no rule ever set `position`,
+ * so the header scrolled away with the rows and the tint simply sat on whatever
+ * was underneath it. Two things were wrong, and both are load-bearing:
+ *
+ *   1. the sticky element must be the `th`, not the `tr` — a sticky table row is
+ *      ignored by every engine, which is why `position` on the row did nothing;
+ *   2. each `th` needs its OWN background, because a row's paint does not travel
+ *      with a cell that has been stuck — without this, rows scroll over the label.
+ */
+.sticky-th th {
+  position: sticky;
+  /* pins directly under the application bar, whose height the header measures
+     and publishes as --app-header-h (it wraps to two rows under ~1024px) */
+  top: var(--app-header-h, 0px);
+  z-index: 2;
+  /* the table's own surface, not the page's: a stuck header has to cover the
+     rows passing under it, so it must be as opaque as the body it leads */
+  background-color: #FFFFFF;
   border-bottom: 1px solid #E6E2DA;
 }
-.dark .sticky-th {
-  background-color: rgba(17, 21, 28, 0.94);
+.dark .sticky-th th {
+  background-color: #11151C;
   border-bottom: 1px solid #1F2633;
+}
+/* only while the header is actually detached from the top of its table */
+.sticky-th.is-stuck th {
+  box-shadow: 0 8px 14px -10px rgba(0, 0, 0, 0.35);
 }
 
 /* Glass panel */

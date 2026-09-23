@@ -24,6 +24,8 @@ import { MONO } from './widgets.jsx';
  * is written straight to the DOM inside one rAF loop; React re-renders only when
  * the active panel changes.
  */
+const BRAND = '#0D8282'; // the site's primary button colour
+const BRAND_SURFACE = 'linear-gradient(158deg, #0F8F8F 0%, #0D8282 52%, #0A6A6A 100%)';
 const GAP_PX = 24; // gap-6
 const GUTTER = '1rem'; // the inset each full-width panel keeps from the viewport
 const STEP_MS = 5000; // dwell per panel — long enough to read a deep panel
@@ -155,13 +157,18 @@ export default function AutoScrollShowcase({ panels = [] }) {
   };
 
   const panel = (p, i, key) => {
-    const accent = p.accent || '#0D8282';
-    // The left column is the SUMMARY and always wears the brand accent (`accent`
+    const accent = p.accent || BRAND;
+    // The left column is the SUMMARY and ALWAYS wears the brand accent (`BRAND`
     // — the exact colour of the site's primary buttons), so the two halves of a
     // slide read as different kinds of content before a word is read: tinted =
-    // the short version, white = the full explanation. Where a panel declares
-    // its own accent it is used only inside the detail column (point icons and
-    // bars), never on the summary side.
+    // the short version, white = the full explanation.
+    //
+    // A panel's own accent is deliberately NOT used here. It used to tint this
+    // gradient, which made four of the ten slides open on a green / orange /
+    // violet / blue wash while the other six opened on teal — so the summary
+    // column changed colour as the rail advanced for no reason a reader could
+    // see. Every summary is now the same surface; the per-panel accent lives
+    // only in the detail column, where it marks which stage a number belongs to.
     return (
       <article
         key={key}
@@ -170,7 +177,7 @@ export default function AutoScrollShowcase({ panels = [] }) {
         {/* ------------------------------------------------ narrative */}
         <div
           className="relative flex shrink-0 flex-col overflow-hidden p-6 lg:h-full lg:w-[37%] lg:shrink lg:p-10"
-          style={{ background: `linear-gradient(158deg, ${accent} 0%, #0D8282 52%, #0A6A6A 100%)` }}
+          style={{ background: BRAND_SURFACE }}
         >
           {/* a soft top-light so the flat tint has depth rather than looking printed */}
           <span

@@ -1,11 +1,56 @@
-import { useMemo, useState } from 'react';
-import { Check, Copy } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowRight, Check, Copy } from 'lucide-react';
 import { STAGES_FULL, STAGES_SHORT, fmtScore } from '../lib.js';
 import TierTag from './TierTag.jsx';
 
 /* ------------------------------------------------------------------ */
 /*  Design tokens                                                      */
 /* ------------------------------------------------------------------ */
+/*
+ * Entrance progress: 0 → 1, once, when a panel mounts.
+ *
+ * The composition panels grow their arcs, bands and figures from this single
+ * value, so one animation driver runs per panel instead of one per element and
+ * every part of the graphic arrives in step. It eases out, so the movement is
+ * fastest where the shapes are still small and settles as they land.
+ *
+ * `prefers-reduced-motion` skips it entirely and returns 1 immediately — the
+ * panel must never be the thing that makes a motion-sensitive reader unwell.
+ * The same hook re-fires whenever the view is opened again, because the
+ * component remounts; nothing has to be scheduled by hand.
+ */
+export function useEnterProgress({ duration = 950, delay = 70 } = {}) {
+  const [t, setT] = useState(0);
+  const frame = useRef(0);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      setT(1);
+      return undefined;
+    }
+
+    let started = 0;
+    const tick = (now) => {
+      if (!started) started = now;
+      const p = Math.min(1, (now - started) / duration);
+      setT(1 - (1 - p) ** 3); // ease-out cubic
+      if (p < 1) frame.current = requestAnimationFrame(tick);
+    };
+
+    const timer = setTimeout(() => {
+      frame.current = requestAnimationFrame(tick);
+    }, delay);
+
+    return () => {
+      clearTimeout(timer);
+      cancelAnimationFrame(frame.current);
+    };
+  }, [duration, delay]);
+
+  return t;
+}
+
 export const INK = '#13151A';
 export const INK_MUTED = '#6E7175';
 export const LINE = '#E6E2DA';
@@ -726,37 +771,119 @@ export function PatientTable({
   selectable = false,
   selectedIds = [],
   onToggleSelect,
+  pageOffset = 0,
 }) {
   const selected = new Set(selectedIds);
+
+  /*
+   * A pinned header needs to LOOK pinned.
+   *
+   * Once the page scrolls the header stops moving while rows keep passing under
+   * it, and because the bar is the same white as the rows it reads as one flat
+   * sheet with a stray border in the middle. A shadow appears the moment it
+   * actually detaches, and disappears the moment it settles back into place — so
+   * the depth is a statement about the scroll position, not decoration.
+   */
+  const [stuck, setStuck] = useState(false);
+  const tableRef = useRef(null);
+
+  useEffect(() => {
+    const onScroll = () => {
+      const el = tableRef.current;
+      if (!el) return;
+      const bar =
+        parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--app-header-h')) || 0;
+      setStuck(el.getBoundingClientRect().top <= bar - 1);
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, []);
+  const HEAD = 'px-4 py-3 text-left font-semibold uppercase tracking-[0.12em] text-muted dark:text-darkMuted';
+  const HEAD_STYLE = { fontSize: '10.5px' };
+  /*
+   * The table is a GRID, so it is drawn as one.
+   *
+   * `border-separate` on the table is load-bearing: under `border-collapse` a
+   * sticky cell drops its own borders while it is stuck, which is why the header
+   * used to lose its bottom rule the moment you scrolled. The trade is that row
+   * borders must then live on the CELLS — a `tr` border is ignored in
+   * border-separate mode — so every cell carries its own bottom rule and the
+   * column rule, and `border-spacing-0` keeps the grid tight.
+   */
+  const RULE = 'border-l border-line/50 dark:border-darkBorder/50';
+  const BOTTOM = 'border-b border-line/60 dark:border-darkBorder/60';
+  const CELL = `px-4 py-4 ${RULE} ${BOTTOM}`;
   return (
-    <div className="max-h-[68vh] overflow-auto">
-      <table className="w-full text-left">
+    /*
+     * No inner scroll box.
+     *
+     * A `max-h-[68vh] overflow-auto` here created a SECOND scroll axis inside a
+     * page that already scrolls, and on a laptop that window was about five rows
+     * tall — the reader had to scroll a small pane to reach row six, then scroll
+     * the page to reach the pane's own bottom. The list now flows with the page
+     * on one axis, and the header stays pinned below the application bar via
+     * `--app-header-h`, which the header itself measures and publishes.
+     */
+    /*
+     * `overflow-x: clip`, not `auto`, once there is room for the whole table.
+     *
+     * Any non-visible overflow makes this div a scroll container, and a sticky
+     * header sticks to its nearest scroll container — so `overflow-x-auto` quietly
+     * broke the pin and the header scrolled away exactly as before (measured: -276px
+     * behind the app bar). `clip` still clips a too-wide table but is NOT a scroll
+     * container, so the page stays the single scroll axis the header pins to. Below
+     * `lg` the table can be wider than the screen, so there the horizontal scroll is
+     * kept and the pin is given up — which is the right trade on a narrow viewport.
+     */
+    <div ref={tableRef} className="w-full border-b border-line/70 lg:overflow-x-clip dark:border-darkBorder/70">
+      {/*
+       * The rows sit on their OWN surface — solid white against the page's paper
+       * tone (#FAF8F4), solid card colour against the dark page. Without it the
+       * rows had nothing separating them from the page and the list read as text
+       * floating on the background: hairlines alone are a grid, not a surface.
+       *
+       * It is still not a card: no radius, no shadow, no side borders, no tint.
+       * The wash simply ends where the rows end.
+       */}
+      <table className="w-full border-separate border-spacing-0 bg-white text-left dark:bg-darkCard">
+        {/*
+         * Head and rows are deliberately built from one set of constants: every
+         * column label shares a size and tracking, and every row shares a
+         * height, so the table reads as a single grid instead of 7 columns laid
+         * out seven separate times.
+         */}
         <thead>
-          <tr className="border-b border-line dark:border-darkBorder sticky-th">
+          <tr className={`sticky-th border-b border-line dark:border-darkBorder ${stuck ? 'is-stuck' : ''}`}>
             {selectable && <th className="w-10 px-3 py-3" />}
-            <th className="px-5 py-3 text-left font-semibold text-muted dark:text-darkMuted uppercase tracking-wider" style={{ fontSize: '10.5px' }}>Subject</th>
+            <th className={`w-12 ${HEAD}`} style={HEAD_STYLE}>#</th>
+            <th className={`px-5 ${HEAD}`} style={HEAD_STYLE}>Subject</th>
+            {!compact && <th className={`${HEAD} ${RULE}`} style={HEAD_STYLE}>Cognition</th>}
+            <th className={`${HEAD} ${RULE}`} style={HEAD_STYLE}>Risk assessment</th>
+            <th className={`${HEAD} ${RULE}`} style={HEAD_STYLE}>Pipeline stage</th>
+            <th className={`${HEAD} ${RULE}`} style={HEAD_STYLE}>Recommended action</th>
             {!compact && (
-              <th className="px-4 py-3 text-left font-semibold text-muted dark:text-darkMuted uppercase tracking-wider" style={{ fontSize: '10.5px' }}>Cognitive (MMSE)</th>
-            )}
-            <th className="px-4 py-3 text-left font-semibold text-muted dark:text-darkMuted uppercase tracking-wider" style={{ fontSize: '10.5px' }}>Risk Assessment</th>
-            <th className="px-4 py-3 text-left font-semibold text-muted dark:text-darkMuted uppercase tracking-wider" style={{ fontSize: '10.5px' }}>Pipeline Stage</th>
-            <th className="px-4 py-3 text-left font-semibold text-muted dark:text-darkMuted uppercase tracking-wider" style={{ fontSize: '10.5px' }}>Recommended Action</th>
-            {!compact && (
-              <th className="px-5 py-3 text-right font-semibold text-muted dark:text-darkMuted uppercase tracking-wider" style={{ fontSize: '10.5px' }}>Action</th>
+              <th className={`${HEAD} ${RULE} px-5 text-right`} style={HEAD_STYLE}>
+                Action
+              </th>
             )}
           </tr>
         </thead>
-        <tbody className="divide-y divide-line/60 dark:divide-darkBorder/60">
-          {rows.map((p) => (
+        <tbody>
+          {rows.map((p, i) => (
             <tr
               key={p.id}
               onClick={() => onSelect(p.id)}
               className={`group cursor-pointer transition last:border-0 hover:bg-[#FAF9F5] dark:hover:bg-darkCardHover ${
-                selected.has(p.id) ? 'bg-accent/[0.07]' : ''
+                selected.has(p.id) ? 'bg-accent/[0.07]' : 'odd:bg-transparent even:bg-black/[0.015] dark:even:bg-white/[0.02]'
               }`}
             >
               {selectable && (
-                <td className="px-3 py-3.5" onClick={(e) => e.stopPropagation()}>
+                <td className={`px-3 py-4 ${BOTTOM}`} onClick={(e) => e.stopPropagation()}>
                   <button
                     type="button"
                     aria-label={`Select ${p.id} for comparison`}
@@ -776,81 +903,143 @@ export function PatientTable({
                   </button>
                 </td>
               )}
-              <td className="px-5 py-3.5">
-                <div className="flex items-center gap-2">
-                  <span style={MONO} className="text-[13px] font-bold text-ink dark:text-darkText group-hover:text-accent dark:group-hover:text-accent transition-colors">
-                    {p.id}
-                  </span>
-                  <svg
-                    className="-ml-1 text-dust dark:text-darkMuted opacity-0 transition group-hover:opacity-100 group-hover:translate-x-0.5"
-                    width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+              {/* rank, not just position: this page is a queue, so the number
+                  continues across pages rather than restarting at 1 */}
+              <td className={`px-4 py-4 ${BOTTOM}`}>
+                <span
+                  style={MONO}
+                  className={`text-[12px] font-bold tabular-nums ${
+                    pageOffset + i < 3 ? 'text-accent' : 'text-dust dark:text-darkMuted'
+                  }`}
+                >
+                  {String(pageOffset + i + 1).padStart(2, '0')}
+                </span>
+              </td>
+
+              {/*
+               * The coloured spine and the identity tile both key off the SERVED
+               * tier, so a row's priority is readable from the edge of the table
+               * without reading a single number.
+               */}
+              <td
+                className={`border-l-2 px-5 py-4 ${BOTTOM} transition-colors`}
+                style={{ borderLeftColor: TIER_HEX[p.risk_tier] }}
+              >
+                <div className="flex items-center gap-3">
+                  <span
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border text-[12px] font-black"
+                    style={{
+                      ...MONO,
+                      color: TIER_HEX[p.risk_tier],
+                      borderColor: `${TIER_HEX[p.risk_tier]}44`,
+                      background: `linear-gradient(135deg, ${TIER_HEX[p.risk_tier]}26, ${TIER_HEX[p.risk_tier]}0d)`,
+                    }}
                   >
-                    <path d="m9 6 6 6-6 6" />
-                  </svg>
-                </div>
-                {!compact && (
-                  <div style={MONO} className="mt-1 text-[11px] text-muted dark:text-darkMuted">
-                    {p.age ?? '—'}y &nbsp;·&nbsp; {p.sex ?? '—'} &nbsp;·&nbsp; Edu {p.education_years ?? '—'}y
+                    {p.id.slice(-2)}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1">
+                      <span
+                        style={MONO}
+                        className="text-[13.5px] font-bold text-ink transition-colors group-hover:text-accent dark:text-darkText dark:group-hover:text-accent"
+                      >
+                        {p.id}
+                      </span>
+                      <svg
+                        className="text-dust opacity-0 transition group-hover:translate-x-0.5 group-hover:opacity-100 dark:text-darkMuted"
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="m9 6 6 6-6 6" />
+                      </svg>
+                    </div>
+                    {!compact && (
+                      <div style={MONO} className="mt-0.5 text-[10.5px] text-muted dark:text-darkMuted">
+                        {p.age ?? '—'}y · {p.sex ?? '—'} · Edu {p.education_years ?? '—'}y
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
               </td>
               {!compact && (
-                <td className="whitespace-nowrap px-4 py-3.5">
+                <td className={`${CELL} whitespace-nowrap`}>
                   <CognitiveCell cognitive={p.cognitive} />
                 </td>
               )}
-              <td className="px-4 py-3.5">
-                <div className="flex items-center gap-2">
-                  <span style={MONO} className="text-[13px] font-bold text-ink dark:text-darkText">{fmtScore(p.final_score ?? p.score)}</span>
+              <td className={CELL}>
+                <div className="flex items-baseline gap-2">
+                  <span style={MONO} className="text-[15px] font-black tabular-nums text-ink dark:text-darkText">
+                    {fmtScore(p.final_score ?? p.score)}
+                  </span>
                   <TierTag tier={p.risk_tier} />
                 </div>
-                <div className="mt-1.5 h-[4px] w-24 overflow-hidden rounded-full bg-[#EDE9E1] dark:bg-darkBorder">
+                <div className="mt-1.5 h-[5px] w-24 overflow-hidden rounded-full bg-[#EDE9E1] shadow-[inset_0_1px_1px_rgba(0,0,0,0.06)] dark:bg-darkBorder dark:shadow-none">
                   <div
                     className="h-full rounded-full transition-all duration-500"
-                    style={{ width: `${Math.round((p.final_score ?? p.score) * 100)}%`, background: TIER_HEX[p.risk_tier] }}
+                    style={{
+                      width: `${Math.round((p.final_score ?? p.score) * 100)}%`,
+                      background: `linear-gradient(90deg, ${TIER_HEX[p.risk_tier]}cc, ${TIER_HEX[p.risk_tier]})`,
+                    }}
                   />
                 </div>
               </td>
-              <td className="px-4 py-3.5">
-                <div className="flex items-center gap-1.5">
-                  {[1, 2, 3, 4].map((step) => (
-                    <span
-                      key={step}
-                      className="h-1.5 w-1.5 rounded-full transition-all"
-                      style={{
-                        background: step < p.stage ? TIER_HEX.low : step === p.stage ? STAGE_FILLS[step - 1] : '#DEDBD3',
-                        boxShadow: step === p.stage ? `0 0 6px ${STAGE_FILLS[step - 1]}80` : undefined,
-                      }}
-                    />
-                  ))}
+              <td className={CELL}>
+                {/* a four-segment rail, not four dots: the pathway is sequential,
+                    so the completed prefix is shown as filled track */}
+                <div className="flex items-center gap-1">
+                  {[1, 2, 3, 4].map((step) => {
+                    const done = step < p.stage;
+                    const current = step === p.stage;
+                    const hex = STAGE_FILLS[step - 1];
+                    return (
+                      <span
+                        key={step}
+                        className="h-1.5 w-6 rounded-full transition-all"
+                        style={{
+                          background: done
+                            ? TIER_HEX.low
+                            : current
+                            ? `linear-gradient(90deg, ${hex}cc, ${hex})`
+                            : undefined,
+                          boxShadow: current ? `0 0 8px ${hex}70` : undefined,
+                        }}
+                      >
+                        {!done && !current && <span className="block h-full w-full rounded-full bg-[#E4E0D8] dark:bg-darkBorder" />}
+                      </span>
+                    );
+                  })}
                 </div>
                 <div style={MONO} className="mt-1 text-[11px] font-medium text-muted dark:text-darkMuted">
+                  {/* Stage is the completed CONTIGUOUS prefix of the pathway, so a
+                      patient whose later-stage result is already on file still
+                      reads as their first gap. That was previously explained by a
+                      "results on file" badge in this cell; the badge is gone.
+                      The detail is on the patient's own record, which is where
+                      anyone reading about that patient will be. */}
                   {STAGES_SHORT[p.stage - 1] ?? p.stage_name} · Stage {p.stage}/4
-                  {/* Stage = the completed CONTIGUOUS prefix of the pathway. A real
-                      cohort arrives with ordering gaps, so a patient can be at
-                      Stage 1 while a later-stage result is already on file. Without
-                      this marker the cell reads as "cognition only", which is wrong
-                      for those patients and was mistaken for one. */}
-                  {p.beyond_stage && (
-                    <span
-                      className="ml-1.5 rounded px-1 py-[1px] text-[10px] font-semibold text-accent bg-accent/10"
-                      title="A later-stage result is already on file — the pathway stops at the first missing test, so this stage reflects the gap, not the patient"
-                    >
-                      results on file
-                    </span>
-                  )}
                 </div>
               </td>
-              <td className={`px-4 py-3.5 ${compact ? '' : 'max-w-[260px]'}`}>
-                <span
-                  className="block text-xs text-muted dark:text-darkMuted truncate"
-                  title={p.recommended_next ?? 'Pipeline complete'}
-                >
-                  {p.recommended_next ?? 'Complete — specialist review'}
-                </span>
+              <td className={`${CELL} ${compact ? '' : 'max-w-[280px]'}`}>
+                {p.recommended_next ? (
+                  <span
+                    className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-line/80 bg-white px-2.5 py-1 text-[11px] font-medium text-ink shadow-[0_1px_2px_rgba(0,0,0,0.03)] dark:border-darkBorder dark:bg-darkCard dark:text-darkText"
+                    title={p.recommended_next}
+                  >
+                    <ArrowRight className="h-3 w-3 shrink-0 text-accent" />
+                    <span className="truncate">{p.recommended_next}</span>
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-muted dark:text-darkMuted">Complete — specialist review</span>
+                )}
               </td>
               {!compact && (
-                <td className="px-5 py-3.5 text-right">
+                <td className={`${RULE} ${BOTTOM} px-5 py-4 text-right`}>
                   {onSimulate && (
                     <button
                       onClick={(e) => {
