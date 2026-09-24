@@ -233,7 +233,7 @@ export default function Footer({
 
   return (
     <>
-      <footer className="mt-16 border-t border-line dark:border-darkBorder bg-tint/40 dark:bg-darkCard/40 backdrop-blur-sm no-print">
+      <footer className=" border-t border-line dark:border-darkBorder bg-tint/40 dark:bg-darkCard/40 backdrop-blur-sm no-print">
         {/* Main Footer Container */}
         <div className="mx-auto w-full max-w-6xl px-6 py-12">
           {/* Top Bar: Brand, Status Beacon & Quick Actions */}

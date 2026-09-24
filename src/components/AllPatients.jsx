@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Scale, Users } from 'lucide-react';
+import { Layers, Scale, Users } from 'lucide-react';
 import { STAGES_SHORT } from '../lib.js';
 import CohortComposition from './CohortComposition.jsx';
 import {
@@ -299,18 +299,49 @@ export default function AllPatients({ patients, onSelect, onSimulate, onCompare 
           Stage gate
         </p>
 
-        {/* no count here: it is on the header cards and in the pagination line,
-            and a third copy 900px down was the page's worst offender */}
+        {/*
+         * The scope card: same size, same rhythm, same top rule as the four stage
+         * cards beside it, so "All stages" reads as one of the choices rather than
+         * as a stray chip that happens to sit next to them. It carries no count —
+         * the total is in the masthead and the pagination line, and a third copy
+         * 900px down was the page's worst offender.
+         */}
         <button
           type="button"
           onClick={() => setStageFilter(0)}
-          className={`rounded-xl border px-3 py-2 text-[11px] font-semibold transition ${
+          title={stageFilter === 0 ? 'Showing every stage' : 'Show every stage again'}
+          className={`relative flex items-center gap-2.5 self-stretch overflow-hidden rounded-2xl border px-3 text-left transition ${
             stageFilter === 0
-              ? 'border-accent/50 bg-accent/5 text-accent'
-              : 'border-line text-muted hover:border-accent/40 hover:text-accent dark:border-darkBorder dark:text-darkMuted'
+              ? 'border-accent/50 bg-white shadow-soft ring-1 ring-accent/30 dark:border-accent/50 dark:bg-darkCard'
+              : 'border-line/80 bg-white/60 hover:border-accent/40 hover:bg-white dark:border-darkBorder dark:bg-darkCard/50 dark:hover:bg-darkCard'
           }`}
         >
-          All stages
+          <span
+            className={`absolute inset-x-0 top-0 h-[3px] ${
+              stageFilter === 0 ? 'bg-accent' : 'bg-line dark:bg-darkBorder'
+            }`}
+          />
+          <span
+            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border transition ${
+              stageFilter === 0
+                ? 'border-accent/40 bg-accent/10 text-accent'
+                : 'border-line/80 bg-tint/70 text-muted dark:border-darkBorder dark:bg-darkBorder/40 dark:text-darkMuted'
+            }`}
+          >
+            <Layers className="h-3.5 w-3.5" />
+          </span>
+          <span>
+            <span className="block text-[9.5px] font-bold uppercase tracking-[0.12em] text-muted dark:text-darkMuted">
+              Scope
+            </span>
+            <span
+              className={`mt-0.5 block text-[13px] font-bold leading-none ${
+                stageFilter === 0 ? 'text-accent' : 'text-ink dark:text-darkText'
+              }`}
+            >
+              All stages
+            </span>
+          </span>
         </button>
 
         {STAGES_SHORT.map((label, i) => {

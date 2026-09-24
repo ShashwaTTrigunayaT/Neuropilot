@@ -740,7 +740,7 @@ export default function Overview({
               </p>
             )}
 
-            <div className="mt-10 border-t border-line/60 pt-6 dark:border-darkBorder/60">
+            <div className="mt-10 border-t  border-line/60 pt-16 dark:border-darkBorder/60">
               <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted dark:text-darkMuted">
                 This page
               </p>
