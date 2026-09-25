@@ -117,6 +117,12 @@ def _env_path(name: str, default: Path) -> Path:
 RISK_SCORES_PATH = _env_path(
     "RISK_SCORES_PATH", PROJECT_ROOT / "data" / "processed" / "risk_scores.json"
 )
+# Per-visit ADNI follow-up history (scripts/ingest_adni.py). The outlook chart
+# draws every real visit from this when it is present and falls back to the two
+# cognitive scores carried in the patient record when it is not.
+VISITS_PATH = _env_path(
+    "VISITS_PATH", PROJECT_ROOT / "data" / "processed" / "adni_visits.csv"
+)
 GLOBAL_IMPORTANCE_PATH = _env_path(
     "GLOBAL_IMPORTANCE_PATH", PROJECT_ROOT / "artifacts" / "global_importance.csv"
 )

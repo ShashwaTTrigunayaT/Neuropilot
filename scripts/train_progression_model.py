@@ -53,7 +53,7 @@ from sklearn.metrics import (
     r2_score,
     roc_auc_score,
 )
-from sklearn.model_selection import StratifiedKFold, train_test_split
+from sklearn.model_selection import KFold, StratifiedKFold, cross_val_predict, train_test_split
 from sklearn.pipeline import Pipeline
 
 try:
@@ -238,6 +238,91 @@ def main() -> int:
         pd.to_numeric(df["mmse_delta"], errors="coerce").dropna(),
     )
 
+    # ---- 2b. Per-attribute projection models -------------------------------- #
+    # The MMSE delta above is the chart's trajectory. These are the same thing for
+    # every other attribute the index carries a MEASURED 24-month follow-up for
+    # (ingest_adni.PROJECTION_FEATURES), so the outlook can move the whole feature
+    # vector forward instead of only cognition. It matters because the served score
+    # runs on all 14 features: freezing 11 of them at today's value understates
+    # change exactly where the model's heaviest drivers sit (centiloids, the two
+    # hippocampal measures, ADAS-Cog).
+    #
+    # Each target is fitted on the rows that actually measured it. A subject with
+    # no usable MRI follow-up is left out of the MRI target rather than imputed to
+    # zero -- imputing zero would teach the model that nothing ever changes.
+    # A candidate is only PUBLISHED when it beats "assume no change" by a margin on
+    # cross-validated MAE. This is the whole judgement, so it is stated: carrying an
+    # attribute forward IS the no-change prediction, so a model that cannot beat it
+    # would inject movement into the projected score with no evidence behind it --
+    # worse than leaving the attribute alone. Measured on this cohort: hippocampal
+    # volume clears the bar (-26% CV MAE), while centiloids (~-1%) and ADAS-Cog
+    # (+4%) do not, and the ICV ratio cannot (it is normalised, so it barely moves).
+    PROJECTION_MIN_GAIN = 0.10
+    projection_models: dict[str, object] = {}
+    projection_metrics: dict[str, dict] = {}
+    for col in [c for c in df.columns if c.endswith("_delta") and c != "mmse_delta"]:
+        feature = col[: -len("_delta")]
+        y_all = pd.to_numeric(df[col], errors="coerce")
+        ok = y_all.notna()
+        n_out = int(ok.sum())
+        if n_out < 200:
+            projection_metrics[feature] = {
+                "n_outcomes": n_out, "accepted": False,
+                "reason": f"only {n_out} paired follow-ups -- too few to fit a model",
+            }
+            print(f"[proj]  {feature:<24} skipped: only {n_out} paired follow-ups")
+            continue
+        y_ok = y_all[ok]
+        pipe = Pipeline([("reg", XGBRegressor(**XGB_COMMON))])
+        pipe.fit(X[ok], y_ok)
+        cv_mean, cv_std = cv_mae(X[ok], y_ok)
+        no_change = float(np.abs(y_ok).mean())
+
+        # ---- calibration: shrink a weak per-subject signal ------------------ #
+        # A raw regressor on a target this noisy can call the SIGN wrong for one
+        # subject: hippocampal volume came out +0.11 cm^3 (growth) on a patient
+        # whose cohort is measurably shrinking by -0.11, because the model's error
+        # (CV MAE) was as large as its prediction. So the published projection is
+        # calibrated out-of-fold: delta = intercept + slope * f(x), where the slope
+        # is fitted on out-of-fold predictions. When the model barely beats "no
+        # change" the slope lands near 0 and the projection collapses onto the
+        # cohort's measured mean change -- which is the honest answer at that
+        # signal-to-noise. Verified below by comparing calibrated CV MAE before and
+        # after; a calibration that does not help is discarded rather than shipped.
+        kf = KFold(n_splits=5, shuffle=True, random_state=42)
+        oof = cross_val_predict(pipe, X[ok], y_ok, cv=kf)
+        slope, intercept = np.polyfit(oof, y_ok.to_numpy(), 1)
+        calibrated = intercept + slope * oof
+        cal_mae = float(np.mean(np.abs(y_ok.to_numpy() - calibrated)))
+        if slope <= 0 or cal_mae > cv_mean:
+            slope, intercept, cal_mae = 0.0, float(y_ok.mean()), no_change
+        gain = 1.0 - (cal_mae / no_change) if no_change > 0 else 0.0
+        record = {
+            "n_outcomes": n_out,
+            "cv_mae_mean": round(cal_mae if slope > 0 else cv_mean, 4),
+            "cv_mae_std": round(cv_std, 4),
+            "cv_mae_raw": round(cv_mean, 4),
+            "mae_no_change": round(no_change, 4),
+            "mean_delta": round(float(y_ok.mean()), 4),
+            "sd_delta": round(float(y_ok.std()), 4),
+            "gain_vs_no_change": round(gain, 4),
+            "calibration": {"slope": round(float(slope), 4),
+                            "intercept": round(float(intercept), 6)},
+        }
+        if gain >= PROJECTION_MIN_GAIN:
+            projection_models[feature] = pipe
+            record["accepted"] = True
+            verdict = "PROJECTED"
+        else:
+            record["accepted"] = False
+            record["reason"] = ("does not beat assuming no change "
+                                f"({gain * 100:+.1f}% on CV MAE)")
+            verdict = "carried forward"
+        projection_metrics[feature] = record
+        print(f"[proj]  {feature:<24} n={n_out:>5}  CV MAE {record['cv_mae_mean']:.4f} "
+              f"(raw {cv_mean:.4f}) vs no-change {no_change:.4f}  = {gain * 100:+.1f}%  "
+              f"shrink {slope:.2f}  -> {verdict}")
+
     # ---- 3. Stratified performance (does it work where it is served?) ------- #
     def subgroup_auc(mask_full: pd.Series) -> tuple[int, float | None]:
         m = mask_full.iloc[te].to_numpy()
@@ -366,6 +451,7 @@ def main() -> int:
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
     joblib.dump(delta_pipe, ARTIFACTS / "progression_delta.joblib")
     joblib.dump(conv_pipe, ARTIFACTS / "progression_conversion.joblib")
+    joblib.dump(projection_models, ARTIFACTS / "progression_projection.joblib")
     imp.to_csv(ARTIFACTS / "progression_importance.csv", index=False)
     (ARTIFACTS / "progression_report.txt").write_text(report, encoding="utf-8")
 
@@ -379,6 +465,13 @@ def main() -> int:
             "(CN->MCI or MCI->Dementia) from a first labeled CN/MCI visit"
         ),
         "features": FEATURES,
+        # One projection model per attribute with enough measured follow-up, keyed
+        # by the FEATURE name (not the target column). The outlook applies these to
+        # move the served vector forward; anything absent here is carried forward at
+        # today's value and reported as carried.
+        "projection_targets": projection_metrics,
+        "projection_accepted": sorted(projection_models),
+        "projection_min_gain": PROJECTION_MIN_GAIN,
         "excluded_features": {
             "faq_total": "label leakage (part of ADNI's diagnostic algorithm)",
             "mmse_change": "2.5% present at a first visit — no prior-visit slope exists",

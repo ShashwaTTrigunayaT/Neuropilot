@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   ArrowDown,
@@ -64,7 +64,222 @@ const STAGE_TITLE = {
 // deliberately not repeated here — these are the cohort's own numbers.
 const JUMPS = [['attribution', 'Attribution']];
 
+/*
+ * The closing section's four moves.
+ *
+ * Each card is the SAME action as one of the buttons above it — hence the action
+ * key, which is resolved against the handlers below — so the card can name its
+ * button and click through to it. The correspondence is shown, not numbered: an
+ * animated arrow rises from each card toward the row of buttons, and the card
+ * prints the exact label it stands for.
+ *
+ * The model card is deliberately NOT restated here: the preview already carries
+ * it, and repeating it made the page end on a spec sheet.
+ */
+const HANDOFF_STEPS = [
+  [
+    'queue',
+    'Open the worklist',
+    'Every subject in one queue, highest priority first. Rank keeps counting across pages, so the order itself is the recommendation.',
+  ],
+  [
+    'autonomous',
+    'Propose the next batch',
+    'The approval-gated workup: the model proposes the next tests with its reasoning, and nothing is ordered until a clinician approves it.',
+  ],
+  [
+    'simulator',
+    'Test a what-if',
+    'Move the measurements and watch the score, the tier and the attribution respond — before a single test is ordered on a real subject.',
+  ],
+  [
+    'interop',
+    'Hand it back',
+    'Anything recorded leaves as a RiskAssessment on the hospital’s own system of record — never as a Condition, so nothing here quietly becomes a diagnosis.',
+  ],
+];
+
 const auc = (v) => (typeof v === 'number' ? v.toFixed(2) : '—');
+
+/*
+ * Fire once, when a block actually reaches the viewport.
+ *
+ * The hand-off arrows are the only thing on this page that keeps moving after it
+ * has been read, and arrows already mid-flight when the reader arrives say
+ * nothing at all. So they sit parked (`.is-idle`) until the closing section is
+ * on screen, then start — staggered per card, so the four read as one gesture
+ * passing left to right instead of four blinking icons. The observer is dropped
+ * the moment it fires: nothing keeps watching the scroll after that.
+ */
+function useInView(ref, rootMargin = '0px 0px -15% 0px') {
+  const [seen, setSeen] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || seen) return undefined;
+    if (typeof IntersectionObserver === 'undefined') {
+      setSeen(true);
+      return undefined;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setSeen(true);
+          io.disconnect();
+        }
+      },
+      { rootMargin }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [ref, seen, rootMargin]);
+
+  return seen;
+}
+
+/*
+ * The hand-off wiring.
+ *
+ * A wire is drawn from each button down to the card that stands for it, the way
+ * a flow diagram wires its boxes together. Nothing here is estimated: both ends
+ * are measured off the real elements (found by their `data-handoff` key) after
+ * layout and again on every resize, so the wire lands on the button and the card
+ * at whatever width, however the rows have wrapped. The SVG sits in the same
+ * coordinate space as the wrapper it is anchored to, so the wires survive
+ * scrolling without a single scroll listener.
+ *
+ * The wires are drawn from a fixed template, not from a spline between the two
+ * points. A plain cubic curve takes its shape from the distance it has to span,
+ * so the four wires came out with four different bends and the set read as four
+ * unrelated arrows rather than one diagram. Instead every wire is the same
+ * elbow: drop from the button, turn with the same corner radius, cross, turn
+ * again, and make the same fixed-length entry into the card. Only the length of
+ * the crossing varies, which is exactly the thing that is supposed to vary.
+ */
+function HandoffLinks({ containerRef, seen }) {
+  const [links, setLinks] = useState([]);
+  const [box, setBox] = useState({ w: 0, h: 0 });
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return undefined;
+
+    const measure = () => {
+      const base = container.getBoundingClientRect();
+      const byKey = new Map();
+      container.querySelectorAll('[data-handoff]').forEach((el) => {
+        const key = el.getAttribute('data-handoff');
+        if (!byKey.has(key)) byKey.set(key, []);
+        byKey.get(key).push(el);
+      });
+
+      const next = [];
+      byKey.forEach((els, key) => {
+        const [btn, card] = els; // order in the DOM: button row, then the card
+        if (!btn || !card) return;
+        const b = btn.getBoundingClientRect();
+        const c = card.getBoundingClientRect();
+        const x1 = Math.round(b.left + b.width / 2 - base.left);
+        const y1 = Math.round(b.bottom - base.top);
+        const x2 = Math.round(c.left + c.width / 2 - base.left);
+        const y2 = Math.round(c.top - base.top) - 2;
+
+        // Identical on every wire: the corner radius, the entry into the card,
+        // and the minimum length of the crossing between the two corners.
+        const RUN = 12; // the vertical entry into the card, arrowhead included
+        const R = 9; // corner radius — never scaled down, or one wire reads as a different arrow
+        const MIN_RUN = R * 2; // a crossing shorter than this cannot hold two corners
+
+        const dx = x2 - x1;
+        const sx = dx < 0 ? -1 : 1;
+        // Risk simulator sits almost exactly above its own card (8px of offset),
+        // and clamping the radius there made that one wire visibly tighter than
+        // the rest. Instead the wire LEAVES the button a few pixels off centre —
+        // invisible on a 200px button — so every crossing is at least two radii
+        // and all four arrows are the same shape.
+        const short = Math.abs(dx) < MIN_RUN ? (MIN_RUN - Math.abs(dx)) / 2 : 0;
+        const ax = x1 - sx * short;
+        const bx = x2 + sx * short; // both ends budge by the same few pixels
+        const yCross = y2 - RUN;
+
+        // Too little vertical room to turn at all: a straight drop is the honest
+        // shape there (narrow viewports, where a row has stacked).
+        const elbow =
+          yCross - R <= y1
+            ? `M ${ax} ${y1} L ${bx} ${y2}`
+            : `M ${ax} ${y1}` +
+              ` L ${ax} ${yCross - R}` +
+              ` Q ${ax} ${yCross} ${ax + sx * R} ${yCross}` +
+              ` L ${bx - sx * R} ${yCross}` +
+              ` Q ${bx} ${yCross} ${bx} ${yCross + R}` +
+              ` L ${bx} ${y2}`;
+
+        next.push({ key, d: elbow });
+      });
+
+      setLinks(next);
+      setBox({ w: base.width, h: base.height });
+    };
+
+    measure();
+    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    if (ro) ro.observe(container);
+    window.addEventListener('resize', measure);
+    return () => {
+      if (ro) ro.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [containerRef]);
+
+  if (!links.length) return null;
+
+  return (
+    <svg
+      aria-hidden="true"
+      className="pointer-events-none absolute left-0 top-0 z-20"
+      width={box.w}
+      height={box.h}
+      viewBox={`0 0 ${box.w} ${box.h}`}
+      fill="none"
+    >
+      <defs>
+        {/* one arrowhead, so every wire ends the same way */}
+        <marker
+          id="handoff-head"
+          viewBox="0 0 10 10"
+          refX="8"
+          refY="5"
+          markerWidth="5.5"
+          markerHeight="5.5"
+          orient="auto"
+        >
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#0D8282" />
+        </marker>
+      </defs>
+      {links.map((l, i) => (
+        <g key={l.key}>
+          {/* the wire itself: always there, so the mapping reads even if motion is off */}
+          <path
+            d={l.d}
+            stroke="#0D8282"
+            strokeOpacity="0.3"
+            strokeWidth="1.4"
+            markerEnd="url(#handoff-head)"
+          />
+          {/* the travelling dashes: the click, moving button → card */}
+          <path
+            d={l.d}
+            className={`handoff-link transition-opacity ${seen ? '' : 'is-idle'}`}
+            style={{ animationDelay: `${i * 130}ms`, strokeOpacity: seen ? 0.85 : undefined }}
+            stroke="#0D8282"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+          />
+        </g>
+      ))}
+    </svg>
+  );
+}
 
 // One icon weight for every preview point, so the panels look like one document
 // instead of ten slides designed separately. Stage-coloured icons are passed in
@@ -176,6 +391,11 @@ export default function Overview({
   const featsOf = (stage, fallback) => (stageFeatures[stage].length ? stageFeatures[stage].join(' · ') : fallback);
   const importanceTotal = servedImportance.reduce((a, f) => a + (f.mean_abs_shap || 0), 0) || 1;
   const source = dataSource ? dataSource.split('+')[0] : 'served';
+
+  // Declared up here (before the empty-cohort return) so the hook order cannot
+  // change when the cohort is empty.
+  const handoffRef = useRef(null);
+  const handoffSeen = useInView(handoffRef);
 
   /*
    * The preview: the whole system, one full-screen panel per capability, each
@@ -595,6 +815,25 @@ export default function Overview({
     );
   }
 
+  /*
+   * Cards ↔ buttons, resolved in one place.
+   *
+   * The row of actions in the closing section and the four cards under it are the
+   * same four moves, so they are defined once and bound to each other here: a
+   * card names the button it stands for ("same as") and clicks through to it, and
+   * the button carries the card's number. The handlers come from App, so a card
+   * can never drift out of step with the control it claims to be.
+   */
+  const handoff = {
+    queue: { label: `${total.toLocaleString()} patients`, run: onShowAll },
+    autonomous: {
+      label: 'Autonomous Neuro',
+      run: onViewChange ? () => onViewChange('autonomous') : null,
+    },
+    simulator: { label: 'Risk simulator', run: onOpenSimulator || null },
+    interop: { label: 'Interoperability', run: onViewChange ? () => onViewChange('interop') : null },
+  };
+
   return (
     <div className="animate-fade-up">
       {/* ================================================================ */}
@@ -704,53 +943,143 @@ export default function Overview({
             className="pointer-events-none absolute inset-0"
             style={{ background: 'radial-gradient(70% 130% at 50% 120%, rgba(13,130,130,0.18), transparent 70%)' }}
           />
+          <div
+            className="pointer-events-none absolute inset-x-0 top-0 h-[240px]"
+            style={{ background: 'radial-gradient(50% 100% at 50% 0%, rgba(13,130,130,0.07), transparent 72%)' }}
+          />
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/45 to-transparent dark:via-accent/30" />
           <div className="relative mx-auto w-full max-w-6xl px-6 py-16 text-center lg:py-20">
-            <h2 className="mx-auto max-w-2xl text-[26px] font-bold leading-tight tracking-tight text-ink dark:text-darkText sm:text-[32px]">
+            <div className="flex items-center justify-center gap-2.5">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-70" />
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-accent" />
+              </span>
+              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-accent">Hand-off</p>
+              <span aria-hidden="true" className="h-px w-14 bg-gradient-to-r from-accent/45 to-transparent" />
+            </div>
+            <h2 className="mx-auto mt-4 max-w-3xl text-[30px] font-black leading-[1.02] tracking-[-0.035em] text-ink dark:text-darkText sm:text-[42px]">
               Work the queue, not the charts.
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-[13px] leading-relaxed text-muted dark:text-darkMuted">
               Start at the top of the list — or open the console and let the system tell you what it
               would order next, and why.
             </p>
-            <div className="mt-8 flex flex-wrap items-center justify-center gap-2.5">
-              <Btn tone="primary" onClick={onShowAll} className="px-5 py-2.5 text-[12px]">
-                <Users className="h-3.5 w-3.5" />
-                {total.toLocaleString()} patients
-              </Btn>
-              {onViewChange && (
-                <Btn tone="ghost" onClick={() => onViewChange('autonomous')} className="px-5 py-2.5 text-[12px]">
-                  <Play className="h-3.5 w-3.5" />
-                  Autonomous Neuro
-                </Btn>
-              )}
-              {onOpenSimulator && (
-                <Btn tone="quiet" onClick={onOpenSimulator} className="px-5 py-2.5 text-[12px]">
-                  <SlidersHorizontal className="h-3.5 w-3.5" />
-                  Risk simulator
-                </Btn>
-              )}
+
+            {/*
+             * The four actions and the four cards that explain them, wired to
+             * each other.
+             *
+             * This wrapper is the flow diagram's coordinate space: the connector
+             * layer measures both rows inside it and draws a line from every
+             * button down to the card that stands for it. Each element carries its
+             * `data-handoff` key, so a card can never end up wired to the wrong
+             * button — the key is the same one that resolves the handler.
+             *
+             * A handler the host view did not pass drops its button, and the wire
+             * to that card is simply not drawn: nothing lands on an inert card.
+             */}
+            <div ref={handoffRef} className="relative">
+              <HandoffLinks containerRef={handoffRef} seen={handoffSeen} />
+
+              <div className="relative z-10 mt-8 flex flex-wrap items-center justify-center gap-2.5">
+                {[
+                  ['queue', 'primary', Users, 'px-6 py-3 text-[12.5px] shadow-glow-teal'],
+                  ['autonomous', 'ghost', Play, 'px-5 py-3 text-[12px]'],
+                  ['simulator', 'quiet', SlidersHorizontal, 'px-5 py-3 text-[12px]'],
+                  ['interop', 'ghost', Workflow, 'px-5 py-3 text-[12px]'],
+                ].map(([key, tone, Icon, cls]) => {
+                  const cta = handoff[key];
+                  if (!cta.run) return null;
+                  return (
+                    <Btn
+                      key={key}
+                      data-handoff={key}
+                      tone={tone}
+                      onClick={cta.run}
+                      className={cls}
+                    >
+                      <Icon className={tone === 'primary' ? 'h-4 w-4' : 'h-3.5 w-3.5'} />
+                      {cta.label}
+                      {tone === 'primary' && <ArrowRight className="h-3.5 w-3.5" />}
+                    </Btn>
+                  );
+                })}
+              </div>
+
+              {/*
+               * What those four buttons above actually do — one card each.
+               *
+               * A joined grid (hairlines come from the gap showing the line-coloured
+               * backdrop through it) keeps the four cells reading as one strip — the
+               * same structure the status ribbon and the phase rail use. Each cell is
+               * set left while the block around it stays centred, because a centred
+               * sentence in a narrow cell is harder to read than a flush one.
+               *
+               * The gap between this grid and the button row above is deliberately
+               * wider than the page's normal rhythm: it is the lane the connectors
+               * travel down, and they need room to be read as lines rather than as
+               * arrows glued to the buttons.
+               */}
+              <div className="relative z-10 mx-auto mt-14 grid w-full max-w-4xl gap-px overflow-hidden rounded-2xl border border-line/70 bg-line/60 text-left dark:border-darkBorder/70 dark:bg-darkBorder/60 sm:grid-cols-2 lg:grid-cols-4">
+                {HANDOFF_STEPS.map(([key, title, body]) => {
+                  const cta = handoff[key];
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      data-handoff={key}
+                      onClick={cta.run || undefined}
+                      disabled={!cta.run}
+                      title={cta.run ? `Same as “${cta.label}” above` : undefined}
+                      className="group/handoff flex h-full flex-col bg-white/85 p-4 text-left backdrop-blur-sm transition hover:bg-white disabled:cursor-default dark:bg-darkCard/85 dark:hover:bg-darkCard"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent/70" />
+                        <span aria-hidden="true" className="h-px flex-1 bg-gradient-to-r from-accent/35 to-transparent" />
+                      </div>
+                      <p className="mt-2.5 text-[12.5px] font-bold tracking-[-0.01em] text-ink dark:text-darkText">
+                        {title}
+                      </p>
+                      <p className="mt-1.5 text-[11.5px] leading-relaxed text-muted dark:text-darkMuted">
+                        {body}
+                      </p>
+                      <span className="mt-auto flex items-center gap-1.5 pt-3">
+                        <span
+                          style={MONO}
+                          className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-muted dark:text-darkMuted"
+                        >
+                          Wired to
+                        </span>
+                        <span style={MONO} className="text-[10.5px] font-bold text-accent">
+                          {cta.label}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
-            {modelInfo?.available && (
-              <p className="mt-7 flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 text-[10.5px] text-muted dark:text-darkMuted">
-                <span className="font-semibold text-ink dark:text-darkText">{modelInfo.label || 'Refined model'}</span>
-                <span style={MONO}>{auc(modelInfo.test_auc)} AUROC</span>
-                <span style={MONO}>{featureCount} features</span>
-                {nTrain ? <span style={MONO}>{nTrain.toLocaleString()} sessions</span> : null}
-              </p>
-            )}
-
-            <div className="mt-10 border-t  border-line/60 pt-16 dark:border-darkBorder/60">
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted dark:text-darkMuted">
-                This page
-              </p>
-              <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
+            {/*
+             * No model card in the UI.
+             *
+             * The preview already introduces the model, its feature count and
+             * its held-out AUROC; repeating those numbers here made the page end
+             * on a spec sheet. The closing section's job is the hand-off, so the
+             * strip below is about where to go, not what was trained.
+             */}
+            <div className="mt-9 w-full border-t border-line/60 pt-5 dark:border-darkBorder/60">
+              <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2">
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted dark:text-darkMuted">
+                  On this page
+                </p>
                 {JUMPS.map(([id, label]) => (
                   <a
                     key={id}
                     href={`#${id}`}
-                    className="text-[11px] font-semibold text-muted transition hover:text-accent dark:text-darkMuted"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-line/80 bg-white/70 px-3 py-1.5 text-[11px] font-semibold text-ink transition hover:border-accent/50 hover:text-accent dark:border-darkBorder dark:bg-darkCard/60 dark:text-darkText"
                   >
+                    <ArrowDown className="h-3 w-3 text-accent" />
                     {label}
                   </a>
                 ))}

@@ -364,6 +364,18 @@ def add_stage(df: pd.DataFrame) -> pd.DataFrame:
 PROGRESSION_HORIZON_MONTHS = 24
 MMSE_DELTA_TOLERANCE_MONTHS = 6
 
+# Attributes the progression forecaster projects forward, alongside MMSE. Each one
+# is a real longitudinal ADNI measurement whose +24-month follow-up exists for a
+# large share of the 1,634 index subjects, so a delta model can be trained on it:
+# ADAS-Cog 13 (1,300 paired), hippocampal volume and its ICV ratio (1,082),
+# centiloids (567). The sparse fluid/tau markers -- ptau217 and abeta4240 (42),
+# tau_meta_temporal (67), nfl and gfap (13) -- are deliberately NOT projected: a
+# delta model on 13 paired subjects is noise wearing a forecast's clothes. The
+# serving layer carries those forward at their measured value and labels them as
+# carried, rather than inventing a change for them.
+PROJECTION_FEATURES = ("adas_cog_13", "hippocampal_volume", "hippocampal_icv_ratio",
+                       "centiloids")
+
 
 def build_progression_index(visits: pd.DataFrame,
                             horizon_months: int = PROGRESSION_HORIZON_MONTHS) -> pd.DataFrame:
@@ -425,6 +437,27 @@ def build_progression_index(visits: pd.DataFrame,
                 mmse_fut = float(vals[j])
                 mmse_days = int((pd.Timestamp(dates[j]) - base["date"]).days)
 
+        # Per-attribute projection targets, by the same horizon-nearest rule: the
+        # visit closest to baseline + horizon that actually carries THAT
+        # measurement, inside the same tolerance. A subject can have a usable MMSE
+        # outcome and no usable MRI outcome -- each attribute is judged on its own
+        # follow-up, so a missing one stays NaN and the model consumes it natively.
+        target_date = base["date"] + pd.Timedelta(days=window)
+        projection_deltas: dict[str, float] = {}
+        for pf in PROJECTION_FEATURES:
+            if pf not in g.columns or pd.isna(base.get(pf)):
+                continue
+            measured = g[(g["date"] > base["date"]) & g[pf].notna()]
+            if not len(measured):
+                continue
+            pf_gaps = (measured["date"] - target_date).dt.days.abs()
+            pf_idx = int(pf_gaps.idxmin())
+            if pf_gaps.loc[pf_idx] > tol_days:
+                continue
+            projection_deltas[f"{pf}_delta"] = float(measured.loc[pf_idx, pf]) - float(base[pf])
+            projection_deltas[f"{pf}_outcome_days"] = int(
+                (measured.loc[pf_idx, "date"] - base["date"]).days)
+
         row = {
             "subject_rid": int(rid),
             "subject_id": f"ADNI-{int(rid):04d}",
@@ -443,6 +476,7 @@ def build_progression_index(visits: pd.DataFrame,
         for f in FEATURES:
             col = "sex_m" if f == "sex" else f
             row[f] = base[col] if col in g.columns else np.nan
+        row.update(projection_deltas)
         rows.append(row)
 
     return pd.DataFrame(rows)

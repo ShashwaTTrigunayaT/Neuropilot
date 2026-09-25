@@ -121,6 +121,70 @@ body {
   -webkit-backdrop-filter: blur(14px);
 }
 
+/*
+ * Hand-off connectors (landing page, closing section).
+ *
+ * A drawn line runs from each button down to the card that stands for it, the
+ * way a flow diagram wires its boxes — the line is what carries the meaning, so
+ * nothing has to be numbered. The travelling dashes move ALONG the wire, which
+ * is the direction the click travels: button → card → the view.
+ *
+ * They are parked (`.is-idle`) until the section is scrolled to. A diagram that
+ * is already mid-flow when the reader arrives draws attention to itself instead
+ * of to the thing it connects.
+ */
+@keyframes handoff-dash {
+  to {
+    stroke-dashoffset: -28;
+  }
+}
+.handoff-link {
+  stroke-dasharray: 5 9;
+  animation: handoff-dash 1.15s linear infinite;
+}
+.handoff-link.is-idle {
+  animation-play-state: paused;
+  opacity: 0.25;
+}
+
+/*
+ * Trajectory chart entrance. The measured line is DRAWN left-to-right (stroke
+ * dash-offset over `pathLength=1`, so one dash spans the whole path whatever the
+ * subject's visit count), then the forecast, its band, the visit dots and the
+ * risk lane arrive in that order. The sequence is the chart's own argument: first
+ * what was measured, then what is inferred from it.
+ */
+@keyframes traj-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.traj-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: traj-draw 1.05s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Marks a position on the risk band. It scales up where it stands rather than
+   sliding in, so the reader never sees it at the wrong score mid-animation. */
+@keyframes band-marker {
+  from {
+    transform: scaleY(0.15);
+    opacity: 0;
+  }
+  to {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+.band-marker {
+  transform-origin: top center;
+  animation: band-marker 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 /* Print styles for clinical consultation export */
 @media print {
   body {

@@ -20,11 +20,80 @@
     "centiloids",
     "tau_meta_temporal"
   ],
+  "projection_targets": {
+    "adas_cog_13": {
+      "n_outcomes": 1300,
+      "cv_mae_mean": 3.8284,
+      "cv_mae_std": 0.2284,
+      "cv_mae_raw": 3.884,
+      "mae_no_change": 4.0354,
+      "mean_delta": 1.3028,
+      "sd_delta": 5.566,
+      "gain_vs_no_change": 0.0513,
+      "calibration": {
+        "slope": 0.5654,
+        "intercept": 0.535816
+      },
+      "accepted": false,
+      "reason": "does not beat assuming no change (+5.1% on CV MAE)"
+    },
+    "hippocampal_volume": {
+      "n_outcomes": 1082,
+      "cv_mae_mean": 0.1032,
+      "cv_mae_std": 0.0043,
+      "cv_mae_raw": 0.1073,
+      "mae_no_change": 0.1448,
+      "mean_delta": -0.1133,
+      "sd_delta": 0.1595,
+      "gain_vs_no_change": 0.2868,
+      "calibration": {
+        "slope": 0.5445,
+        "intercept": -0.050631
+      },
+      "accepted": true
+    },
+    "hippocampal_icv_ratio": {
+      "n_outcomes": 1082,
+      "cv_mae_mean": 0.0001,
+      "cv_mae_std": 0.0,
+      "cv_mae_raw": 0.0001,
+      "mae_no_change": 0.0001,
+      "mean_delta": -0.0001,
+      "sd_delta": 0.0002,
+      "gain_vs_no_change": 0.0,
+      "calibration": {
+        "slope": 0.0,
+        "intercept": -8.1e-05
+      },
+      "accepted": false,
+      "reason": "does not beat assuming no change (+0.0% on CV MAE)"
+    },
+    "centiloids": {
+      "n_outcomes": 567,
+      "cv_mae_mean": 9.139,
+      "cv_mae_std": 0.6786,
+      "cv_mae_raw": 9.7186,
+      "mae_no_change": 9.7884,
+      "mean_delta": 4.0353,
+      "sd_delta": 14.7908,
+      "gain_vs_no_change": 0.0663,
+      "calibration": {
+        "slope": 0.4135,
+        "intercept": 2.384851
+      },
+      "accepted": false,
+      "reason": "does not beat assuming no change (+6.6% on CV MAE)"
+    }
+  },
+  "projection_accepted": [
+    "hippocampal_volume"
+  ],
+  "projection_min_gain": 0.1,
   "excluded_features": {
     "faq_total": "label leakage (part of ADNI's diagnostic algorithm)",
     "mmse_change": "2.5% present at a first visit \u2014 no prior-visit slope exists"
   },
-  "trained_at": "2026-09-20T01:43:06",
+  "trained_at": "2026-09-24T22:49:18",
   "n_train": 1307,
   "n_test": 327,
   "n_cohort": 1634,

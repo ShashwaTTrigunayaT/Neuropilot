@@ -432,13 +432,27 @@ class ModelInfoResponse(BaseModel):
 
 
 class TrajectoryPoint(BaseModel):
-    t: int  # months relative to today (negative = observed past)
+    """One point on the outlook chart.
+
+    Observed points are real ADNI follow-up visits: `date` and the visit's other
+    instruments travel with them so the chart's hover readout can show the visit
+    itself, not just its MMSE. `t` is a float because month offsets are measured
+    from the subject's own first visit (30.44 days per month), not rounded to a
+    calendar grid.
+    """
+
+    t: float  # months relative to today (negative = observed past)
     mmse: Optional[float] = None
     kind: str  # observed | predicted
     stage: Optional[int] = None
     stage_label: Optional[str] = None
     lo: Optional[int] = None  # uncertainty band (predicted points only)
     hi: Optional[int] = None
+    date: Optional[str] = None  # ISO date of the visit (observed only)
+    adas: Optional[float] = None  # ADAS-Cog 13 at that visit
+    cdr: Optional[float] = None  # CDR-SB at that visit
+    visit_no: Optional[int] = None  # 1-based visit index
+    n_visits: Optional[int] = None  # size of the subject's series
 
 
 class OutlookDriver(BaseModel):
@@ -465,7 +479,24 @@ class RefinedOutlookResponse(BaseModel):
     current: dict
     projected: dict
     trajectory: List[TrajectoryPoint]
+    # How much observed history the trajectory is drawn from: visit count, the
+    # span covered, and the fitted MMSE slope. None when the visits artifact is
+    # absent and the chart fell back to the record's two cognitive scores.
+    history: Optional[dict] = None
     # Risk score at the moment each stage test completed (chart annotations)
     score_checkpoints: List[dict] = []
+    # Risk score at every real visit: the main panel's series. Each point is the
+    # served model run on THAT visit's measured values only, so the trajectory is a
+    # real retrospective score rather than today's record drawn across history.
+    risk_trajectory: List[dict] = []
+    # What the projected vector is made of. `projected_attributes` holds the
+    # attributes the model moved forward, each with the CV MAE that earned it a
+    # place (and the no-change MAE it had to beat). `carried_attributes` holds the
+    # ones kept at today's measured value with the reason its projection was
+    # refused, so a consumer can tell a forecast from a carried value. Without
+    # these declared, FastAPI would silently strip both from the response.
+    projected_attributes: List[dict] = []
+    carried_attributes: List[dict] = []
+    projection: Optional[dict] = None
     drivers: List[OutlookDriver]
     disclaimer: str
