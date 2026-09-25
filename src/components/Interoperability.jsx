@@ -3,6 +3,8 @@ import {
   Activity,
   AlertTriangle,
   CheckCircle2,
+  ChevronRight,
+  DownloadCloud,
   ExternalLink,
   Layers,
   Link2,
@@ -70,7 +72,15 @@ const SAMPLE_BUNDLE = (patientId) => ({
   ],
 });
 
-export default function Interoperability({ patients = [], initialPatientId, onToast }) {
+const score = (value) => (typeof value === 'number' ? value.toFixed(2) : '—');
+
+export default function Interoperability({
+  patients = [],
+  initialPatientId,
+  onToast,
+  onRefresh,
+  onOpenPatient,
+}) {
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
   const [overview, setOverview] = useState(null);
@@ -85,6 +95,9 @@ export default function Interoperability({ patients = [], initialPatientId, onTo
   const [bundleText, setBundleText] = useState('');
   const [ingestResult, setIngestResult] = useState(null);
   const [ingestIssues, setIngestIssues] = useState([]);
+  // SMART-session import: the chart read straight from the EHR, as opposed to a
+  // Bundle pasted into the textarea below.
+  const [importResult, setImportResult] = useState(null);
 
   const load = useCallback(async () => {
     setStatus('loading');
@@ -111,6 +124,7 @@ export default function Interoperability({ patients = [], initialPatientId, onTo
     setPushResult(null);
     setIngestResult(null);
     setIngestIssues([]);
+    setImportResult(null);
   }, [patientId]);
 
   const patientOptions = useMemo(() => patients.slice(0, 400), [patients]);
@@ -183,6 +197,32 @@ export default function Interoperability({ patients = [], initialPatientId, onTo
       }
     });
 
+  /** Pull the patient in context from the EHR over the SMART session.
+   *
+   * Rejections land in the SAME `ingestIssues` state the paste flow uses, so a
+   * 422 OperationOutcome renders once, in one place, for both paths.
+   */
+  const doImportFromEhr = () =>
+    run('smart-import', async () => {
+      setImportResult(null);
+      setIngestIssues([]);
+      try {
+        const result = await api.smartImportPatient();
+        setImportResult(result);
+        // The cohort list is the app's own copy of the store, taken before this
+        // patient existed; refresh it in the background so the imported chart is
+        // actually reachable from the worklist.
+        onRefresh?.();
+        onToast?.(
+          result.duplicate ? 'Chart already imported' : 'Patient imported from the EHR',
+          `${result.subject_id} · risk ${score(result.score)}${result.risk_tier ? ` · ${result.risk_tier} tier` : ''}`,
+          'success',
+        );
+      } catch (err) {
+        setIngestIssues(err.message.split('\n').filter(Boolean));
+      }
+    });
+
   const doRefreshSmart = () =>
     run('smart-refresh', async () => {
       const next = await api.smartRefresh();
@@ -225,6 +265,10 @@ export default function Interoperability({ patients = [], initialPatientId, onTo
   const outbound = overview.outbound_server || {};
   const surface = overview.surface || {};
   const phasesLive = PHASE_KEYS.filter((k) => overview.phases?.[k]?.implemented).length;
+  // The import reads over the session's own token, so it needs a bound session
+  // with a live token AND a patient in context — a session without one has no
+  // chart to read, and the API says exactly that in a 401.
+  const canImport = Boolean(smart?.connected && !smart?.expired && smart?.patient);
 
   // A raw server-local timestamp forces the viewer to do timezone maths. Prefer a
   // scannable state, built from the authoritative `expires_in` duration.
@@ -380,6 +424,12 @@ export default function Interoperability({ patients = [], initialPatientId, onTo
               label="Push on order"
               value={overview.push_orders_on_order ? 'Enabled' : 'Disabled'}
             />
+            {/* Where a push actually lands. The session outranks the static config
+                on the server, so the dashboard has to say so rather than imply
+                the configured base URL is always the destination. */}
+            {outbound.source === 'smart-session' && (
+              <Row label="Push target" value="the session's hospital (outranks FHIR_BASE_URL)" />
+            )}
           </div>
           <p className="mt-3 text-[10.5px] leading-relaxed text-muted dark:text-darkMuted">
             {outbound.reachable
@@ -609,49 +659,138 @@ export default function Interoperability({ patients = [], initialPatientId, onTo
       <div className={PANEL_PAD}>
         <SectionLabel right={<Pill tone="accent">atomic — all or nothing</Pill>}>
           Inbound ingestion
-          <span
-            style={MONO}
-            className="ml-1.5 rounded-md border border-line dark:border-darkBorder bg-tint/70 dark:bg-darkBorderSubtle px-1.5 py-0.5 text-[10px] font-medium tracking-normal text-muted dark:text-darkMuted"
-          >
-            POST /fhir/Bundle
-          </span>
         </SectionLabel>
         <p className="mt-2 text-[11px] leading-relaxed text-muted dark:text-darkMuted">
-          Paste any FHIR R4 transaction/collection Bundle. A recognised result is mapped, the served model
-          re-scores the patient, and unknown codes are reported rather than dropped. A wrong UCUM unit or an
-          unmappable resource rejects the <span className="font-semibold">whole</span> bundle with an
-          OperationOutcome naming every offender — no partial writes.
+          Two ways in, one destination: a mapped, re-scored record. <span className="font-semibold">Import
+          patient from EHR</span> reads the chart the SMART session is bound to; the manual tester below
+          posts a Bundle the way a hospital&apos;s own integration would. A wrong UCUM unit or an unmappable
+          resource rejects the <span className="font-semibold">whole</span> bundle with an OperationOutcome
+          naming every offender — no partial writes.
         </p>
 
-        <textarea
-          value={bundleText}
-          onChange={(e) => setBundleText(e.target.value)}
-          spellCheck={false}
-          rows={12}
-          style={MONO}
-          className="mt-3 w-full rounded-xl border border-line dark:border-darkBorder bg-tint/30 dark:bg-darkBorderSubtle p-3 text-[10.5px] leading-relaxed text-ink dark:text-darkText focus:outline-none focus:ring-2 focus:ring-accent/40"
-        />
-
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <Btn tone="primary" icon={Send} onClick={doIngest} disabled={busy === 'ingest'}>
-            Send bundle
-          </Btn>
-          <Btn
-            icon={RefreshCw}
-            onClick={() => {
-              setBundleText(JSON.stringify(SAMPLE_BUNDLE(patientId), null, 2));
-              setIngestResult(null);
-              setIngestIssues([]);
-            }}
-          >
-            Reset sample
-          </Btn>
+        <div className="mt-3 rounded-xl border border-accent/35 bg-accent/[0.06] p-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-[14rem] flex-1">
+              <p className="flex flex-wrap items-center gap-1.5 text-[11px] font-bold text-ink dark:text-darkText">
+                <DownloadCloud className="h-3.5 w-3.5 text-accent" />
+                Import from the EHR session
+                <span
+                  style={MONO}
+                  className="rounded-md border border-accent/35 bg-white/70 px-1.5 py-0.5 text-[10px] font-medium text-accent dark:bg-transparent"
+                >
+                  POST /fhir/smart/import-patient
+                </span>
+              </p>
+              <p className="mt-1 text-[10.5px] leading-relaxed text-muted dark:text-darkMuted">
+                {canImport ? (
+                  <>
+                    Reads <span style={MONO}>Patient</span>,{' '}
+                    <span style={MONO}>Observation</span> and{' '}
+                    <span style={MONO}>DiagnosticReport</span> for{' '}
+                    <span style={MONO}>{shortId(smart.patient)}</span> from{' '}
+                    <span style={MONO}>{outbound.source === 'smart-session' && outbound.base_url ? outbound.base_url : smart.iss}</span>{' '}
+                    — by 3 real reads — then runs them through the same ingestion and re-scoring as a pasted
+                    bundle.
+                  </>
+                ) : (
+                  <>
+                    Needs an active SMART session with a patient in context: launch NeuroPilot from the EHR.
+                    For a standalone launch, set{' '}
+                    <span style={MONO}>SMART_LAUNCH_PATIENT_ID</span> so the session binds a chart.
+                  </>
+                )}
+              </p>
+            </div>
+            <Btn
+              tone="primary"
+              icon={DownloadCloud}
+              onClick={doImportFromEhr}
+              disabled={!canImport || busy === 'smart-import'}
+            >
+              Import patient from EHR
+            </Btn>
+          </div>
         </div>
 
+        {importResult && (
+          <div className="mt-3 rounded-xl border border-emerald-500/35 bg-emerald-500/10 p-3">
+            <p className="flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-[0.1em] text-emerald-700 dark:text-emerald-400">
+              <CheckCircle2 className="h-3.5 w-3.5" />{' '}
+              {importResult.duplicate
+                ? 'Chart already imported — nothing re-scored'
+                : importResult.created
+                  ? 'Patient imported and scored'
+                  : 'Patient refreshed and re-scored'}
+            </p>
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {[
+                ['Subject', importResult.subject_id],
+                ['Risk score', score(importResult.score)],
+                ['Tier', importResult.risk_tier || '—'],
+                ['Stage', importResult.stage_name || importResult.stage || '—'],
+                ['Observations read', importResult.fetched?.Observation],
+                ['Reports read', importResult.fetched?.DiagnosticReport],
+                ['Mapped', importResult.mapped?.observations],
+                ['Ignored', importResult.ignored?.length ?? 0],
+              ].map(([label, value]) => (
+                <div
+                  key={label}
+                  className="rounded-lg border border-emerald-500/20 bg-white/60 px-2.5 py-1.5 dark:bg-black/10"
+                >
+                  <p className="text-[9.5px] font-semibold uppercase tracking-[0.08em] text-emerald-800/70 dark:text-emerald-300/70">
+                    {label}
+                  </p>
+                  <p style={MONO} className="mt-0.5 truncate text-[11px] font-bold text-emerald-900 dark:text-emerald-200">
+                    {value ?? '—'}
+                  </p>
+                </div>
+              ))}
+            </div>
+            {importResult.summary && (
+              <p style={MONO} className="mt-2 text-[10.5px] leading-relaxed text-emerald-800 dark:text-emerald-300">
+                {importResult.summary}
+              </p>
+            )}
+            {importResult.identity_note && (
+              <p className="mt-2 rounded-lg border border-amber-500/35 bg-amber-500/10 p-2 text-[10.5px] leading-relaxed text-amber-700 dark:text-amber-400">
+                Identity note: {importResult.identity_note}.
+              </p>
+            )}
+            {importResult.ignored?.length > 0 && (
+              <details className="mt-2">
+                <summary className="cursor-pointer text-[10.5px] font-semibold text-emerald-800 dark:text-emerald-300">
+                  {importResult.ignored.length} resource(s) read but not part of the mapped feature set
+                </summary>
+                <ul className="mt-2 max-h-40 space-y-1 overflow-auto">
+                  {importResult.ignored.map((line) => (
+                    <li key={line} style={MONO} className="text-[10px] leading-relaxed text-emerald-900/80 dark:text-emerald-200/80">
+                      {line}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+            {onOpenPatient && importResult.subject_id && (
+              <button
+                onClick={() => onOpenPatient(importResult.subject_id)}
+                className="mt-3 inline-flex items-center gap-1.5 rounded-xl border border-emerald-600/40 bg-white px-3 py-1.5 text-[10.5px] font-bold text-emerald-800 transition hover:bg-emerald-50 dark:border-emerald-400/35 dark:bg-transparent dark:text-emerald-300"
+              >
+                Open the imported record <ExternalLink className="h-3 w-3 opacity-60" />
+              </button>
+            )}
+          </div>
+        )}
+
+        {/*
+         * A rejection is rendered OUTSIDE the tester below, because both routes
+         * end here: the import reports its own 401/422 through the same state, and
+         * an error that only appears inside a collapsed disclosure is an error
+         * nobody sees.
+         */}
         {ingestIssues.length > 0 && (
           <div className="mt-3 rounded-xl border border-red-500/35 bg-red-500/10 p-3">
             <p className="flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-[0.1em] text-red-600 dark:text-red-400">
-              <XCircle className="h-3.5 w-3.5" /> Bundle rejected (422)
+              <XCircle className="h-3.5 w-3.5" /> Rejected — nothing was written
             </p>
             <ul className="mt-2 space-y-1">
               {ingestIssues.map((issue) => (
@@ -667,24 +806,70 @@ export default function Interoperability({ patients = [], initialPatientId, onTo
           </div>
         )}
 
-        {ingestResult && (
-          <div className="mt-3 rounded-xl border border-emerald-500/35 bg-emerald-500/10 p-3">
-            <p className="flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-[0.1em] text-emerald-700 dark:text-emerald-400">
-              <CheckCircle2 className="h-3.5 w-3.5" /> {ingestResult.type} received
-            </p>
-            <ul className="mt-2 space-y-1">
-              {(ingestResult.extension || []).map((ext) => (
-                <li
-                  key={ext.url + ext.valueString}
-                  style={MONO}
-                  className="text-[10.5px] leading-relaxed text-emerald-800 dark:text-emerald-300"
-                >
-                  {ext.valueString}
-                </li>
-              ))}
-            </ul>
+        {/*
+         * The manual tester for POST /fhir/Bundle, collapsed by default. Importing
+         * the patient in context is the clinician's path; posting a Bundle by hand
+         * is the integrator's and the demo's. Collapsed rather than deleted, because
+         * the endpoint is the real server-to-server route a hospital pushes to, and
+         * this is the only surface that exercises it with no EHR in the room.
+         */}
+        <details className="group mt-4 border-t border-line pt-3 dark:border-darkBorder">
+          <summary className="flex cursor-pointer flex-wrap items-center gap-2 text-[10.5px] font-semibold text-muted dark:text-darkMuted">
+            <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
+            Manual bundle tester
+            <span
+              style={MONO}
+              className="rounded-md border border-line dark:border-darkBorder bg-tint/70 dark:bg-darkBorderSubtle px-1.5 py-0.5 text-[10px] font-medium text-ink dark:text-darkText"
+            >
+              POST /fhir/Bundle
+            </span>
+            <span className="font-normal">— paste what a hospital integration would push</span>
+          </summary>
+
+          <textarea
+            value={bundleText}
+            onChange={(e) => setBundleText(e.target.value)}
+            spellCheck={false}
+            rows={12}
+            style={MONO}
+            className="mt-3 w-full rounded-xl border border-line dark:border-darkBorder bg-tint/30 dark:bg-darkBorderSubtle p-3 text-[10.5px] leading-relaxed text-ink dark:text-darkText focus:outline-none focus:ring-2 focus:ring-accent/40"
+          />
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Btn tone="primary" icon={Send} onClick={doIngest} disabled={busy === 'ingest'}>
+              Send bundle
+            </Btn>
+            <Btn
+              icon={RefreshCw}
+              onClick={() => {
+                setBundleText(JSON.stringify(SAMPLE_BUNDLE(patientId), null, 2));
+                setIngestResult(null);
+                setIngestIssues([]);
+              }}
+            >
+              Reset sample
+            </Btn>
           </div>
-        )}
+
+          {ingestResult && (
+            <div className="mt-3 rounded-xl border border-emerald-500/35 bg-emerald-500/10 p-3">
+              <p className="flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-[0.1em] text-emerald-700 dark:text-emerald-400">
+                <CheckCircle2 className="h-3.5 w-3.5" /> {ingestResult.type} received
+              </p>
+              <ul className="mt-2 space-y-1">
+                {(ingestResult.extension || []).map((ext) => (
+                  <li
+                    key={ext.url + ext.valueString}
+                    style={MONO}
+                    className="text-[10.5px] leading-relaxed text-emerald-800 dark:text-emerald-300"
+                  >
+                    {ext.valueString}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </details>
       </div>
 
       {/* ABDM (India) — a different national gateway, not FHIR phase 5. */}

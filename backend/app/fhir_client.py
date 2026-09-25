@@ -12,6 +12,10 @@ Kept deliberately small and side-effect free:
   used; otherwise the optional static `FHIR_AUTH_TOKEN`; otherwise no header.
   A server that rejects the call returns its own status code, which we surface
   verbatim rather than translating into a guess.
+* **The destination follows the session.** A live SMART session's `iss` outranks
+  `FHIR_BASE_URL` (see `_base_url`), so the base URL and the bearer token belong
+  to the same hospital; the static config is the fallback when no session is
+  bound. `probe()` reports which of the two won.
 * **Nothing is pushed anywhere until FHIR_BASE_URL is set.** Pointing this at a
   system is a deliberate act, not a default.
 
@@ -21,6 +25,8 @@ caller; `AuditEvent` search is not implemented on most servers; and a real
 deployment needs a durable outbox rather than a best-effort push.
 """
 from __future__ import annotations
+
+from typing import Optional
 
 import httpx
 
@@ -36,9 +42,29 @@ class FHIRClientError(Exception):
         self.status_code = status_code
 
 
+def session_base_url() -> Optional[str]:
+    """The connected SMART server (`iss`) when the session can authorise a write.
+
+    A clinician working inside the chart means the hospital they are IN is the
+    hospital that should receive the record — not whatever `FHIR_BASE_URL` was
+    configured with at deploy time. The session's token is also the only
+    credential scoped to that server (limitation L12), and `_auth_headers` already
+    sends it first, so pairing the two keeps the base URL and its bearer together.
+
+    Returns None when there is no usable session, which leaves the static
+    configuration in charge exactly as before.
+    """
+    from . import smart
+
+    if not smart.access_token():
+        return None  # no session, or an expired one
+    iss = (smart.context() or {}).get("iss")
+    return str(iss).rstrip("/") if iss else None
+
+
 def configured() -> bool:
-    """True when an outbound hospital server is configured."""
-    return bool(config.FHIR_BASE_URL)
+    """True when there is anywhere to push: a live SMART session or a configured server."""
+    return bool(session_base_url() or config.FHIR_BASE_URL)
 
 
 def _auth_headers() -> dict:
@@ -54,11 +80,18 @@ def _client(client: httpx.Client | None) -> httpx.Client:
 
 
 def _base_url(base_url: str | None = None) -> str:
-    base = (base_url or config.FHIR_BASE_URL).rstrip("/")
+    """Where a write goes: an explicit argument, then the SMART session, then config.
+
+    The SMART session outranks `FHIR_BASE_URL` because it is the live, scoped one:
+    the token in `_auth_headers` belongs to that server, and a hospital that a
+    clinician is currently working inside is the hospital the record belongs in.
+    """
+    base = (base_url or session_base_url() or config.FHIR_BASE_URL).rstrip("/")
     if not base:
         raise FHIRClientError(
-            "No outbound FHIR server configured — set FHIR_BASE_URL (e.g. "
-            "http://localhost:8090/fhir for a local HAPI server).",
+            "No outbound FHIR server: no SMART session is bound and FHIR_BASE_URL is "
+            "not set (e.g. http://localhost:8090/fhir for a local HAPI server). "
+            "Launch NeuroPilot from the EHR to push to that hospital instead.",
             status_code=409,
         )
     return base
@@ -88,23 +121,32 @@ def fetch_capability_statement(base_url: str | None = None, client: httpx.Client
 
 
 def probe(base_url: str | None = None, client: httpx.Client | None = None) -> dict:
-    """Connection report for the status endpoint. Never raises."""
-    if not (base_url or config.FHIR_BASE_URL):
+    """Connection report for the status endpoint. Never raises.
+
+    Reads the same precedence a write uses (see `_base_url`) and names which
+    source won, so the dashboard cannot report "no hospital connected" while a
+    push to the session's server would in fact succeed.
+    """
+    session = session_base_url()
+    if not (base_url or session or config.FHIR_BASE_URL):
         return {
             "configured": False,
             "base_url": None,
+            "source": None,
             "reachable": False,
             "detail": "No hospital server connected.",
         }
-    base = (base_url or config.FHIR_BASE_URL).rstrip("/")
+    base = (base_url or session or config.FHIR_BASE_URL).rstrip("/")
+    source = "argument" if base_url else ("smart-session" if session else "config")
     try:
         cap = fetch_capability_statement(base, client=client)
     except FHIRClientError as exc:
-        return {"configured": True, "base_url": base, "reachable": False,
-                "detail": exc.message}
+        return {"configured": True, "base_url": base, "source": source,
+                "reachable": False, "detail": exc.message}
     return {
         "configured": True,
         "base_url": base,
+        "source": source,
         "reachable": True,
         "detail": "CapabilityStatement retrieved",
         "fhir_version": cap.get("fhirVersion"),

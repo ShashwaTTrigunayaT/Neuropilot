@@ -546,6 +546,53 @@ def fhir_smart_logout() -> dict:
     return smart.logout()
 
 
+@router.post(
+    "/fhir/smart/import-patient",
+    tags=["fhir"],
+    responses={
+        401: {"description": "No SMART session, an expired token, or no patient in context"},
+        422: {"description": "The chart was read but not mappable — OperationOutcome lists every offender"},
+    },
+)
+def fhir_smart_import_patient() -> Response:
+    """Import the patient in the active SMART session directly from the EHR.
+
+    The alternative to this endpoint is pasting a Bundle by hand, which means
+    leaving the chart the clinician is already in. Here the session's `iss` and
+    token are used to read that patient's `Patient`, `Observation` and
+    `DiagnosticReport` resources, the results are assembled into the same Bundle
+    shape `POST /fhir/Bundle` accepts, and the **same** ingestion path writes and
+    re-scores the record — one mapper, one write path, one scorer.
+
+    The body is NeuroPilot's envelope (this is a workflow action, not a FHIR
+    resource): the subject id, the re-scored result, what was read, and the FHIR
+    `transaction-response` receipt underneath it. Failures use the FHIR
+    surfaces' own shape — an `OperationOutcome` — so the dashboard has one
+    rejection rendering for both the paste and the import path.
+    """
+    from fastapi.responses import JSONResponse
+
+    from . import fhir_import
+
+    try:
+        result = fhir_import.import_from_smart_session()
+    except fhir_import.FhirImportError as exc:
+        code = "login" if exc.status_code == 401 else "invalid"
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=fhir_import.operation_outcome(exc.message, code=code),
+            media_type=fhir.FHIR_JSON,
+        )
+    except fhir_ingest.IngestError as exc:
+        # Readable, but unmappable — the identical 422 the paste flow produces.
+        return JSONResponse(
+            status_code=422,
+            content=fhir_ingest.operation_outcome(exc.issues),
+            media_type=fhir.FHIR_JSON,
+        )
+    return JSONResponse(content=result, media_type="application/json")
+
+
 # --------------------------------------------------------------------------- #
 # ABDM (Ayushman Bharat Digital Mission) — HIU consent flow (FHIR plan.md 4-5)
 #

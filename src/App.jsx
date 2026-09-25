@@ -543,6 +543,11 @@ export default function App() {
                   patients={patients}
                   initialPatientId={selectedId}
                   onToast={showToast}
+                  // A patient imported from the EHR session did not exist when
+                  // this list was loaded, so the background refresh is what makes
+                  // the new record reachable from the worklist.
+                  onRefresh={() => loadAll({ silent: true })}
+                  onOpenPatient={openPatient}
                 />
               )}
 

@@ -111,6 +111,10 @@ export const api = {
   smartStatus: () => request('/fhir/smart/status'),
   smartRefresh: () => request('/fhir/smart/refresh', { method: 'POST' }),
   smartLogout: () => request('/fhir/smart/logout', { method: 'POST' }),
+  // Import the patient in context from the EHR using the SMART session — the
+  // server-side counterpart of pasting a Bundle (POST /fhir/Bundle).
+  smartImportPatient: () =>
+    request('/fhir/smart/import-patient', { method: 'POST' }),
   smartLaunchUrl: (params = {}) =>
     `${API_BASE}/fhir/smart/launch?${new URLSearchParams(params)}`,
 
