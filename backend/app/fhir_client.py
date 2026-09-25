@@ -31,6 +31,7 @@ from typing import Optional
 import httpx
 
 from . import config
+from .net import TRANSPORT_FAILURES, clean_base
 
 
 class FHIRClientError(Exception):
@@ -59,12 +60,32 @@ def session_base_url() -> Optional[str]:
     if not smart.access_token():
         return None  # no session, or an expired one
     iss = (smart.context() or {}).get("iss")
-    return str(iss).rstrip("/") if iss else None
+    return clean_base(str(iss)) if iss else None
 
 
 def configured() -> bool:
     """True when there is anywhere to push: a live SMART session or a configured server."""
-    return bool(session_base_url() or config.FHIR_BASE_URL)
+    return bool(resolved_base()[0])
+
+
+def resolved_base(base_url: str | None = None) -> tuple[str, str | None]:
+    """(destination, which source won) — the same precedence a write uses, no I/O.
+
+    Split out of `probe` so diagnostics can **name** the destination without
+    calling it: an operator looking at a broken integration panel needs the URL
+    it was trying, not another eight-second timeout.
+    """
+    session = session_base_url()
+    chosen = base_url or session or config.FHIR_BASE_URL
+    if base_url:
+        source = "argument"
+    elif session:
+        source = "smart-session"
+    elif config.FHIR_BASE_URL:
+        source = "config"
+    else:
+        source = None
+    return clean_base(chosen), source
 
 
 def _auth_headers() -> dict:
@@ -86,7 +107,7 @@ def _base_url(base_url: str | None = None) -> str:
     the token in `_auth_headers` belongs to that server, and a hospital that a
     clinician is currently working inside is the hospital the record belongs in.
     """
-    base = (base_url or session_base_url() or config.FHIR_BASE_URL).rstrip("/")
+    base = clean_base(base_url or session_base_url() or config.FHIR_BASE_URL)
     if not base:
         raise FHIRClientError(
             "No outbound FHIR server: no SMART session is bound and FHIR_BASE_URL is "
@@ -108,7 +129,9 @@ def fetch_capability_statement(base_url: str | None = None, client: httpx.Client
             resp = http.get(f"{base}/metadata", headers={
                 "Accept": "application/fhir+json", **_auth_headers(),
             })
-    except httpx.HTTPError as exc:  # timeouts, DNS, connection refused
+    # timeouts, DNS, connection refused -- and `InvalidURL`, which is NOT an
+    # `HTTPError` and would otherwise escape as a 500 (see app/net.py).
+    except TRANSPORT_FAILURES as exc:
         raise FHIRClientError(f"{base}/metadata unreachable: {exc}") from exc
     if resp.status_code >= 400:
         raise FHIRClientError(
@@ -127,8 +150,8 @@ def probe(base_url: str | None = None, client: httpx.Client | None = None) -> di
     source won, so the dashboard cannot report "no hospital connected" while a
     push to the session's server would in fact succeed.
     """
-    session = session_base_url()
-    if not (base_url or session or config.FHIR_BASE_URL):
+    base, source = resolved_base(base_url)
+    if not base:
         return {
             "configured": False,
             "base_url": None,
@@ -136,13 +159,29 @@ def probe(base_url: str | None = None, client: httpx.Client | None = None) -> di
             "reachable": False,
             "detail": "No hospital server connected.",
         }
-    base = (base_url or session or config.FHIR_BASE_URL).rstrip("/")
-    source = "argument" if base_url else ("smart-session" if session else "config")
     try:
         cap = fetch_capability_statement(base, client=client)
     except FHIRClientError as exc:
         return {"configured": True, "base_url": base, "source": source,
                 "reachable": False, "detail": exc.message}
+    except Exception as exc:  # noqa: BLE001 -- "Never raises" is the contract
+        # This is a *report about* a connection, and its whole job is to describe
+        # a failure rather than become one: a status panel that 500s tells the
+        # operator less than one that names what went wrong. Whatever an exotic
+        # transport throws (a proxy, a malformed `iss`, a decoder), it is
+        # reported here instead of turning /fhir/status into an error page.
+        return {"configured": True, "base_url": base, "source": source,
+                "reachable": False,
+                "detail": f"{type(exc).__name__}: {exc}"}
+    # The server answered -- now describe what it said. A CapabilityStatement
+    # that is not a JSON object (an array, a bare string, a proxy's HTML turned
+    # into JSON) must still be a report, not another exception escaping here.
+    if not isinstance(cap, dict):
+        return {"configured": True, "base_url": base, "source": source,
+                "reachable": True,
+                "detail": f"{base}/metadata returned JSON that is not a "
+                          f"CapabilityStatement ({type(cap).__name__})"}
+    software = cap.get("software")
     return {
         "configured": True,
         "base_url": base,
@@ -150,7 +189,7 @@ def probe(base_url: str | None = None, client: httpx.Client | None = None) -> di
         "reachable": True,
         "detail": "CapabilityStatement retrieved",
         "fhir_version": cap.get("fhirVersion"),
-        "software": (cap.get("software") or {}).get("name"),
+        "software": software.get("name") if isinstance(software, dict) else None,
         "kind": cap.get("kind"),
     }
 
@@ -177,7 +216,7 @@ def push_bundle(bundle: dict, base_url: str | None = None, client: httpx.Client 
                     **_auth_headers(),
                 },
             )
-    except httpx.HTTPError as exc:
+    except TRANSPORT_FAILURES as exc:
         raise FHIRClientError(f"POST {base} failed: {exc}") from exc
     if resp.status_code >= 400:
         raise FHIRClientError(
@@ -226,6 +265,8 @@ def maybe_push_order(record: dict) -> dict | None:
         receipt = push_bundle(fhir.transaction_bundle(record, orders_only=True))
     except FHIRClientError as exc:
         return {"pushed": False, "detail": exc.message}
+    except TRANSPORT_FAILURES as exc:  # belt and braces: this must never raise
+        return {"pushed": False, "detail": f"{type(exc).__name__}: {exc}"}
     accepted = len(receipt.get("entry") or []) if isinstance(receipt, dict) else 0
     return {"pushed": True, "resources": accepted,
             "detail": f"{accepted} order resource(s) accepted by the hospital server"}

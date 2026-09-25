@@ -48,6 +48,7 @@ from datetime import datetime, timedelta, timezone
 import httpx
 
 from . import config, fhir_ingest, fidelius
+from .net import TRANSPORT_FAILURES
 
 CM_API = "v0.5"
 DATA_PUSH_PATH = "/abdm/health-information/transfer"
@@ -210,7 +211,7 @@ def _post_to_cm(path: str, body: dict) -> dict:
     try:
         response = httpx.post(url, json=body, headers=_headers(request_id),
                               timeout=config.ABDM_TIMEOUT_SECONDS)
-    except httpx.HTTPError as exc:
+    except TRANSPORT_FAILURES as exc:
         raise AbdmError(f"Consent Manager unreachable at {url}: {exc}", status_code=502) from exc
     if response.status_code >= 400:
         raise AbdmError(
@@ -569,8 +570,9 @@ def status() -> dict:
             probe = httpx.get(f"{base}/api/{CM_API}/consent-requests/status/{_new_id()}",
                               headers=_headers(_new_id()), timeout=3)
             reachable = probe.status_code < 500
-        except httpx.HTTPError as exc:
-            reachable = f"unreachable: {exc}"
+        except TRANSPORT_FAILURES as exc:
+            # A status probe must report a bad URL, not become a 500 of its own.
+            reachable = f"unreachable: {type(exc).__name__}: {exc}"
     with _lock:
         sessions = list(_SESSIONS.values())
     return {

@@ -64,7 +64,11 @@ MISSING_DATA_SOURCE = "adni-missing"
 # pushed there. Empty means "not configured" -- every outbound call then reports
 # that honestly instead of pretending a hospital is connected.
 # --------------------------------------------------------------------------- #
-FHIR_BASE_URL = os.getenv("FHIR_BASE_URL", "").rstrip("/")
+# `.strip()` is not cosmetic: a value pasted into a deployment's environment
+# arrives with a trailing newline often enough that `https://host/fhir\n` became
+# a real outage. httpx rejects that as an *invalid URL* (not an HTTP error), so
+# the one route that probes the server 500'd while the rest of the app was fine.
+FHIR_BASE_URL = os.getenv("FHIR_BASE_URL", "").strip().rstrip("/")
 # Optional static bearer token for servers that do not use SMART (a HAPI test
 # server usually runs open; a real one never does -- see SMART below).
 FHIR_AUTH_TOKEN = os.getenv("FHIR_AUTH_TOKEN", "")
@@ -88,7 +92,7 @@ SMART_REDIRECT_URI = os.getenv("SMART_REDIRECT_URI", "")
 # external FHIR server cannot resolve identifiers such as ADNI-6891.
 SMART_LAUNCH_PATIENT_ID = os.getenv("SMART_LAUNCH_PATIENT_ID", "").strip()
 # The SPA the backend hands the browser back to once the token exchange is done.
-FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "").rstrip("/")
+FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "").strip().rstrip("/")
 # Minimum-necessary scope set: read the patient in context and their results,
 # write the risk assessment back. `launch/patient` is what makes context
 # selection possible at all; no encounter read, no write to clinical records.
@@ -185,7 +189,7 @@ MODEL_VARIANTS: dict[str, dict] = {
 # pull -> re-score loop is demonstrable today; pointing ABDM_CM_BASE_URL at a real
 # sandbox CM switches to the real network with no code change.
 # --------------------------------------------------------------------------- #
-ABDM_CM_BASE_URL = os.getenv("ABDM_CM_BASE_URL", "").rstrip("/")
+ABDM_CM_BASE_URL = os.getenv("ABDM_CM_BASE_URL", "").strip().rstrip("/")
 ABDM_CM_ID = os.getenv("ABDM_CM_ID", "sbx")
 ABDM_HIU_ID = os.getenv("ABDM_HIU_ID", "neuropilot-demo-hiu")
 # Bearer the HIU presents to the CM. A real deployment signs each request with
@@ -197,7 +201,7 @@ ABDM_REQUESTER_REGNO = os.getenv("ABDM_REQUESTER_REGNO", "NEUROPILOT-0001")
 # Where the CM reaches us: callbacks (/abdm/consents/notify,
 # /abdm/health-information/on-request) the CM drives, and the data push URL the
 # HIU hands out in the HI request. Must be reachable FROM the CM in real use.
-ABDM_CALLBACK_BASE_URL = os.getenv("ABDM_CALLBACK_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+ABDM_CALLBACK_BASE_URL = os.getenv("ABDM_CALLBACK_BASE_URL", "http://127.0.0.1:8000").strip().rstrip("/")
 ABDM_TIMEOUT_SECONDS = float(os.getenv("ABDM_TIMEOUT_SECONDS", "10"))
 # Run the in-process mock Consent Manager + mock HIP (abdm_mock.py). On by default
 # so the demo is self-contained; it is bypassed the moment ABDM_CM_BASE_URL is set.

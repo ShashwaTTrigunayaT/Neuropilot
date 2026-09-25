@@ -41,6 +41,7 @@ from urllib.parse import quote, urlencode
 import httpx
 
 from . import config
+from .net import TRANSPORT_FAILURES, clean_base
 
 
 class SmartError(Exception):
@@ -158,7 +159,7 @@ def discover(iss: str, client: httpx.Client | None = None) -> dict:
     """
     if not iss:
         raise SmartError("An iss (FHIR server base URL) is required to launch.", status_code=422)
-    base = iss.rstrip("/")
+    base = clean_base(iss)
     endpoints: dict[str, str] = {}
     source = None
     with _client(client) as http:
@@ -175,7 +176,7 @@ def discover(iss: str, client: httpx.Client | None = None) -> dict:
                 for key in ("capabilities", "scopes_supported", "code_challenge_methods_supported"):
                     if body.get(key):
                         endpoints.setdefault(f"_{key}", body[key])
-        except (httpx.HTTPError, ValueError):
+        except (*TRANSPORT_FAILURES, ValueError):
             endpoints = {}
 
         if not endpoints.get("authorization_endpoint") or not endpoints.get("token_endpoint"):
@@ -183,7 +184,7 @@ def discover(iss: str, client: httpx.Client | None = None) -> dict:
                 resp = http.get(f"{base}/metadata", headers={"Accept": "application/fhir+json"})
                 resp.raise_for_status()
                 from_cap = _oauth_servers_from_capability(resp.json())
-            except (httpx.HTTPError, ValueError) as exc:
+            except (*TRANSPORT_FAILURES, ValueError) as exc:
                 raise SmartError(
                     f"Could not discover SMART endpoints at {base} "
                     f"(no smart-configuration and no usable CapabilityStatement): {exc}",
@@ -295,7 +296,7 @@ def handle_callback(code: str, state: str, client: httpx.Client | None = None) -
                 auth=auth,
                 headers={"Accept": "application/json"},
             )
-        except httpx.HTTPError as exc:
+        except TRANSPORT_FAILURES as exc:
             raise SmartError(f"Token endpoint unreachable: {exc}", status_code=502) from exc
 
     if resp.status_code >= 400:
@@ -357,7 +358,7 @@ def refresh(client: httpx.Client | None = None) -> dict:
         try:
             resp = http.post(_SESSION["token_endpoint"], data=data, auth=auth,
                              headers={"Accept": "application/json"})
-        except httpx.HTTPError as exc:
+        except TRANSPORT_FAILURES as exc:
             raise SmartError(f"Token endpoint unreachable: {exc}", status_code=502) from exc
     if resp.status_code >= 400:
         raise SmartError(f"Token refresh rejected (HTTP {resp.status_code}): {resp.text[:300]}",

@@ -38,6 +38,7 @@ from typing import Optional
 import httpx
 
 from . import config, fhir_ingest, service, smart
+from .net import TRANSPORT_FAILURES, clean_base
 
 # Search results are paged and capped. A chart with thousands of Observations
 # (a research export re-used as a clinical record) must not turn one clinician
@@ -66,6 +67,7 @@ _ID_LOCK = threading.Lock()
 
 class FhirImportError(Exception):
     """A failed import. `status_code` maps to the HTTP response."""
+
 
     def __init__(self, message: str, status_code: int = 502):
         super().__init__(message)
@@ -124,13 +126,13 @@ def _subject_for_ehr(iss: str, patient_id: str) -> Optional[str]:
     but the ingest that follows stamps `external_ids` onto it, so from then on the
     record is findable by provenance like any other and no duplicate is created.
     """
-    base = iss.rstrip("/")
+    base = clean_base(iss)
     legacy: Optional[str] = None
     for pid, record in service.PATIENTS.items():
         if not isinstance(record, dict):
             continue
         ids = record.get("external_ids") or {}
-        if ids.get("ehr_patient_id") == patient_id and str(ids.get("ehr_iss") or "").rstrip("/") == base:
+        if ids.get("ehr_patient_id") == patient_id and clean_base(str(ids.get("ehr_iss") or "")) == base:
             return pid
         if legacy is None and not ids and str(pid) == patient_id:
             legacy = str(pid)
@@ -195,7 +197,7 @@ def session_target() -> tuple[str, str, str]:
             "what binds one — relaunch with it.",
             status_code=401,
         )
-    iss = str(ctx.get("iss") or "").rstrip("/")
+    iss = clean_base(str(ctx.get("iss") or ""))
     if not iss:
         raise FhirImportError(
             "The SMART session has no `iss`, so there is no server to read the chart "
@@ -225,7 +227,9 @@ def _get(http: httpx.Client, url: str, token: str) -> dict:
     """GET one FHIR URL, translating its failures into something actionable."""
     try:
         resp = http.get(url, headers=_headers(token))
-    except httpx.HTTPError as exc:
+    # `InvalidURL` (a malformed `iss`, e.g. one pasted with a newline) is not an
+    # `HTTPError`; catching only that turned a bad base URL into a 500.
+    except TRANSPORT_FAILURES as exc:
         raise FhirImportError(f"GET {url} failed: {exc}") from exc
 
     if resp.status_code in (401, 403):
@@ -295,7 +299,7 @@ def fetch_patient_resources(iss: str, token: str, patient_id: str,
     references it cannot place (correctly — a dangling reference must never
     conjure a patient).
     """
-    base = iss.rstrip("/")
+    base = clean_base(iss)
     with _client(client) as http:
         patient = _get(http, f"{base}/Patient/{patient_id}", token)
         observations = _search(http, f"{base}/Observation",
@@ -339,8 +343,8 @@ def _server_for_browse(iss: Optional[str]) -> tuple[str, str, str]:
     allowed to do.
     """
     ctx = smart.context()
-    session_iss = str(ctx.get("iss") or "").rstrip("/") if ctx.get("connected") else ""
-    target = (iss or session_iss or config.FHIR_BASE_URL or "").rstrip("/")
+    session_iss = clean_base(str(ctx.get("iss") or "")) if ctx.get("connected") else ""
+    target = clean_base(iss or session_iss or config.FHIR_BASE_URL or "")
     if not target:
         raise FhirImportError(
             "No FHIR server to browse. Pass ?iss=<FHIR base URL>, set FHIR_BASE_URL, "

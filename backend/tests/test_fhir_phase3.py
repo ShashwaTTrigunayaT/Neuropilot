@@ -16,11 +16,12 @@ Each test creates its own patient so it never depends on cohort state another
 test may have mutated.
 """
 import json
+import time
 
 import httpx
 from fastapi.testclient import TestClient
 
-from app import fhir, fhir_client, service
+from app import config, fhir, fhir_client, service, smart
 from app.main import app
 
 client = TestClient(app)
@@ -282,6 +283,125 @@ def test_probe_reports_an_unreachable_server_without_raising():
                                client=httpx.Client(transport=httpx.MockTransport(handler)))
     assert report["configured"] is True and report["reachable"] is False
     assert "503" in report["detail"]
+
+
+def test_probe_reports_an_unparseable_url_instead_of_raising():
+    """A URL httpx cannot parse must be reported, never raised.
+
+    `httpx.InvalidURL` is NOT an `httpx.HTTPError`, so catching only the latter
+    let it escape `probe()` -- whose docstring promises it never raises -- and
+    `/fhir/status` 500'd while every other route on the same container stayed
+    healthy. That is the whole reason `app/net.py` exists.
+    """
+    for bad in ("::::not a url::::", "http://[::1/fhir"):
+        report = fhir_client.probe(bad)
+        assert report["configured"] is True
+        assert report["reachable"] is False
+        assert report["detail"], "a failure with no reason is not a report"
+
+
+def test_a_base_url_carrying_a_newline_is_trimmed(monkeypatch):
+    """`rstrip("/")` never removed the newline an env var arrives with.
+
+    `https://host/fhir\n` is not an unreachable server, it is an invalid URL --
+    so it has to be trimmed to what the operator meant rather than repaired.
+    """
+    seen: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        return httpx.Response(200, json={"resourceType": "CapabilityStatement",
+                                         "fhirVersion": "4.0.1"})
+
+    monkeypatch.setattr(config, "FHIR_BASE_URL", "https://hospital.test/fhir\n")
+    report = fhir_client.probe(client=httpx.Client(transport=httpx.MockTransport(handler)))
+    assert report["reachable"] is True
+    assert report["base_url"] == "https://hospital.test/fhir"
+    assert seen["url"] == "https://hospital.test/fhir/metadata"
+
+
+def test_probe_reports_a_capability_statement_that_is_not_an_object():
+    """Arriving is not the same as being readable: a server (or a proxy) that
+    answers with a JSON array must still leave `probe` with something to say."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=["not", "a statement"])
+
+    report = fhir_client.probe("http://hospital.test/fhir",
+                               client=httpx.Client(transport=httpx.MockTransport(handler)))
+    assert report["reachable"] is True
+    assert "CapabilityStatement" in report["detail"]
+
+
+def test_status_endpoint_survives_a_session_iss_that_is_not_a_url(monkeypatch):
+    """A bound session outranks config, so its `iss` decides the destination.
+
+    That value is user input -- typed into the launch panel or handed over by a
+    simulator link -- which makes it exactly the kind of URL that must be
+    reported rather than thrown.
+    """
+    monkeypatch.setattr(smart, "_SESSION", {
+        "iss": "::::not a url::::",
+        "access_token": "test-token",
+        "expires_at": time.time() + 600,
+        "patient": "chart-1",
+        "scope": "launch/patient",
+    })
+    resp = client.get("/fhir/status")
+    assert resp.status_code == 200
+    outbound = resp.json()["outbound_server"]
+    assert outbound["source"] == "smart-session"
+    assert outbound["reachable"] is False and outbound["detail"]
+
+
+def test_debug_env_names_the_outbound_destination_without_calling_it(monkeypatch):
+    """A broken integration panel used to be diagnosable only from server logs."""
+    monkeypatch.setattr(config, "FHIR_BASE_URL", "https://hospital.test/fhir")
+    body = client.get("/debug/env").json()
+    assert body["outbound_url"] == "https://hospital.test/fhir"
+    assert body["outbound_source"] == "config"
+    assert body["outbound_configured"] is True
+
+
+def test_debug_env_flags_a_base_url_that_arrived_with_whitespace(monkeypatch):
+    monkeypatch.setenv("FHIR_BASE_URL", " https://hospital.test/fhir\n")
+    body = client.get("/debug/env").json()
+    assert body["fhir_base_url_set"] is True
+    assert body["fhir_base_url_needed_trimming"] is True
+    assert body["fhir_base_url_last_character"] == "'\\n'"
+
+
+def test_status_endpoint_survives_a_malformed_fhir_base_url(monkeypatch):
+    """The regression: this route is the only one that probes, so this is where
+    a bad `FHIR_BASE_URL` used to turn the integration panel into a 500."""
+    monkeypatch.setattr(config, "FHIR_BASE_URL", "::::not a url::::")
+    resp = client.get("/fhir/status")
+    assert resp.status_code == 200
+    outbound = resp.json()["outbound_server"]
+    assert outbound["configured"] is True and outbound["reachable"] is False
+    assert outbound["detail"]
+
+
+def test_push_to_a_malformed_server_reports_rather_than_500s(monkeypatch):
+    _new_cognitive_only("PHASE3-BADURL")
+    monkeypatch.setattr(config, "FHIR_BASE_URL", "::::not a url::::")
+    body = client.post("/fhir/push/PHASE3-BADURL").json()
+    assert body["resourceType"] == "OperationOutcome"
+    issue = body["issue"][0]
+    assert issue["severity"] == "error"
+    # The point: the operator is told which value could not be used, instead of
+    # the route failing with a bare 500.
+    assert "not a url" in issue["diagnostics"]
+
+
+def test_a_malformed_base_url_cannot_break_the_triage_loop(monkeypatch):
+    """The order push runs inside the triage loop, which must never be taken
+    down by configuration: it returns a report instead."""
+    _new_cognitive_only("PHASE3-BADURL")
+    monkeypatch.setattr(config, "FHIR_BASE_URL", "::::not a url::::")
+    monkeypatch.setattr(config, "FHIR_PUSH_ORDERS", True)
+    report = fhir_client.maybe_push_order(service.PATIENTS["PHASE3-BADURL"])
+    assert report["pushed"] is False
+    assert report["detail"]
 
 
 def test_push_without_a_configured_server_says_so():

@@ -1,6 +1,8 @@
 """REST endpoints (blueprint section 4.6)."""
 from __future__ import annotations
 
+import os
+
 from fastapi import APIRouter, Body, Header, HTTPException, Query, Response
 
 from . import abdm
@@ -45,14 +47,38 @@ def health() -> dict:
 
 @router.get("/debug/env", tags=["system"])
 def debug_env() -> dict:
-    """Deploy diagnostics: is DATABASE_URL reaching this process? (no secret values)."""
-    from . import db
+    """Deploy diagnostics: what is this process actually configured with?
+
+    No secret values -- only presence, shape and the destination. The outbound
+    half exists because a broken integration panel used to be diagnosable only
+    from server logs: an operator could see /fhir/status fail without being able
+    to see which URL it was failing on, or that the URL it had been given still
+    carried the newline it was pasted with. `resolved_base` answers that with no
+    I/O, so this endpoint stays fast and side-effect free.
+    """
+    from . import config, db, fhir_client, smart
+
     url = db.get_database_url() or ""
+    raw_base = os.getenv("FHIR_BASE_URL", "")
+    outbound, source = fhir_client.resolved_base()
     return {
         "database_url_present": bool(url),
         "database_url_scheme": url.split("://")[0] if url else None,
         "database_url_is_railway_internal": ".railway.internal" in url,
         "db_layer_enabled": db.enabled(),
+        "outbound_url": outbound or None,
+        "outbound_source": source,
+        "outbound_configured": bool(outbound),
+        # A value pasted into a deployment often arrives with a newline attached,
+        # and `https://host/fhir\n` is an invalid URL rather than a typo'd server
+        # -- which is exactly how one route 500'd while the others were fine.
+        "fhir_base_url_set": bool(raw_base),
+        "fhir_base_url_length": len(raw_base),
+        "fhir_base_url_needed_trimming": raw_base != raw_base.strip(),
+        "fhir_base_url_last_character": repr(raw_base[-1:]) if raw_base else None,
+        "smart_session_bound": bool(fhir_client.session_base_url()),
+        "smart_pending_launches": len(getattr(smart, "_PENDING", {})),
+        "fhir_timeout_seconds": config.FHIR_TIMEOUT_SECONDS,
     }
 
 
