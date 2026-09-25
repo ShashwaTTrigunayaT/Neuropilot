@@ -31,7 +31,9 @@ against the hospital, paginated, with the session token as the bearer.
 """
 from __future__ import annotations
 
-from typing import Any, Optional
+import re
+import threading
+from typing import Optional
 
 import httpx
 
@@ -42,6 +44,24 @@ from . import config, fhir_ingest, service, smart
 # click into an unbounded walk of a hospital server; `_count` is a hint, and the
 # cap is on pages, so the limit holds whether or not the server honours it.
 _MAX_SEARCH_PAGES = 5
+
+# How an imported chart is named in NeuroPilot: FHIR-0001, FHIR-0002, …
+#
+# An EHR's `Patient.id` is local to that server — an Epic GUID or a sandbox's
+# `smart-43` — which is a poor subject key to read on a worklist and a worse one
+# to hand a clinician. So an imported chart is FILED under a NeuroPilot number,
+# and the EHR's own id is kept on the record as provenance and shown in the UI
+# (see `external_ids` below): renamed for readability, never disguised.
+#
+# A chart that arrives carrying its own cross-system identity — an ABHA address,
+# or a `urn:neuropilot:subject-id` we (or another NeuroPilot node) assigned —
+# keeps it. NeuroPilot does not rename an identity the source asserts, and the
+# ABHA is the crosswalk that keeps one human one patient (L9).
+_SUBJECT_PREFIX = "FHIR"
+_SUBJECT_RE = re.compile(rf"^{_SUBJECT_PREFIX}-(\d+)$")
+# Two imports landing at once must not both take FHIR-0007 and have the second
+# overwrite the first as the same patient.
+_ID_LOCK = threading.Lock()
 
 
 class FhirImportError(Exception):
@@ -68,6 +88,77 @@ def _client(client: httpx.Client | None) -> httpx.Client:
 def _bare_patient_id(value: str) -> str:
     """`Patient/abc` and `abc` name the same patient; we address the id itself."""
     return value.rsplit("/", 1)[-1] if "/" in value else value
+
+
+# --------------------------------------------------------------------------- #
+# identity: a filing number for the chart, the EHR's own id as provenance
+# --------------------------------------------------------------------------- #
+def _next_subject_id() -> str:
+    """The next free filing number, DERIVED from the served cohort.
+
+    Derived rather than kept in a counter, for the same reason the ABHA crosswalk
+    lives on the records: a counter is a second source of truth, and a restart, a
+    re-seed or a database round-trip that resets it hands two different humans
+    the same `FHIR-0001`. The cohort is its own register, and it persists wherever
+    the records do (Postgres on Railway).
+    """
+    highest = 0
+    for pid in service.PATIENTS:
+        match = _SUBJECT_RE.match(str(pid))
+        if match:
+            highest = max(highest, int(match.group(1)))
+    return f"{_SUBJECT_PREFIX}-{highest + 1:04d}"
+
+
+def _subject_for_ehr(iss: str, patient_id: str) -> Optional[str]:
+    """Which served subject is this chart already filed under?
+
+    Re-importing a chart must find the SAME number. Without this lookup the
+    second import mints a new filing number, and one human becomes two records
+    with split history and split priority rank — the failure L9 describes, in a
+    new place.
+
+    The second pass adopts a record that was filed before this module recorded
+    provenance at all (a chart imported while the subject id WAS the raw EHR id).
+    It is not renamed — the key is already referenced by history, orders and URLs —
+    but the ingest that follows stamps `external_ids` onto it, so from then on the
+    record is findable by provenance like any other and no duplicate is created.
+    """
+    base = iss.rstrip("/")
+    legacy: Optional[str] = None
+    for pid, record in service.PATIENTS.items():
+        if not isinstance(record, dict):
+            continue
+        ids = record.get("external_ids") or {}
+        if ids.get("ehr_patient_id") == patient_id and str(ids.get("ehr_iss") or "").rstrip("/") == base:
+            return pid
+        if legacy is None and not ids and str(pid) == patient_id:
+            legacy = str(pid)
+    return legacy
+
+
+def _filing_identity(iss: str, patient_id: str,
+                     patient_resource: dict) -> tuple[Optional[str], Optional[str]]:
+    """(subject id to declare on the chart, a note when we declined to rename).
+
+    Precedence, mirroring `fhir_ingest._patient_identity`: an identity the chart
+    itself asserts (ABHA, or our own subject-id system) wins and is used as-is;
+    otherwise the chart is filed under the next free number and the EHR id is
+    recorded as provenance.
+    """
+    existing = _subject_for_ehr(iss, patient_id)
+    if existing:
+        return existing, None  # the same chart, the same number
+    declared = fhir_ingest._declared_subject_id(patient_resource)
+    abha = fhir_ingest._abha_address(patient_resource)
+    if declared or abha:
+        return None, (
+            f"the chart declares its own cross-system identity ({declared or abha}), so it "
+            "keeps it — an asserted identity is not renamed, and the ABHA is what keeps "
+            "one human one record"
+        )
+    with _ID_LOCK:
+        return _next_subject_id(), None
 
 
 # --------------------------------------------------------------------------- #
@@ -208,7 +299,21 @@ def fetch_patient_resources(iss: str, token: str, patient_id: str,
 # --------------------------------------------------------------------------- #
 # assemble + ingest
 # --------------------------------------------------------------------------- #
-def collection_bundle(fetched: dict) -> dict:
+def _declare_subject(resource: dict, subject_id: str) -> dict:
+    """A copy of the Patient with our subject id declared on it.
+
+    Declaring it as `urn:neuropilot:subject-id` is how the EXISTING mapper learns
+    the identity — `fhir_ingest` prefers a declared subject id over the resource
+    id, so the filing number needs no change to the parser at all.
+    """
+    declared = {k: v for k, v in resource.items() if k != "identifier"}
+    identifiers = [i for i in (resource.get("identifier") or []) if isinstance(i, dict)]
+    identifiers.append({"system": fhir_ingest.ID_SYSTEM, "value": subject_id})
+    declared["identifier"] = identifiers
+    return declared
+
+
+def collection_bundle(fetched: dict, subject_id: Optional[str] = None) -> dict:
     """The fetched resources as the Bundle shape `fhir_ingest` already accepts.
 
     Deliberately carries NO `Bundle.identifier` and NO `Bundle.timestamp`. The
@@ -217,33 +322,21 @@ def collection_bundle(fetched: dict) -> dict:
     recognised as the same document: nothing is written, nothing is re-scored,
     and no duplicate line appears in the patient's audit history for what is
     clinically the same set of results.
+
+    `subject_id` is the filing number to declare on the Patient (see
+    `_filing_identity`); passing None leaves the chart's declared identity alone.
     """
-    resources: list[dict] = []
-    for rtype in ("Patient", "Observation", "DiagnosticReport"):
+    patients = [r for r in fetched.get("Patient") or [] if isinstance(r, dict)]
+    if subject_id:
+        patients = [_declare_subject(r, subject_id) for r in patients]
+    resources: list[dict] = list(patients)
+    for rtype in ("Observation", "DiagnosticReport"):
         resources.extend(r for r in fetched.get(rtype) or [] if isinstance(r, dict))
     return {
         "resourceType": "Bundle",
         "type": "collection",
         "entry": [{"resource": resource} for resource in resources],
     }
-
-
-def _session_subject_note(parsed_id: str, claim: str) -> Optional[str]:
-    """Flag the (rare) case where the served subject id is not the session claim.
-
-    The subject id is what the parser derives from the `Patient` resource — an
-    ABHA when the chart carries one, else the EHR's resource id. The session
-    claim is whatever the token response said. They agree in normal use; when
-    they do not, the difference is worth naming out loud rather than hiding,
-    because it is exactly how one human becomes two records (L9).
-    """
-    if _bare_patient_id(claim) == parsed_id:
-        return None
-    return (
-        f"the EHR returned a Patient resource identified as '{parsed_id}' while the "
-        f"session context claims '{claim}' — the record was filed under '{parsed_id}', "
-        "which is the id its Observations reference"
-    )
 
 
 def import_from_smart_session(client: httpx.Client | None = None) -> dict:
@@ -256,14 +349,21 @@ def import_from_smart_session(client: httpx.Client | None = None) -> dict:
     """
     iss, token, patient_id = session_target()
     fetched = fetch_patient_resources(iss, token, patient_id, client=client)
-    bundle = collection_bundle(fetched)
+    filing, identity_note = _filing_identity(iss, patient_id, fetched["Patient"][0])
+    bundle = collection_bundle(fetched, subject_id=filing)
 
     # Parsed once here for the identity and the fetch report, and again inside
     # ingest_bundle — which is intentional: the WRITE goes through the same public
     # entry point the paste flow uses, so there is exactly one write path and one
     # place scoring can happen. A bundle this size costs nothing to map twice.
     parsed = fhir_ingest.parse_bundle(bundle)
-    receipt = fhir_ingest.ingest_bundle(bundle)
+    receipt = fhir_ingest.ingest_bundle(
+        bundle,
+        # Provenance, not a second identity: the record stays keyed by its
+        # NeuroPilot subject id and carries the EHR's own handle beside it, so the
+        # UI can show which chart this came from without the id being a GUID.
+        external_ids={"ehr_patient_id": patient_id, "ehr_iss": iss},
+    )
 
     subject_id = next(iter(parsed["patients"]))
     entry = (receipt.get("entry") or [{}])[0]
@@ -282,6 +382,8 @@ def import_from_smart_session(client: httpx.Client | None = None) -> dict:
     detail = service.get_patient(subject_id) or {}
     result = {
         "subject_id": subject_id,
+        "ehr_patient_id": patient_id,
+        "ehr_iss": iss,
         "created": status.startswith("201"),
         "duplicate": bool(notes["duplicate"]),
         "score": detail.get("official_score"),
@@ -300,7 +402,6 @@ def import_from_smart_session(client: httpx.Client | None = None) -> dict:
         "summary": notes["summary"],
         "receipt": receipt,
     }
-    flaw = _session_subject_note(subject_id, patient_id)
-    if flaw:
-        result["identity_note"] = flaw
+    if identity_note:
+        result["identity_note"] = identity_note
     return result

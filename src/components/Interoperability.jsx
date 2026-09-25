@@ -725,13 +725,16 @@ export default function Interoperability({
             <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
               {[
                 ['Subject', importResult.subject_id],
+                // The record is FILED under a NeuroPilot number, but the EHR's own
+                // id is the real-world handle: it is shown, never hidden behind
+                // the rename.
+                ['EHR record', importResult.ehr_patient_id],
                 ['Risk score', score(importResult.score)],
                 ['Tier', importResult.risk_tier || '—'],
                 ['Stage', importResult.stage_name || importResult.stage || '—'],
                 ['Observations read', importResult.fetched?.Observation],
                 ['Reports read', importResult.fetched?.DiagnosticReport],
                 ['Mapped', importResult.mapped?.observations],
-                ['Ignored', importResult.ignored?.length ?? 0],
               ].map(([label, value]) => (
                 <div
                   key={label}
@@ -746,6 +749,11 @@ export default function Interoperability({
                 </div>
               ))}
             </div>
+            {importResult.ehr_iss && (
+              <p className="mt-2 truncate text-[10px] text-emerald-800/80 dark:text-emerald-300/70">
+                Read from <span style={MONO}>{importResult.ehr_iss}</span>
+              </p>
+            )}
             {importResult.summary && (
               <p style={MONO} className="mt-2 text-[10.5px] leading-relaxed text-emerald-800 dark:text-emerald-300">
                 {importResult.summary}

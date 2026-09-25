@@ -684,11 +684,16 @@ def _outcome(diagnostics: str) -> dict:
     }
 
 
-def ingest_bundle(bundle: dict) -> dict:
+def ingest_bundle(bundle: dict, external_ids: Optional[dict] = None) -> dict:
     """Parse + apply a bundle. Returns a FHIR transaction-response receipt.
 
     Scoring is delegated to `service.ingest_record`, which runs the served model
     exactly as the UI does -- this function never computes a score itself.
+
+    `external_ids` is passed straight through as PROVENANCE (the sending system's
+    own handle for this patient); it never becomes the subject key. The SMART
+    import uses it to keep an EHR's local resource id visible on a record that is
+    filed under a NeuroPilot subject id.
     """
     parsed = parse_bundle(bundle)
     entries_out: list[dict] = []
@@ -706,6 +711,7 @@ def ingest_bundle(bundle: dict) -> dict:
             source="fhir",
             abha_address=payload.get("abha_address"),
             document_key=document_key,
+            external_ids=external_ids,
         )
         if result.get("skipped"):
             # The same document (same patient, same header or same measurements)

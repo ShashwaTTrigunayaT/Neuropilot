@@ -281,6 +281,11 @@ def get_patient(patient_id: str) -> Optional[dict]:
                 if isinstance(record.get(slot), dict) and record[slot].get("status") == "completed"
             ],
             "beyond_stage": bool(record.get("beyond_stage")),
+            # Where this record came from, when it arrived through an integration
+            # (the SMART import files a chart under FHIR-0001 and keeps the EHR's
+            # own id here, so the UI can show the real handle rather than a
+            # renamed one that hides it).
+            "external_ids": record.get("external_ids"),
         }
     )
     return detail
@@ -1378,6 +1383,7 @@ def ingest_record(
     source: str = "fhir",
     abha_address: Optional[str] = None,
     document_key: Optional[str] = None,
+    external_ids: Optional[dict] = None,
 ) -> dict:
     """Create or refresh a patient from an inbound integration (FHIR Phase 2).
 
@@ -1391,6 +1397,11 @@ def ingest_record(
       re-run) would otherwise append a duplicate audit event and churn the score
       for no clinical reason. The key is recorded on the patient, so the guard
       survives a restart whenever the record does (Postgres on Railway).
+    * `external_ids` records where a record came from -- the source system's own
+      handle for this patient (raw `ehr_patient_id` + `ehr_iss`, today). It is
+      PROVENANCE, never identity: the subject key stays whatever this store already
+      files the patient under, so a chart can be renamed for readability without
+      losing the real-world id, and a re-import can find the record it belongs to.
 
     Reuses the SAME scoring path as every other mutation in this module
     (`_rescore` + `_refresh_priority_scores` + `persist`), so a result pushed by
@@ -1447,6 +1458,14 @@ def ingest_record(
 
     if abha_address and record.get("abha_address") != abha_address:
         record["abha_address"] = abha_address
+
+    if external_ids:
+        # Merged rather than replaced: a later import can enrich the provenance
+        # (same EHR id, now with the MRN the server started returning) without
+        # dropping what the first one knew.
+        stored = dict(record.get("external_ids") or {})
+        stored.update({k: v for k, v in external_ids.items() if v})
+        record["external_ids"] = stored
 
     changed: list[str] = []
     for field in ("age", "sex", "education_years", "apoe_e4", "apoe_genotype", "adas_cog_13"):

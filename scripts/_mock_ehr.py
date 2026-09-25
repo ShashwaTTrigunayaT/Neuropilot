@@ -1,9 +1,5 @@
 """THROWAWAY mock SMART-on-FHIR server + EHR for manual verification only.
 
-Speaks the three things the flow touches: `.well-known/smart-configuration`,
-an OAuth2 token endpoint, and the FHIR reads the import makes. The FHIR reads
-REQUIRE the bearer token, so a broken token path fails loudly.
-
 Run:  python scripts/_mock_ehr.py     (listens on 127.0.0.1:8123)
 """
 import json
@@ -12,16 +8,16 @@ from urllib.parse import urlparse
 
 ISS = "http://127.0.0.1:8123/fhir"
 TOKEN = "mock-token-123"
-PID = "smart-43"
+PID = "smart-88"
 NP = "urn:neuropilot:codes"
 LOINC = "http://loinc.org"
 SCOPE = ("launch/patient openid fhirUser patient/Patient.read patient/Observation.read "
          "patient/DiagnosticReport.read patient/RiskAssessment.read patient/RiskAssessment.write")
 
 PATIENT = {
-    "resourceType": "Patient", "id": PID, "gender": "female", "birthDate": "1951-03-04",
-    "name": [{"text": "SMART Import Demo"}],
-    "identifier": [{"system": "http://hospital.test/mrn", "value": "MRN-8891"}],
+    "resourceType": "Patient", "id": PID, "gender": "male", "birthDate": "1949-07-19",
+    "name": [{"text": "EHR Import Demo"}],
+    "identifier": [{"system": "http://hospital.test/mrn", "value": "MRN-2291"}],
 }
 
 
@@ -30,25 +26,25 @@ def obs(oid, system, code, value, unit):
         "resourceType": "Observation", "id": oid, "status": "final",
         "code": {"coding": [{"system": system, "code": code}]},
         "subject": {"reference": f"Patient/{PID}"},
-        "effectiveDateTime": "2026-08-14",
+        "effectiveDateTime": "2026-08-20",
         "valueQuantity": {"value": value, "unit": unit,
                           "system": "http://unitsofmeasure.org", "code": unit},
     }
 
 
 OBSERVATIONS = [
-    obs("o-mmse", LOINC, "72106-8", 21, "{score}"),
-    obs("o-ptau217", NP, "ptau217-plasma", 0.78, "pg/mL"),
-    obs("o-nfl", NP, "nfl-plasma", 38.4, "pg/mL"),
-    obs("o-hippo", NP, "hippocampal-volume", 2.54, "cm3"),
-    obs("o-cent", NP, "centiloids", 91, "1"),
-    obs("o-hr", LOINC, "8867-4", 71, "/min"),
+    obs("o-mmse", LOINC, "72106-8", 22, "{score}"),
+    obs("o-ptau217", NP, "ptau217-plasma", 0.66, "pg/mL"),
+    obs("o-nfl", NP, "nfl-plasma", 33.1, "pg/mL"),
+    obs("o-hippo", NP, "hippocampal-volume", 2.62, "cm3"),
+    obs("o-cent", NP, "centiloids", 77, "1"),
+    obs("o-hr", LOINC, "8867-4", 68, "/min"),
 ]
 REPORTS = [{
     "resourceType": "DiagnosticReport", "id": "dr-blood", "status": "final",
     "code": {"coding": [{"system": NP, "code": "panel-blood-plasma-ad"}]},
     "subject": {"reference": f"Patient/{PID}"},
-    "issued": "2026-08-15T09:00:00Z", "conclusion": "abnormal",
+    "issued": "2026-08-21T09:00:00Z", "conclusion": "abnormal",
 }]
 CAPABILITY = {"resourceType": "CapabilityStatement", "fhirVersion": "4.0.1",
               "kind": "instance", "software": {"name": "Mock SMART EHR"},
@@ -58,7 +54,7 @@ CAPABILITY = {"resourceType": "CapabilityStatement", "fhirVersion": "4.0.1",
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
-    def log_message(self, *args):  # keep the console readable
+    def log_message(self, *args):
         pass
 
     def _json(self, payload, code=200):

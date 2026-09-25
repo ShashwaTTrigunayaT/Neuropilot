@@ -76,6 +76,10 @@ class PatientDetail(PatientSummary):
     n_visits: Optional[int] = None
     # Slots measured outside the ordered pathway (real-cohort ordering gaps)
     slots_on_file: List[str] = []
+    # Provenance for records that arrived through an integration: the source
+    # system's own handle for this patient (e.g. {"ehr_patient_id", "ehr_iss"}).
+    # Shown in the UI so a renamed subject id never hides the real one.
+    external_ids: Optional[dict] = None
 
 
 class ExplainFactor(BaseModel):

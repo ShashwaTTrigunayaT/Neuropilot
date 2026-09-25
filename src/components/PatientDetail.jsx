@@ -1426,6 +1426,34 @@ export default function PatientDetail({
                 , with {measuredPanels} of 3 biomarker panels measured
                 {patient.updated_at ? ` · updated ${patient.updated_at.substring(5, 16)}` : ''}.
               </p>
+
+              {/*
+               * Where the record came from.
+               *
+               * A chart imported from an EHR is FILED under a NeuroPilot number
+               * (FHIR-0001) because an Epic-style resource id is unreadable on a
+               * worklist — but renaming it must not hide it, so the source
+               * system's own handle and the server it came from are shown here.
+               * Absent for the cohort, which was ingested from a study dataset
+               * rather than pulled from a live chart.
+               */}
+              {patient.external_ids?.ehr_patient_id && (
+                <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10.5px] leading-relaxed text-muted dark:text-darkMuted">
+                  <span aria-hidden="true" className="h-[3px] w-[3px] rounded-full bg-accent" />
+                  <span>Pulled from the EHR record</span>
+                  <span
+                    style={MONO}
+                    className="rounded-md border border-line bg-tint/60 px-1.5 py-0.5 text-[10px] font-semibold text-ink dark:border-darkBorder dark:bg-darkBorderSubtle dark:text-darkText"
+                  >
+                    {patient.external_ids.ehr_patient_id}
+                  </span>
+                  {patient.external_ids.ehr_iss && (
+                    <span style={MONO} className="truncate text-dust dark:text-darkMuted">
+                      {patient.external_ids.ehr_iss}
+                    </span>
+                  )}
+                </p>
+              )}
             </div>
           </div>
         </div>

@@ -25,6 +25,7 @@ has been exercised, and saying so is part of the claim.
 """
 from __future__ import annotations
 
+import re
 import time
 import uuid
 
@@ -276,7 +277,10 @@ def test_import_creates_the_patient_and_reports_the_served_score(pid):
     connect(f"Patient/{pid}")
     result = fhir_import.import_from_smart_session(client=mock(ehr(pid)))
 
-    assert result["subject_id"] == pid
+    # Filed under a NeuroPilot number, with the EHR's own id kept beside it.
+    assert re.fullmatch(r"FHIR-\d{4}", result["subject_id"]), result["subject_id"]
+    assert result["ehr_patient_id"] == pid
+    assert result["ehr_iss"] == ISS
     assert result["created"] is True
     assert result["duplicate"] is False
     assert result["fetched"] == {"Patient": 1, "Observation": 4, "DiagnosticReport": 1}
@@ -285,18 +289,27 @@ def test_import_creates_the_patient_and_reports_the_served_score(pid):
     # The score returned is the SERVED score, computed through
     # service.ingest_record by the served model -- not a number computed at the
     # integration boundary.
-    served = service.get_patient(pid)
+    served = service.get_patient(result["subject_id"])
     assert served is not None
     assert result["score"] == served["official_score"]
     assert result["risk_tier"] == served["risk_tier"]
     assert result["stage"] == served["stage"] == 3   # blood + MRI on file, no PET
 
 
+def test_real_ehr_id_is_preserved_on_the_record(pid):
+    """The renamed subject id must never hide the source system's handle."""
+    connect(f"Patient/{pid}")
+    subject = fhir_import.import_from_smart_session(client=mock(ehr(pid)))["subject_id"]
+
+    detail = service.get_patient(subject)
+    assert detail["external_ids"] == {"ehr_patient_id": pid, "ehr_iss": ISS}
+
+
 def test_import_maps_the_measurements_and_ignores_the_rest(pid):
     connect(f"Patient/{pid}")
     result = fhir_import.import_from_smart_session(client=mock(ehr(pid)))
 
-    record = service.PATIENTS[pid]
+    record = service.PATIENTS[result["subject_id"]]
     assert record["blood"]["pTau217"] == 0.61
     assert record["imaging"]["hippocampalVolumeCm3"] == 2.71
     assert record["cognitive"]["latest"] == 24.0
@@ -310,13 +323,66 @@ def test_reimporting_the_same_chart_is_a_duplicate(pid):
     """Idempotent on the measurements themselves: no header, nothing written twice."""
     connect(f"Patient/{pid}")
     first = fhir_import.import_from_smart_session(client=mock(ehr(pid)))
-    history_after_first = len(service.PATIENTS[pid]["history"])
+    history_after_first = len(service.PATIENTS[first["subject_id"]]["history"])
 
     second = fhir_import.import_from_smart_session(client=mock(ehr(pid)))
     assert first["duplicate"] is False
     assert second["duplicate"] is True
     assert second["created"] is False
-    assert len(service.PATIENTS[pid]["history"]) == history_after_first
+    # The SAME filing number: a re-import must not mint a second patient for one
+    # human (that would split their history and their priority rank -- L9).
+    assert second["subject_id"] == first["subject_id"]
+    assert len(service.PATIENTS[first["subject_id"]]["history"]) == history_after_first
+
+
+def test_two_charts_get_different_filing_numbers():
+    """Numbering is sequential and unique -- two humans never share a key."""
+    numbers = []
+    for _ in range(2):
+        pid = f"EHR-{uuid.uuid4().hex[:8]}"
+        connect(f"Patient/{pid}")
+        numbers.append(fhir_import.import_from_smart_session(client=mock(ehr(pid)))["subject_id"])
+    assert numbers[0] != numbers[1]
+    first, second = (int(n.split("-")[1]) for n in numbers)
+    assert second > first        # derived from the highest number already filed
+
+
+def test_a_chart_filed_before_provenance_existed_is_adopted(pid):
+    """A record imported before `external_ids` existed must not be duplicated.
+
+    Its key is already referenced by history, orders and URLs, so it is not
+    renamed either — it is adopted, and the ingest stamps the provenance onto it
+    (after which the lookup above finds it like any other).
+    """
+    service.ingest_record(pid, demographics={"age": 70}, source="fhir")
+    assert service.PATIENTS[pid].get("external_ids") is None
+
+    connect(f"Patient/{pid}")
+    result = fhir_import.import_from_smart_session(client=mock(ehr(pid)))
+
+    assert result["subject_id"] == pid  # adopted, not renamed and not re-filed
+    assert service.PATIENTS[pid]["external_ids"]["ehr_patient_id"] == pid
+
+
+def test_a_chart_asserting_its_own_identity_is_not_renamed(pid):
+    """An asserted cross-system identity (here an ABHA) outranks our numbering.
+
+    Renaming it would break the crosswalk that keeps one human one record, so the
+    chart keeps its id and the response says why.
+    """
+    abha = f"{pid.lower()}@sbx"
+    chart = patient_resource(pid)
+    chart["identifier"] = [{"system": "https://healthid.ndhm.gov.in", "value": abha}]
+    connect(f"Patient/{pid}")
+
+    result = fhir_import.import_from_smart_session(
+        client=mock(ehr(pid, patient=chart)))
+
+    assert result["subject_id"] == abha
+    assert "identity" in result["identity_note"]
+    # ...and the EHR handle is still recorded, so the provenance is not lost.
+    assert result["ehr_patient_id"] == pid
+    assert service.get_patient(abha)["external_ids"]["ehr_patient_id"] == pid
 
 
 def test_the_assembled_bundle_carries_no_document_header(pid):
@@ -329,6 +395,17 @@ def test_the_assembled_bundle_carries_no_document_header(pid):
     assert bundle["type"] == "collection"
     assert "identifier" not in bundle and "timestamp" not in bundle
     assert len(bundle["entry"]) == 1 + len(observations(pid)) + len(reports(pid))
+
+
+def test_the_filing_number_is_declared_on_the_patient(pid):
+    """The mechanism: the number rides in as urn:neuropilot:subject-id, which is
+    the identifier system the existing mapper already prefers over the raw id."""
+    bundle = fhir_import.collection_bundle({"Patient": [patient_resource(pid)]},
+                                           subject_id="FHIR-9999")
+    identifiers = bundle["entry"][0]["resource"]["identifier"]
+    assert {"system": fhir_ingest.ID_SYSTEM, "value": "FHIR-9999"} in identifiers
+    # The EHR's own identifiers survive alongside it.
+    assert any(i["system"] == "http://hospital.test/mrn" for i in identifiers)
 
 
 def test_a_chart_with_nothing_mappable_is_rejected_by_the_shared_mapper(pid):
@@ -359,15 +436,18 @@ def test_endpoint_imports_over_http(pid, monkeypatch):
     response = client.post("/fhir/smart/import-patient")
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["subject_id"] == pid
+    assert re.fullmatch(r"FHIR-\d{4}", body["subject_id"])
+    assert body["ehr_patient_id"] == pid
     assert isinstance(body["score"], float)
     assert body["receipt"]["resourceType"] == "Bundle"
     assert body["session"]["iss"] == ISS
 
-    # And the imported patient is served by the app afterwards.
-    detail = client.get(f"/patients/{pid}")
+    # And the imported patient is served by the app afterwards, under the filing
+    # number, with the EHR id exposed for the record view.
+    detail = client.get(f"/patients/{body['subject_id']}")
     assert detail.status_code == 200
     assert detail.json()["official_score"] == body["score"]
+    assert detail.json()["external_ids"]["ehr_patient_id"] == pid
 
 
 # --------------------------------------------------------------------------- #
