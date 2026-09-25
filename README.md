@@ -816,7 +816,9 @@ npm install && npm run build && npm run dev
 
 ## 18. Stack
 
-**ML** Python 3.11 · pandas · NumPy · scikit-learn · XGBoost · SHAP
-**API** FastAPI · Uvicorn · Pydantic · SQLAlchemy (PostgreSQL 16 / SQLite)
-**UI** React 18 · Vite 5 · Tailwind CSS 3 · Recharts · lucide-react
-**Ops** Docker · docker-compose · nginx · pytest
+| Layer | Tools |
+|---|---|
+| ML | Python 3.11 · pandas · NumPy · scikit-learn · XGBoost · SHAP |
+| API | FastAPI · Uvicorn · Pydantic · SQLAlchemy (PostgreSQL 16 / SQLite) |
+| UI | React 18 · Vite 5 · Tailwind CSS 3 · Recharts · lucide-react |
+| Ops | Docker · docker-compose · nginx · pytest |
