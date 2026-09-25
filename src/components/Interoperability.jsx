@@ -8,6 +8,7 @@ import {
   ExternalLink,
   Layers,
   Link2,
+  ListChecks,
   Plug,
   RefreshCw,
   Server,
@@ -97,6 +98,12 @@ export default function Interoperability({
   // `patient` -- launch.smarthealthit.org needs base64'd JSON launch options,
   // for instance -- are driven through this field with the value they handed out.
   const [launchContext, setLaunchContext] = useState('');
+  // The chart list comes from the EHR, never from the served cohort: a launch's
+  // patient-in-context must exist on that server, and `ADNI-0016` is
+  // NeuroPilot's own key — unknown to any EHR.
+  const [charts, setCharts] = useState(null);
+  const [chartError, setChartError] = useState('');
+  const [chartName, setChartName] = useState('');
 
   const [patientId, setPatientId] = useState(initialPatientId || patients[0]?.id || '');
   const [exported, setExported] = useState(null);
@@ -142,6 +149,14 @@ export default function Interoperability({
     setIngestIssues([]);
     setImportResult(null);
   }, [patientId]);
+
+  // A chart list belongs to the server it was read from. Switching servers
+  // invalidates it — stale ids would aim a launch at a server that has no such
+  // patient, and the EHR would reject the launch for the wrong reason.
+  useEffect(() => {
+    setCharts(null);
+    setChartError('');
+  }, [launchIss]);
 
   const patientOptions = useMemo(() => patients.slice(0, 400), [patients]);
 
@@ -250,6 +265,17 @@ export default function Interoperability({
         );
       } catch (err) {
         setIngestIssues(err.message.split('\n').filter(Boolean));
+      }
+    });
+
+  const doBrowseCharts = () =>
+    run('smart-charts', async () => {
+      setChartError('');
+      try {
+        setCharts(await api.smartCharts({ iss: launchIss.trim(), name: chartName.trim() }));
+      } catch (err) {
+        setCharts(null);
+        setChartError(err.message);
       }
     });
 
@@ -538,6 +564,87 @@ export default function Interoperability({
                 />
               </label>
             </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <Btn icon={ListChecks} onClick={doBrowseCharts} disabled={busy === 'smart-charts'}>
+                {busy === 'smart-charts' ? 'Reading server…' : 'Browse charts on this server'}
+              </Btn>
+              <input
+                value={chartName}
+                onChange={(event) => setChartName(event.target.value)}
+                placeholder="filter by name (optional)"
+                spellCheck={false}
+                className="min-w-[10rem] flex-1 rounded-lg border border-line dark:border-darkBorder bg-white dark:bg-darkCard px-2 py-1.5 text-[11px] text-ink dark:text-darkText outline-none focus:border-accent"
+              />
+            </div>
+
+            {chartError && (
+              <p className="mt-2 flex items-start gap-1.5 rounded-lg border border-tierHigh/35 bg-tierHigh/[0.08] px-2 py-1.5 text-[10.5px] leading-relaxed text-tierHigh">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span className="whitespace-pre-line">{chartError}</span>
+              </p>
+            )}
+
+            {charts && (
+              <div className="mt-2 rounded-lg border border-line/70 dark:border-darkBorder/70 bg-white dark:bg-darkCard">
+                <p className="flex flex-wrap items-center gap-1.5 border-b border-line/60 dark:border-darkBorder/60 px-2 py-1.5 text-[10px] text-muted dark:text-darkMuted">
+                  <span className="font-semibold">
+                    {charts.count} chart{charts.count === 1 ? '' : 's'} on {shortId(charts.iss)}
+                  </span>
+                  <Pill tone={charts.authenticated ? 'ok' : 'muted'}>
+                    {charts.authenticated ? 'session token' : 'no token'}
+                  </Pill>
+                  <span className="font-normal">
+                    {charts.provenance === 'smart-session'
+                      ? 'read with the bound session token'
+                      : charts.provenance}
+                    {charts.capped ? ' · truncated — narrow it with the name filter' : ''}
+                  </span>
+                </p>
+                {charts.count === 0 ? (
+                  <p className="px-2 py-3 text-[10.5px] text-muted dark:text-darkMuted">
+                    The server returned no patients{chartName.trim() ? ` matching “${chartName.trim()}”` : ''}. If it
+                    needs credentials it answers 401 rather than an empty list, so an empty result means it really
+                    holds none for this search.
+                  </p>
+                ) : (
+                  <ul className="max-h-56 divide-y divide-line/60 overflow-y-auto dark:divide-darkBorder/60">
+                    {charts.charts.map((chart) => {
+                      const selected = launchPatient.trim() === chart.patient_id;
+                      return (
+                        <li key={chart.patient_id}>
+                          <button
+                            type="button"
+                            onClick={() => setLaunchPatient(chart.patient_id)}
+                            className={`flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left transition hover:bg-tint dark:hover:bg-darkBorderSubtle ${
+                              selected ? 'bg-accent/[0.08]' : ''
+                            }`}
+                          >
+                            <span className="min-w-0">
+                              <span className="block truncate text-[11px] font-semibold text-ink dark:text-darkText">
+                                {chart.name || '(no name on record)'}
+                              </span>
+                              <span style={MONO} className="block truncate text-[10px] text-muted dark:text-darkMuted">
+                                {chart.patient_id}
+                              </span>
+                            </span>
+                            <span className="flex shrink-0 items-center gap-1.5">
+                              {chart.subject_id && <Pill tone="accent">imported · {chart.subject_id}</Pill>}
+                              {[chart.gender, chart.birthDate].filter(Boolean).length > 0 && (
+                                <span className="text-[10px] text-muted dark:text-darkMuted">
+                                  {[chart.gender, chart.birthDate].filter(Boolean).join(' · ')}
+                                </span>
+                              )}
+                              {selected && <CheckCircle2 className="h-3.5 w-3.5 text-accent" />}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            )}
+
             <label className="mt-2 block">
               <span className="text-[10px] font-semibold text-muted dark:text-darkMuted">
                 Launch context <span className="font-normal">(optional, opaque — paste what the EHR/simulator issued)</span>
@@ -552,8 +659,9 @@ export default function Interoperability({
               />
             </label>
             <p className="mt-2 text-[10.5px] leading-relaxed text-muted dark:text-darkMuted">
-              A session binds <span className="font-semibold">one</span> chart. Left blank, the launch inherits{' '}
-              <span style={MONO}>SMART_LAUNCH_PATIENT_ID</span> from the server's environment — which is why every
+              A session binds <span className="font-semibold">one</span> chart, and the id must be one that exists
+              on that server — so browse and pick rather than inventing one. Left blank, the launch inherits{' '}
+              <span style={MONO}>SMART_LAUNCH_PATIENT_ID</span> from the server's environment, which is why every
               standalone launch otherwise opens the same patient.
               {smart?.connected && (
                 <>

@@ -488,6 +488,130 @@ def test_push_without_any_target_says_so(monkeypatch):
     assert "FHIR_BASE_URL" in exc.value.message
 
 
+# --------------------------------------------------------------------------- #
+# browse: the EHR's own charts (what a standalone launch may name)
+# --------------------------------------------------------------------------- #
+def browse_ehr(charts: list[dict], *, seen: dict | None = None, status: int = 200):
+    """A mock EHR answering the Patient search a browse makes."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        if seen is not None:
+            seen["url"] = str(request.url)
+            seen["auth"] = request.headers.get("authorization")
+        if status >= 400:
+            return httpx.Response(status, text=f"refused ({status})")
+        return httpx.Response(200, json=_searchset(charts))
+
+    return handler
+
+
+def _chart(cid: str, given: str = "Ada", family: str = "Lovelace") -> dict:
+    return {"resourceType": "Patient", "id": cid, "gender": "female", "birthDate": "1950-01-01",
+            "name": [{"given": [given], "family": family}]}
+
+
+def test_browse_reads_the_charts_the_ehr_holds():
+    connect("Patient/a")
+    result = fhir_import.list_charts(client=mock(browse_ehr([_chart("c1"), _chart("c2", "Grace", "Hopper")])))
+    assert result["iss"] == ISS
+    assert result["count"] == 2
+    assert [c["patient_id"] for c in result["charts"]] == ["c1", "c2"]
+    assert result["charts"][1]["name"] == "Grace Hopper"
+    # Nothing filed yet, so nothing claims to be imported.
+    assert all(c["subject_id"] is None for c in result["charts"])
+
+
+def test_browse_sends_the_session_token_to_its_own_server():
+    connect("Patient/a", token="tok-browse")
+    seen: dict = {}
+    fhir_import.list_charts(client=mock(browse_ehr([_chart("c1")], seen=seen)))
+    assert seen["auth"] == "Bearer tok-browse"
+    assert "/Patient" in seen["url"]
+
+
+def test_browse_NEVER_sends_a_token_to_a_different_server():
+    """A token minted for one server must not be replayed at another.
+
+    Browsing a second server is a convenience; leaking a live credential to it is
+    not a thing a convenience is allowed to do.
+    """
+    connect("Patient/a", iss=ISS, token="tok-for-ISS")
+    seen: dict = {}
+    result = fhir_import.list_charts(iss="https://other.test/fhir",
+                                     client=mock(browse_ehr([_chart("c9")], seen=seen)))
+    assert "other.test" in seen["url"]
+    assert seen["auth"] is None
+    assert result["authenticated"] is False
+    assert "different server" in result["provenance"]
+
+
+def test_browse_without_a_session_attempts_an_open_server(monkeypatch):
+    monkeypatch.setattr(config, "FHIR_BASE_URL", "http://open.test/fhir")
+    seen: dict = {}
+    result = fhir_import.list_charts(client=mock(browse_ehr([_chart("c1")], seen=seen)))
+    # No session, so no credential -- and no empty `Bearer ` either, which is what
+    # would make an OPEN server answer 401 and look locked.
+    assert seen["auth"] is None
+    assert result["authenticated"] is False
+    assert result["iss"] == "http://open.test/fhir"
+
+
+def test_browse_with_no_server_at_all_is_a_422(monkeypatch):
+    monkeypatch.setattr(config, "FHIR_BASE_URL", "")
+    with pytest.raises(fhir_import.FhirImportError) as exc:
+        fhir_import.list_charts()
+    assert exc.value.status_code == 422
+    assert "iss" in exc.value.message
+
+
+def test_browse_reports_a_secured_servers_401_with_the_fix():
+    connect("Patient/a", iss=ISS)
+    with pytest.raises(fhir_import.FhirImportError) as exc:
+        fhir_import.list_charts(iss="https://locked.test/fhir",
+                                client=mock(browse_ehr([], status=401)))
+    assert exc.value.status_code == 401
+    assert "scope" in exc.value.message.lower() or "relaunch" in exc.value.message.lower()
+
+
+def test_browse_passes_the_name_filter_through():
+    connect("Patient/a")
+    seen: dict = {}
+    fhir_import.list_charts(name="  Hopper ", client=mock(browse_ehr([], seen=seen)))
+    assert "name=Hopper" in seen["url"]
+
+
+def test_browse_marks_a_chart_that_was_already_imported(pid):
+    """Re-picking a chart must re-open ONE record, not file a second."""
+    connect(f"Patient/{pid}")
+    fhir_import.import_from_smart_session(client=mock(ehr(pid)))
+    filed = fhir_import._subject_for_ehr(ISS, pid)
+    assert filed, "the import should have filed the chart"
+
+    result = fhir_import.list_charts(client=mock(browse_ehr([_chart(pid)])))
+    assert result["charts"][0]["subject_id"] == filed
+
+
+def test_browse_endpoint_returns_the_chart_list(monkeypatch):
+    monkeypatch.setattr(config, "FHIR_BASE_URL", "http://open.test/fhir")
+    transport = httpx.MockTransport(browse_ehr([_chart("c1")]))
+    real_client = httpx.Client
+
+    def factory(*args, **kwargs):
+        kwargs.setdefault("transport", transport)
+        return real_client(*args, **kwargs)
+
+    monkeypatch.setattr(httpx, "Client", factory)
+    response = client.get("/fhir/smart/charts")
+    assert response.status_code == 200
+    assert response.json()["charts"][0]["patient_id"] == "c1"
+
+
+def test_browse_endpoint_refusal_is_an_operation_outcome(monkeypatch):
+    monkeypatch.setattr(config, "FHIR_BASE_URL", "")
+    response = client.get("/fhir/smart/charts")
+    assert response.status_code == 422
+    assert response.json()["resourceType"] == "OperationOutcome"
+
+
 def test_probe_reports_the_session_as_the_source(monkeypatch):
     monkeypatch.setattr(config, "FHIR_BASE_URL", "")
     connect("Patient/whatever")

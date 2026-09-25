@@ -564,6 +564,42 @@ def fhir_smart_logout() -> dict:
     return smart.logout()
 
 
+@router.get(
+    "/fhir/smart/charts",
+    tags=["fhir"],
+    responses={
+        401: {"description": "The server requires credentials and no session for it is bound"},
+        422: {"description": "No FHIR server to browse — pass ?iss= or set FHIR_BASE_URL"},
+    },
+)
+def fhir_smart_charts(
+    iss: str | None = Query(default=None, description="FHIR server base URL; defaults to the session's"),
+    name: str | None = Query(default=None, description="Optional name search passed to the server"),
+) -> Response:
+    """The patients the EHR holds — what a standalone launch is allowed to name.
+
+    A launch's patient-in-context has to exist ON THAT SERVER, so the served
+    cohort cannot supply it: `ADNI-0016` is NeuroPilot's own key and is unknown to
+    an EHR. This lists the server's own `Patient` resources (with the session
+    token when the session belongs to that same server) so a standalone launch can
+    be aimed at a real chart instead of one env-pinned id.
+    """
+    from fastapi.responses import JSONResponse
+
+    from . import fhir_import
+
+    try:
+        result = fhir_import.list_charts(iss=iss, name=name)
+    except fhir_import.FhirImportError as exc:
+        code = "login" if exc.status_code == 401 else "invalid"
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=fhir_import.operation_outcome(exc.message, code=code),
+            media_type=fhir.FHIR_JSON,
+        )
+    return JSONResponse(content=result, media_type="application/json")
+
+
 @router.post(
     "/fhir/smart/import-patient",
     tags=["fhir"],

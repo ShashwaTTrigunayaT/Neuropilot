@@ -109,6 +109,13 @@ export const api = {
     request('/fhir/Bundle', { method: 'POST', body: JSON.stringify(bundle) }),
   fhirPush: (id) => request(`/fhir/push/${encodeURIComponent(id)}`, { method: 'POST' }),
   smartStatus: () => request('/fhir/smart/status'),
+  /** The EHR's own patients — the only ids a launch can name. */
+  smartCharts: (params = {}) => {
+    const query = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v))
+    ).toString();
+    return request(`/fhir/smart/charts${query ? `?${query}` : ''}`);
+  },
   smartRefresh: () => request('/fhir/smart/refresh', { method: 'POST' }),
   smartLogout: () => request('/fhir/smart/logout', { method: 'POST' }),
   // Import the patient in context from the EHR using the SMART session — the

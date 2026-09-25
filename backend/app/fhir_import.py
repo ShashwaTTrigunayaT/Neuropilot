@@ -206,7 +206,16 @@ def session_target() -> tuple[str, str, str]:
 
 
 def _headers(token: str) -> dict[str, str]:
-    return {"Accept": fhir_ingest.FHIR_JSON, "Authorization": f"Bearer {token}"}
+    """Bearer auth, or none at all.
+
+    Sending `Authorization: Bearer ` with an empty value is not "no credential" —
+    servers answer 401 to it, which would make an OPEN server look locked simply
+    because no session is bound yet.
+    """
+    headers = {"Accept": fhir_ingest.FHIR_JSON}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
 
 
 # --------------------------------------------------------------------------- #
@@ -269,7 +278,7 @@ def _search(http: httpx.Client, base: str, params: dict, token: str) -> list[dic
         if page == _MAX_SEARCH_PAGES - 1:
             print(
                 f"[fhir_import] {base}: stopped after {_MAX_SEARCH_PAGES} pages with a "
-                "`next` link still offered — the import is capped, and the receipt says "
+                "`next` link still offered — this read is capped, and the caller reports "
                 "how much was read"
             )
             break
@@ -294,6 +303,105 @@ def fetch_patient_resources(iss: str, token: str, patient_id: str,
         reports = _search(http, f"{base}/DiagnosticReport",
                           {"patient": patient_id, "_count": "100"}, token)
     return {"Patient": [patient], "Observation": observations, "DiagnosticReport": reports}
+
+
+# --------------------------------------------------------------------------- #
+# browse: which charts does the EHR itself hold?
+#
+# A standalone launch must name a patient that EXISTS ON THAT SERVER. The served
+# cohort is no use for this: `ADNI-0016` is NeuroPilot's own key and means nothing
+# to an EHR, so naming it at the authorize endpoint either fails or binds nothing.
+# The only truthful list is the server's own `Patient` search.
+# --------------------------------------------------------------------------- #
+_MAX_CHART_RESULTS = 25
+
+
+def _human_name(resource: dict) -> Optional[str]:
+    """FHIR HumanName -> one line. `text` when the server supplies it."""
+    for name in resource.get("name") or []:
+        if not isinstance(name, dict):
+            continue
+        if name.get("text"):
+            return str(name["text"])
+        parts = [*(name.get("given") or []), name.get("family")]
+        joined = " ".join(str(p) for p in parts if p)
+        if joined:
+            return joined
+    return None
+
+
+def _server_for_browse(iss: Optional[str]) -> tuple[str, str, str]:
+    """(iss, token, provenance) for listing a server's charts.
+
+    The token is attached ONLY when the bound session belongs to the same server.
+    A token minted for server A must never be replayed at server B — that leaks a
+    live credential to a third party and is not something a browse convenience is
+    allowed to do.
+    """
+    ctx = smart.context()
+    session_iss = str(ctx.get("iss") or "").rstrip("/") if ctx.get("connected") else ""
+    target = (iss or session_iss or config.FHIR_BASE_URL or "").rstrip("/")
+    if not target:
+        raise FhirImportError(
+            "No FHIR server to browse. Pass ?iss=<FHIR base URL>, set FHIR_BASE_URL, "
+            "or bind a SMART session first.",
+            status_code=422,
+        )
+    if session_iss and session_iss == target:
+        token = smart.access_token() or ""
+        if token:
+            return target, token, "smart-session"
+        return target, "", "no-token (the session token expired; an open server still reads)"
+    if session_iss:
+        return target, "", "unauthenticated (the bound session belongs to a different server)"
+    return target, "", "unauthenticated (no session bound — only an open server will answer)"
+
+
+def list_charts(iss: Optional[str] = None, name: Optional[str] = None,
+                client: httpx.Client | None = None) -> dict:
+    """The patients the EHR holds, so a standalone launch can name a real one.
+
+    Read with the session token when it is the session's own server, and without
+    a token otherwise. A secured server answers 401 in that case, which is the
+    honest outcome — the fix is written into the message rather than faked.
+    """
+    base, token, provenance = _server_for_browse(iss)
+    params = {"_count": str(_MAX_CHART_RESULTS), "_elements": "id,name,gender,birthDate"}
+    if name and name.strip():
+        params["name"] = name.strip()
+    with _client(client) as http:
+        resources = _search(http, f"{base}/Patient", params, token)
+
+    charts: list[dict] = []
+    for resource in resources:
+        chart_id = resource.get("id")
+        if not chart_id:
+            continue
+        charts.append({
+            "patient_id": str(chart_id),
+            "name": _human_name(resource),
+            "gender": resource.get("gender"),
+            "birthDate": resource.get("birthDate"),
+            # Already pulled into NeuroPilot? Then say which filing number it took,
+            # so re-selecting it re-opens one record instead of filing a second.
+            "subject_id": _subject_for_ehr(base, str(chart_id)),
+        })
+
+    # The search cap is on pages, so a full window means the server was still
+    # offering more. Say so rather than presenting a truncated list as complete.
+    ceiling = _MAX_CHART_RESULTS * _MAX_SEARCH_PAGES
+    return {
+        "iss": base,
+        "authenticated": bool(token),
+        "provenance": provenance,
+        "count": len(charts),
+        "capped": len(resources) >= ceiling,
+        "charts": charts,
+        "note": (
+            "These are the EHR's own patients — the only ids a launch can name. A "
+            "NeuroPilot subject id means nothing to an EHR."
+        ),
+    }
 
 
 # --------------------------------------------------------------------------- #
