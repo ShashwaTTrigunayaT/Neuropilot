@@ -271,9 +271,14 @@ def workup_execute(body: WorkupExecuteRequest) -> dict:
 def record_result(patient_id: str, body: ResultRequest) -> dict:
     if body.slot not in ("blood", "imaging", "pet"):
         raise HTTPException(status_code=422, detail="slot must be one of: blood, imaging, pet")
-    payload, error = service.record_result(
-        patient_id, slot=body.slot, outcome=body.outcome, values=body.values, note=body.note
-    )
+    try:
+        payload, error = service.record_result(
+            patient_id, slot=body.slot, outcome=body.outcome, values=body.values, note=body.note
+        )
+    except service.InvalidResultValue as exc:
+        # 422, not 409: the request carried a value the slot cannot hold, and the
+        # message names it so the clinician can fix it rather than guess.
+        raise HTTPException(status_code=422, detail=exc.message) from exc
     if payload is None:
         if error is None:
             raise HTTPException(status_code=404, detail="Patient not found")

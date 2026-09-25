@@ -404,6 +404,97 @@ def test_a_malformed_base_url_cannot_break_the_triage_loop(monkeypatch):
     assert report["detail"]
 
 
+# --------------------------------------------------------------------------- #
+# what a manually entered value may contain
+#
+# The result form stores what the clinician types. A value that is not a number
+# in a measurement field used to break every route that builds an Observation,
+# and /fhir/status builds them for the WHOLE cohort -- so one such entry took
+# the integration panel down for every patient in the store.
+# --------------------------------------------------------------------------- #
+def _blood_ordered(pid: str) -> None:
+    """A fresh patient with the blood panel ordered, ready for a result."""
+    _new_cognitive_only(pid)
+    r = client.post(f"/patients/{pid}/advance-stage", json={"override": True})
+    assert r.status_code == 200, r.text
+
+
+def test_a_numeric_string_is_stored_as_a_number():
+    _blood_ordered("PHASE3-VALUES")
+    r = client.post("/patients/PHASE3-VALUES/results",
+                    json={"slot": "blood", "outcome": "abnormal",
+                          "values": {"pTau181": "5.1", "abeta4240": 0.058}})
+    assert r.status_code == 200, r.text
+    record = service.PATIENTS["PHASE3-VALUES"]
+    assert record["blood"]["pTau181"] == 5.1
+    assert isinstance(record["blood"]["pTau181"], float)
+    # and it still becomes an Observation, because it is a real number
+    assert any(o["id"].endswith("ptau181") for o in fhir.observation_resources(record))
+
+
+def test_text_in_a_measurement_field_is_rejected_naming_the_field():
+    _blood_ordered("PHASE3-TEXT")
+    r = client.post("/patients/PHASE3-TEXT/results",
+                    json={"slot": "blood", "outcome": "abnormal",
+                          "values": {"pTau181": "5.1 ng/mL"}})
+    assert r.status_code == 422
+    assert "pTau181" in r.json()["detail"]
+    # Rejected means nothing was written: a refused value must not leave a
+    # half-recorded result behind.
+    blood = service.PATIENTS["PHASE3-TEXT"]["blood"]
+    assert blood.get("status") != "completed" and "pTau181" not in blood
+
+
+def test_blank_input_is_not_a_measurement():
+    _blood_ordered("PHASE3-BLANK")
+    r = client.post("/patients/PHASE3-BLANK/results",
+                    json={"slot": "blood", "outcome": "abnormal",
+                          "values": {"pTau181": "   ", "abeta4240": 0.058}})
+    assert r.status_code == 200, r.text
+    blood = service.PATIENTS["PHASE3-BLANK"]["blood"]
+    assert "pTau181" not in blood, "an untouched field must not be stored as blank"
+    assert blood["abeta4240"] == 0.058
+
+
+def test_a_descriptive_extra_is_kept_as_text_and_never_becomes_a_quantity():
+    _blood_ordered("PHASE3-DESC")
+    r = client.post("/patients/PHASE3-DESC/results",
+                    json={"slot": "blood", "outcome": "abnormal",
+                          "values": {"pTau181": 2.2, "tauBraakStage": "IV"}})
+    assert r.status_code == 200, r.text
+    record = service.PATIENTS["PHASE3-DESC"]
+    assert record["blood"]["tauBraakStage"] == "IV"  # the clinician's own note
+    codes = " ".join(str(o.get("code")) for o in fhir.observation_resources(record))
+    assert "tauBraakStage" not in codes
+
+
+def test_the_alias_spelling_of_a_measurement_is_validated_too():
+    """The result form writes `amyloidSUVr`; the ADNI ingester and the inbound
+    mapper write `amyloidSuvr`. Both name one measurement, so both are checked."""
+    import pytest
+
+    with pytest.raises(service.InvalidResultValue) as exc:
+        service._clean_result_values("pet", {"amyloidSUVr": "elevated"})
+    assert "amyloidSUVr" in str(exc.value)
+    assert service._clean_result_values("pet", {"amyloidSUVr": "1.31"}) == {"amyloidSUVr": 1.31}
+
+
+def test_status_endpoint_survives_text_left_in_a_measurement_slot(monkeypatch):
+    """The production 500, reproduced.
+
+    A value entered before the write path validated them is still in the store,
+    and `/fhir/status` builds Observations for every patient -- so the export has
+    to skip what it cannot express rather than fail the whole panel.
+    """
+    _new_cognitive_only("PHASE3-LEGACY")
+    record = service.PATIENTS["PHASE3-LEGACY"]
+    monkeypatch.setitem(record, "blood", {"status": "completed", "outcome": "abnormal",
+                                           "pTau181": "5.1 ng/mL"})
+    resp = client.get("/fhir/status")
+    assert resp.status_code == 200
+    assert resp.json()["surface"]["patients"] > 0
+
+
 def test_push_without_a_configured_server_says_so():
     resp = client.post("/fhir/push/PHASE3-ORDER")
     body = resp.json()

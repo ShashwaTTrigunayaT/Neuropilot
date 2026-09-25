@@ -9,6 +9,7 @@ carries the decision-support disclaimer.
 """
 from fastapi.testclient import TestClient
 
+from app import fhir
 from app.main import app
 
 client = TestClient(app)
@@ -116,6 +117,53 @@ def test_fhir_observation_values_match_record():
         assert ptau is not None
         assert ptau["valueQuantity"]["value"] == blood["pTau181"]
         assert ptau["valueQuantity"]["code"] == "pg/mL"
+
+
+# --------------------------------------------------------------------------- #
+# a record the export must not choke on
+#
+# The result form stores what the clinician typed, so a slot can hold text. A
+# Quantity cannot be built from it -- and `observation_resources` runs over the
+# WHOLE cohort in /fhir/status, so raising here once took the integration panel
+# down for every patient in the store.
+# --------------------------------------------------------------------------- #
+def _record(**slots) -> dict:
+    return {"id": "EXPORT-TEXT", "age": 74, "sex": "M", "score": 0.72, "stage": 3,
+            "updated_at": "2026-09-25 10:00", "history": [], "factors": [], **slots}
+
+
+def test_observation_skips_a_value_that_is_not_a_number():
+    obs = fhir.observation_resources(_record(blood={
+        "status": "completed", "outcome": "abnormal", "note": "units typed in",
+        "pTau181": "5.1 ng/mL", "abeta4240": 0.058,
+    }))
+    ids = [o["id"] for o in obs]
+    assert "obs-EXPORT-TEXT-ptau181" not in ids, "text is not a measurement"
+    assert "obs-EXPORT-TEXT-abeta4240" in ids, "the rest of the record must survive"
+    quantity = next(o["valueQuantity"] for o in obs if o["id"].endswith("abeta4240"))
+    assert quantity["value"] == 0.058
+
+
+def test_observation_accepts_a_numeric_string():
+    obs = fhir.observation_resources(_record(blood={"status": "completed", "pTau181": "5.1"}))
+    value = next(o["valueQuantity"]["value"] for o in obs if o["id"].endswith("ptau181"))
+    assert value == 5.1 and isinstance(value, float)
+
+
+def test_pet_suvr_exports_under_either_spelling():
+    """Inbound mapping writes `amyloidSuvr` while the export asked for
+    `amyloidSUVr`, so a value that arrived from a hospital exported as nothing."""
+    for key in ("amyloidSUVr", "amyloidSuvr"):
+        obs = fhir.observation_resources(_record(pet={"status": "completed", key: 1.31}))
+        suvr = [o for o in obs if o["id"].endswith("amyloid-suvr")]
+        assert len(suvr) == 1, f"{key} produced {len(suvr)} observations"
+        assert suvr[0]["valueQuantity"]["value"] == 1.31
+
+
+def test_one_measurement_named_both_ways_yields_one_observation():
+    obs = fhir.observation_resources(_record(
+        pet={"status": "completed", "amyloidSUVr": 1.31, "amyloidSuvr": 1.31}))
+    assert len([o for o in obs if o["id"].endswith("amyloid-suvr")]) == 1
 
 
 def test_fhir_observation_patient_not_found():

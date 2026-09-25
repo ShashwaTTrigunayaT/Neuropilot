@@ -1308,6 +1308,64 @@ def execute_workup(
     }
 
 
+class InvalidResultValue(ValueError):
+    """A structured value the record cannot hold as the type it means.
+
+    Raised instead of stored. A measurement slot holding text exports as nothing
+    (`fhir._numeric` skips it), so accepting one would mean the dashboard shows a
+    result the interoperability layer silently omits -- and worse, it used to
+    mean the integration panel 500'd for the whole cohort.
+    """
+
+    def __init__(self, message: str):
+        super().__init__(message)
+        self.message = message
+
+
+# Alternative spellings of the SAME measurement. The ADNI ingester and the
+# inbound mapper write `amyloidSuvr`, while the result form writes
+# `amyloidSUVr` (and the export reads either). A validation set built from the
+# stored spelling alone would therefore wave `amyloidSUVr: elevated` through as
+# though it were a descriptive note.
+_VALUE_ALIASES = {"amyloidSUVr": "amyloidSuvr"}
+
+
+def _clean_result_values(slot: str, values: Optional[dict]) -> dict:
+    """Normalize entered values into what the slot's fields can actually hold.
+
+    * **Blank input is dropped** — an untouched form field is not a measurement,
+      and storing `""` for one is what made every Observation built from the
+      record unusable.
+    * **A numeric string is coerced** — clinicians type `5.1`; the record stores
+      the number, so the model and the FHIR export see the same thing they saw
+      before the coercion existed.
+    * **Text in a measurement field is rejected**, naming the field. The
+      alternative is a value the export cannot emit, which is how a result can
+      look recorded in the UI and be absent from the chart the hospital reads.
+    * **Anything else in `values` is descriptive** (a Braak stage, a free-text
+      remark) and passes through untouched: it never becomes a Quantity.
+    """
+    from .fhir import _numeric  # local: fhir imports service at module level
+
+    measurement_fields = set(RESULT_VALUE_KEYS.get(slot, ()))
+    cleaned: dict = {}
+    for key, value in (values or {}).items():
+        if value is None or (isinstance(value, str) and not value.strip()):
+            continue
+        if _VALUE_ALIASES.get(key, key) in measurement_fields:
+            number = _numeric(value)
+            if number is None:
+                raise InvalidResultValue(
+                    f"{key} must be a number — '{value}' is not one. It is exported "
+                    f"as a FHIR Observation, so it cannot hold text; record a "
+                    f"free-text finding in the note instead."
+                )
+            cleaned[key] = number
+            continue
+        cleaned[key] = value
+    return cleaned
+
+
 def record_result(
     patient_id: str,
     slot: str,
@@ -1334,12 +1392,13 @@ def record_result(
     # ordered it is the first result the pathway receives.
     amending = current.get("status") == "completed"
 
-    # Normalize outcome; structured values pass through for display.
+    # Normalize outcome; structured values are checked against the slot's own
+    # fields before they are stored (see _clean_result_values).
     outcome = outcome if outcome in ("normal", "abnormal", "inconclusive") else "normal"
     completed = {"status": "completed", "outcome": outcome}
     if current.get("ordered_at"):
         completed["ordered_at"] = current["ordered_at"]  # keep the real order time
-    completed.update(values or {})
+    completed.update(_clean_result_values(slot, values))
     if note:
         completed["note"] = note
 

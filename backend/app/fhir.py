@@ -108,8 +108,49 @@ def _interpretation(outcome: Optional[str]) -> list[dict]:
     return [{"coding": [{"system": V3_OBS_INTERPRETATION, "code": code}]}]
 
 
-def _quantity(value: float, unit: str, ucum: str) -> dict:
-    return {"value": float(value), "unit": unit, "system": UCUM, "code": ucum}
+def _numeric(value: Any) -> Optional[float]:
+    """The value as a number, or None when the record does not hold one.
+
+    A slot payload can hold text. The result form lets a clinician type
+    `pTau181: 5.1 ng/mL`, and a record written before that was validated still
+    carries strings like `IV` or `elevated`. Such a value is not a measurement,
+    so it cannot become a numeric Observation -- and it must not take down every
+    route that builds one. `observation_resources` runs over the WHOLE cohort in
+    /fhir/status, so a single such value used to 500 the integration panel for
+    every patient in the store.
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value.strip())
+        except ValueError:
+            return None
+    return None
+
+
+def _quantity(value: Any, unit: str, ucum: str) -> Optional[dict]:
+    """A UCUM Quantity, or None when the record holds no number for it."""
+    number = _numeric(value)
+    if number is None:
+        return None
+    return {"value": number, "unit": unit, "system": UCUM, "code": ucum}
+
+
+def _first(payload: dict, *keys: Optional[str]) -> Any:
+    """The first value present among `keys` -- alternative spellings of one field.
+
+    Inbound mapping writes `amyloidSuvr` while the export and the UI expect
+    `amyloidSUVr`: a value that arrives from a hospital then has no Observation
+    at all. Reading the aliases here means one measurement yields exactly one
+    Observation, whichever spelling stored it.
+    """
+    for key in keys:
+        if key and payload.get(key) is not None:
+            return payload[key]
+    return None
 
 
 def _record(patient_id: str) -> Optional[dict]:
@@ -154,8 +195,13 @@ def observation_resources(record: dict) -> list[dict]:
     issued = _iso(record.get("updated_at"))
     obs: list[dict] = []
 
-    def _obs(obs_id: str, code: dict, value: dict, category: str, note: Optional[str] = None,
-             outcome: Optional[str] = None) -> None:
+    def _obs(obs_id: str, code: dict, value: Optional[dict], category: str,
+             note: Optional[str] = None, outcome: Optional[str] = None) -> Optional[dict]:
+        if value is None:
+            # Nothing measured for this field (see `_quantity`): emit nothing
+            # rather than a Quantity built from text, and let the rest of the
+            # record -- and every other patient -- export normally.
+            return None
         entry: dict[str, Any] = {
             "resourceType": "Observation",
             "id": f"obs-{pid}-{obs_id}",
@@ -174,6 +220,7 @@ def observation_resources(record: dict) -> list[dict]:
         if note:
             entry["note"] = [{"text": note}]
         obs.append(entry)
+        return entry
 
     # ---- cognitive stage: MMSE (LOINC 72106-8) or MoCA (custom -- no verified mapping)
     cog = record.get("cognitive") or {}
@@ -297,7 +344,7 @@ def observation_resources(record: dict) -> list[dict]:
             coding: list[dict] = []
             if sct:
                 coding.append({"system": SNOMED, "code": sct[0], "display": sct[1]})
-            _obs(
+            entry = _obs(
                 slot_id,
                 {"coding": coding, "text": f"{label}: {raw}"},
                 # valueCodeableConcept, not valueQuantity -- injected below
@@ -305,20 +352,22 @@ def observation_resources(record: dict) -> list[dict]:
                 "imaging",
                 outcome=pet.get("outcome") if key == "amyloid" else None,
             )
-            obs[-1].pop("valueQuantity")
-            obs[-1]["valueCodeableConcept"] = {"coding": coding, "text": str(raw)}
+            if entry is not None:
+                entry.pop("valueQuantity")
+                entry["valueCodeableConcept"] = {"coding": coding, "text": str(raw)}
 
-        for slot_id, key, label in (
-            ("amyloid-suvr", "amyloidSUVr", "Neocortical amyloid SUVR"),
-            ("tau-meta-temporal-suvr", "tauMetaTemporalSuvr", "Tau meta-temporal SUVR"),
+        for slot_id, key, alias, label in (
+            ("amyloid-suvr", "amyloidSUVr", "amyloidSuvr", "Neocortical amyloid SUVR"),
+            ("tau-meta-temporal-suvr", "tauMetaTemporalSuvr", None, "Tau meta-temporal SUVR"),
         ):
-            if pet.get(key) is None:
+            suvr = _first(pet, key, alias)
+            if suvr is None:
                 continue
             _obs(
                 slot_id,
                 {"coding": [{"system": NP_SYSTEM, "code": slot_id, "display": label}],
                  "text": label},
-                _quantity(pet[key], "SUVR", "{SUVR}"),
+                _quantity(suvr, "SUVR", "{SUVR}"),
                 "imaging",
             )
         if pet.get("centiloids") is not None:
