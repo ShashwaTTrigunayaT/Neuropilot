@@ -9,7 +9,7 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { api } from '../api.js';
-import { CopyableRow, MONO, Pill, Row, SectionLabel, shortId } from './widgets.jsx';
+import { Btn, CopyableRow, MONO, Pill, Row, SectionHeader, shortId } from './widgets.jsx';
 
 /**
  * ABDM consent flow (India) — the HIU side, live (FHIR plan.md Phases 4-5).
@@ -24,8 +24,11 @@ import { CopyableRow, MONO, Pill, Row, SectionLabel, shortId } from './widgets.j
  * session reaches a terminal state, because that is what a real CM looks like.
  */
 
+// The same surface as the panels around it: hairline, radius, and a shadow with
+// a 1px inner highlight along the top edge, so this component does not look like
+// a slightly different product sitting on the same page.
 const PANEL =
-  'rounded-2xl border border-line dark:border-darkBorder bg-white dark:bg-darkCard shadow-soft';
+  'rounded-2xl border border-line dark:border-darkBorder bg-white dark:bg-darkCard shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_1px_2px_rgba(19,21,26,0.03),0_10px_24px_-22px_rgba(19,21,26,0.14)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_2px_10px_-6px_rgba(0,0,0,0.55)]';
 
 const TERMINAL = ['GRANTED', 'DENIED', 'RECEIVED', 'FAILED'];
 
@@ -146,8 +149,11 @@ export default function AbdmPanel({ patients = [], initialPatientId, onToast }) 
   const fidelius = status?.fidelius;
 
   return (
-    <div className={`${PANEL} p-5`}>
-      <SectionLabel
+    <div className={`${PANEL} p-6`}>
+      {/* The same header idiom as every other panel on the interoperability view. */}
+      <SectionHeader
+        icon={KeyRound}
+        title="ABDM consent flow (India)"
         right={
           status?.mock_gateway ? (
             <Pill tone="warn">Mock gateway</Pill>
@@ -157,9 +163,7 @@ export default function AbdmPanel({ patients = [], initialPatientId, onToast }) 
             <Pill tone="muted">Not configured</Pill>
           )
         }
-      >
-        ABDM consent flow (India)
-      </SectionLabel>
+      />
 
       <p className="mt-2 max-w-3xl text-[10.5px] leading-relaxed text-muted dark:text-darkMuted">
         NeuroPilot is the <span className="font-semibold text-ink dark:text-darkText">HIU</span>: it asks a
@@ -232,14 +236,14 @@ export default function AbdmPanel({ patients = [], initialPatientId, onToast }) 
                 <option key={p.id} value={`${p.id}@sbx`} />
               ))}
             </datalist>
-            <button
+            <Btn
+              tone="primary"
+              icon={UserCheck}
               onClick={requestConsent}
               disabled={busy === 'consent' || !abha.trim()}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-accent px-3.5 py-2 text-[11px] font-bold text-white shadow-soft transition hover:bg-accentHover disabled:opacity-50"
             >
-              <UserCheck className="h-3.5 w-3.5" />
               {busy === 'consent' ? 'Waiting for the patient…' : 'Request consent'}
-            </button>
+            </Btn>
           </div>
 
           {session && (
@@ -279,22 +283,18 @@ export default function AbdmPanel({ patients = [], initialPatientId, onToast }) 
           )}
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <button
+            <Btn
+              icon={KeyRound}
               onClick={requestRecords}
               disabled={!canRequestRecords || busy === 'records'}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-line dark:border-darkBorder bg-white dark:bg-darkCard px-3 py-2 text-[11px] font-semibold text-ink dark:text-darkText disabled:opacity-40"
+              className={busy === 'records' ? '[&_svg]:animate-pulse' : ''}
             >
-              <KeyRound className={`h-3.5 w-3.5 ${busy === 'records' ? 'animate-pulse' : ''}`} />
               2. Pull encrypted records
-            </button>
+            </Btn>
             {session && (
-              <button
-                onClick={reset}
-                disabled={busy === 'reset'}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-line dark:border-darkBorder bg-white dark:bg-darkCard px-3 py-2 text-[11px] font-semibold text-muted dark:text-darkMuted disabled:opacity-50"
-              >
-                <RotateCcw className="h-3.5 w-3.5" /> Reset
-              </button>
+              <Btn tone="quiet" icon={RotateCcw} onClick={reset} disabled={busy === 'reset'}>
+                Reset
+              </Btn>
             )}
             <span className="text-[10.5px] text-muted dark:text-darkMuted">
               {canRequestRecords

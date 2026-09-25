@@ -223,6 +223,40 @@ export function SectionLabel({ children, right, size = 'md' }) {
   );
 }
 
+/**
+ * A panel header with an icon tile and a hairline that fades out to the right.
+ *
+ * Used by every panel on the interoperability view so the page reads as one
+ * document. Kept beside SectionLabel rather than in one view because the ABDM
+ * panel is its own component and must not drift from the rest of the page.
+ */
+export function SectionHeader({ icon: Icon, title, right }) {
+  return (
+    <>
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl"
+            style={{ backgroundColor: `${ACCENT}14`, color: ACCENT }}
+          >
+            <Icon className="h-3.5 w-3.5" />
+          </span>
+          <h2 className="truncate text-[13px] font-semibold tracking-tight text-ink dark:text-darkText">
+            {title}
+          </h2>
+        </div>
+        {right}
+      </div>
+      {/* Draws itself across the card on arrival, then stays put. The animation
+          is disabled wholesale under prefers-reduced-motion (see index.css). */}
+      <span
+        aria-hidden="true"
+        className="rule-draw mt-3 block h-px w-full bg-gradient-to-r from-accent/35 via-line to-transparent dark:via-darkBorder"
+      />
+    </>
+  );
+}
+
 export function Panel({ children }) {
   return <div className="border-t border-line dark:border-darkBorder pt-6">{children}</div>;
 }

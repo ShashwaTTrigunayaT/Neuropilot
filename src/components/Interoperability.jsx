@@ -14,23 +14,46 @@ import {
   Server,
   Send,
   ShieldCheck,
+  Target,
   Upload,
+  Users,
   XCircle,
 } from 'lucide-react';
 import { API_BASE, api } from '../api.js';
 import AbdmPanel from './AbdmPanel.jsx';
 import {
+  ACCENT,
   Btn,
   CopyableRow,
   MONO,
   PANEL,
-  PANEL_PAD,
   Pill,
   RibbonStat,
   Row,
-  SectionLabel,
+  SectionHeader,
   shortId,
 } from './widgets.jsx';
+
+/**
+ * The page's card surface, in one place.
+ *
+ * `PANEL` supplies the hairline and the radius. On top of that this adds the
+ * interior padding and a shadow carrying a 1px inner highlight along the top
+ * edge — that highlight is the difference between a white card sitting *on* a
+ * tinted page and a flat white rectangle cut *out* of it. Every panel on this
+ * view uses one of these two constants, so no card drifts a shade from another.
+ */
+const CARD_DEPTH =
+  'shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_1px_2px_rgba(19,21,26,0.03),0_10px_24px_-22px_rgba(19,21,26,0.14)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_2px_10px_-6px_rgba(0,0,0,0.55)] card-wash';
+const CARD = `${PANEL} ${CARD_DEPTH} p-6`;
+const CARD_RIBBON = `${PANEL} ${CARD_DEPTH}`;
+
+/** Two letters for a chart row's monogram — a name reads as a person, not a row. */
+const initials = (name) => {
+  const words = (name || '').split(/\s+/).filter((w) => /^[A-Za-z]/.test(w));
+  if (!words.length) return '?\u2009';
+  return (words[0][0] + (words[1]?.[0] || '')).toUpperCase();
+};
 
 /**
  * Interoperability — the HL7 FHIR R4 surface (FHIR_INTEGRATION.md Phases 1-4).
@@ -49,6 +72,9 @@ const PHASE_TITLES = {
   '3_bidirectional': 'Bidirectional',
   '4_smart': 'SMART launch',
 };
+
+// One icon per phase, so the rail reads the same way the status ribbon does.
+const PHASE_ICONS = [Upload, DownloadCloud, Link2, Plug];
 
 const SAMPLE_BUNDLE = (patientId) => ({
   resourceType: 'Bundle',
@@ -305,7 +331,7 @@ export default function Interoperability({
 
   if (status === 'error') {
     return (
-      <div className={`${PANEL} p-8 text-center`}>
+      <div className={`${CARD} p-8 text-center`}>
         <AlertTriangle className="mx-auto h-6 w-6 text-tierHigh" />
         <p className="mt-3 text-xs text-muted dark:text-darkMuted">{error}</p>
         <button
@@ -320,7 +346,18 @@ export default function Interoperability({
 
   const outbound = overview.outbound_server || {};
   const surface = overview.surface || {};
-  const phasesLive = PHASE_KEYS.filter((k) => overview.phases?.[k]?.implemented).length;
+
+  // The five counts as ONE composition. The bar and the row dots share these
+  // colours, so the mix reads before any individual number is read. The
+  // proportions are of the listed counts only — which is all the bar claims.
+  const surfaceMix = [
+    { label: 'Patients (resources)', value: surface.patients ?? 0, hex: ACCENT },
+    { label: 'RiskAssessments', value: surface.risk_assessments ?? 0, hex: '#3B82F6' },
+    { label: 'Observations', value: surface.observations ?? 0, hex: '#8B5CF6' },
+    { label: 'Orders open', value: surface.open_orders ?? 0, hex: '#EC4899' },
+    { label: 'Orders completed', value: surface.completed_orders ?? 0, hex: '#D9822B' },
+  ];
+  const surfaceTotal = surfaceMix.reduce((sum, row) => sum + row.value, 0) || 1;
   // The import reads over the session's own token, so it needs a bound session
   // with a live token AND a patient in context — a session without one has no
   // chart to read, and the API says exactly that in a 401.
@@ -345,43 +382,78 @@ export default function Interoperability({
 
   return (
     <div className="animate-fade-up space-y-6">
-      {/* ── Header ─────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <SectionLabel>Interoperability</SectionLabel>
-          <h1 className="mt-1 text-lg font-black tracking-tight text-ink dark:text-darkText">
-            HL7 FHIR R4 Exchange
-          </h1>
-          <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-muted dark:text-darkMuted">
-            NeuroPilot is a system of engagement layered on the hospital&apos;s system of record. Model
-            output travels as{' '}
-            <span className="font-semibold text-ink dark:text-darkText">RiskAssessment</span> — decision
-            support by definition — never as a <code style={MONO}>Condition</code>.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <a
-            href={`${API_BASE}/fhir/metadata`}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-line dark:border-darkBorder bg-white dark:bg-darkCard px-3 py-1.5 text-[11px] font-semibold text-ink dark:text-darkText"
-          >
-            <Layers className="h-3.5 w-3.5" /> CapabilityStatement
-            <ExternalLink className="h-3 w-3 opacity-60" />
-          </a>
-          <a
-            href={`${API_BASE}/docs`}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-line dark:border-darkBorder bg-white dark:bg-darkCard px-3 py-1.5 text-[11px] font-semibold text-ink dark:text-darkText"
-          >
-            OpenAPI <ExternalLink className="h-3 w-3 opacity-60" />
-          </a>
+      {/* ── Masthead — type, not another card. The page is long enough.
+       * The counts live here as one line of type, which is what the four summary
+       * tiles were saying with a great deal more ink. */}
+      <div className="dot-grid animate-fade-up rounded-2xl border-b border-line/80 px-4 pb-5 pt-3 dark:border-darkBorder/80">
+        <div className="flex flex-wrap items-start justify-between gap-x-10 gap-y-4">
+          <div className="flex min-w-0 items-start gap-4">
+            <div
+              className="relative flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-[18px] border border-white/60 shadow-soft dark:border-white/10"
+              style={{ background: `linear-gradient(135deg, ${ACCENT}26, ${ACCENT}0A 62%, transparent)` }}
+            >
+              <Plug className="h-[22px] w-[22px]" style={{ color: ACCENT }} />
+              <span
+                aria-hidden="true"
+                className="absolute inset-0 rounded-[18px] ring-1 ring-inset ring-white/50 dark:ring-white/10"
+              />
+            </div>
+
+            {/* Quoted by a full-height accent rule on its leading edge. */}
+            <div className="relative min-w-0 pl-[18px]">
+              <span
+                aria-hidden="true"
+                className="absolute left-0 top-0 h-full w-px bg-gradient-to-b from-accent via-accent/35 to-transparent"
+              />
+              <div className="flex items-center gap-2.5">
+                <span className="h-[3px] w-[3px] rounded-full bg-accent shadow-[0_0_8px_rgba(13,130,130,0.6)]" />
+                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-accent">
+                  Interoperability
+                </p>
+                <span aria-hidden="true" className="h-px w-14 bg-gradient-to-r from-accent/45 to-transparent" />
+              </div>
+
+              <h1
+                style={MONO}
+                className="mt-2 text-[30px] font-black leading-[1.02] tracking-[-0.03em] text-ink dark:text-darkText sm:text-[36px]"
+              >
+                HL7 FHIR R4
+              </h1>
+
+              <p className="mt-2 max-w-3xl text-[12.5px] leading-relaxed text-muted dark:text-darkMuted">
+                A system of engagement layered on the hospital&apos;s system of record. Model output travels as{' '}
+                <span className="font-semibold text-ink dark:text-darkText">RiskAssessment</span> — decision
+                support by definition — and never as a <span style={MONO}>Condition</span>.
+              </p>
+
+            </div>
+          </div>
+
+          {/* Plain text links: these are references, not actions worth a box each. */}
+          <div className="flex shrink-0 items-center gap-4 pt-1">
+            <a
+              href={`${API_BASE}/fhir/metadata`}
+              target="_blank"
+              rel="noreferrer"
+              className="group inline-flex items-center gap-1.5 text-[11px] font-semibold text-muted transition hover:text-accent dark:text-darkMuted"
+            >
+              <Layers className="h-3.5 w-3.5" /> CapabilityStatement
+              <ExternalLink className="h-3 w-3 opacity-60 transition group-hover:translate-x-0.5" />
+            </a>
+            <a
+              href={`${API_BASE}/docs`}
+              target="_blank"
+              rel="noreferrer"
+              className="group inline-flex items-center gap-1.5 text-[11px] font-semibold text-muted transition hover:text-accent dark:text-darkMuted"
+            >
+              OpenAPI <ExternalLink className="h-3 w-3 opacity-60 transition group-hover:translate-x-0.5" />
+            </a>
+          </div>
         </div>
       </div>
 
       {/* ── Status ribbon: one panel instead of four competing cards ── */}
-      <div className={`${PANEL} divide-y divide-line dark:divide-darkBorder sm:grid sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4`}>
+      <div className={`${CARD_RIBBON} divide-y divide-line dark:divide-darkBorder sm:grid sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4`}>
         <div className="sm:border-r sm:border-line dark:sm:border-darkBorder">
           <RibbonStat
             icon={Server}
@@ -420,51 +492,58 @@ export default function Interoperability({
         </div>
       </div>
 
-      {/* ── Phases: a compact rail, not four full cards ─────────── */}
-      <div className={`${PANEL} px-5 py-4`}>
-        <div className="flex items-baseline justify-between gap-4">
-          <SectionLabel size="sm">FHIR R4 capability phases</SectionLabel>
-          <Pill tone={phasesLive === PHASE_KEYS.length ? 'ok' : 'warn'}>
-            {phasesLive}/{PHASE_KEYS.length} live
-          </Pill>
+      {/* ── One board, two bands: the system's live state on top, the four
+       * capability phases under it, fused because they answer the same question
+       * ("what is wired up right now?"). Stacked as two cards they read as two
+       * products saying overlapping things — this card has already been through
+       * a round of that, so the counts live once, in the band above. */}
+      <div className={`${CARD_RIBBON} overflow-hidden`}>
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-line bg-tint/40 px-5 py-2.5 dark:border-darkBorder dark:bg-darkBorderSubtle/40">
+          <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-muted dark:text-darkMuted">
+            <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-accent" />
+            FHIR R4 capability phases
+          </p>
+          <p style={MONO} className="text-[10.5px] font-bold text-ink dark:text-darkText">
+            {PHASE_KEYS.filter((key) => overview.phases?.[key]?.implemented).length}/{PHASE_KEYS.length} live
+          </p>
         </div>
-        <div className="mt-3 grid gap-px overflow-hidden rounded-xl border border-line/70 dark:border-darkBorder/70 bg-line/60 dark:bg-darkBorder/60 sm:grid-cols-2 lg:grid-cols-4">
-          {PHASE_KEYS.map((key, i) => {
-            const phase = overview.phases?.[key] || {};
-            return (
-              <div key={key} className="bg-white p-3.5 dark:bg-darkCard">
-                <div className="flex items-center justify-between gap-2">
-                  <span style={MONO} className="text-[10px] font-bold text-dust dark:text-darkMuted">
-                    0{i + 1}
-                  </span>
-                  {phase.implemented ? (
-                    <Pill tone="ok">
-                      <CheckCircle2 className="h-3 w-3" /> Live
-                    </Pill>
-                  ) : (
-                    <Pill tone="muted">Planned</Pill>
-                  )}
-                </div>
-                <p className="mt-2 text-[12px] font-bold text-ink dark:text-darkText">
-                  {PHASE_TITLES[key]}
-                </p>
-                <p className="mt-1 text-[10.5px] leading-relaxed text-muted dark:text-darkMuted">
-                  {phase.detail}
-                </p>
-              </div>
-            );
-          })}
+
+        <div className="divide-y divide-line dark:divide-darkBorder sm:grid sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4">
+        {PHASE_KEYS.map((key, i) => {
+          const phase = overview.phases?.[key] || {};
+          const PhaseIcon = PHASE_ICONS[i];
+          return (
+            <div
+              key={key}
+              className={
+                (i % 2 === 0 ? 'sm:border-r sm:border-line dark:sm:border-darkBorder ' : '') +
+                (i < PHASE_KEYS.length - 1 ? 'lg:border-r lg:border-line dark:lg:border-darkBorder' : '')
+              }
+            >
+              <RibbonStat
+                icon={PhaseIcon}
+                label={`0${i + 1} · ${PHASE_TITLES[key]}`}
+                value={phase.implemented ? 'Live' : 'Planned'}
+                tone={phase.implemented ? 'ok' : 'muted'}
+                hint={phase.detail}
+                // A live phase pulses where a planned one shows its icon: the
+                // glyph itself carries the state, so the card is not static.
+                dot={phase.implemented}
+              />
+            </div>
+          );
+        })}
         </div>
       </div>
 
-      {/* ── Connection detail ──────────────────────────────────── */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className={PANEL_PAD}>
-          <SectionLabel
+      {/* ── Connection detail — one surface split by a hairline ────── */}
+      <div className={`${CARD_RIBBON} grid divide-y divide-line lg:grid-cols-2 lg:divide-x lg:divide-y-0 dark:divide-darkBorder`}>
+        <div className="p-6">
+          <SectionHeader
+            icon={Server}
+            title="Outbound hospital server"
             right={outbound.reachable ? <Pill tone="ok">Reachable</Pill> : <Pill tone="warn">Offline</Pill>}
-          >
-            Outbound hospital server
-          </SectionLabel>
+          />
           <div className="mt-3">
             {outbound.base_url ? (
               <CopyableRow label="Base URL" value={outbound.base_url} />
@@ -494,8 +573,10 @@ export default function Interoperability({
           </p>
         </div>
 
-        <div className={PANEL_PAD}>
-          <SectionLabel
+        <div className="p-6">
+          <SectionHeader
+            icon={Plug}
+            title="SMART on FHIR"
             right={
               <span className="flex items-center gap-1.5">
                 {smart?.connected ? (
@@ -506,9 +587,7 @@ export default function Interoperability({
                 {tokenExpiry}
               </span>
             }
-          >
-            SMART on FHIR
-          </SectionLabel>
+          />
           <div className="mt-3">
             <CopyableRow label="Client ID" value={smart?.client_id} display={smart?.client_id} />
             <CopyableRow label="Redirect URI" value={smart?.redirect_uri} />
@@ -536,133 +615,120 @@ export default function Interoperability({
             />
           </div>
 
-          <div className="mt-4 rounded-xl border border-line/70 dark:border-darkBorder/70 bg-tint/50 dark:bg-darkBorderSubtle p-3">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted dark:text-darkMuted">
-              Standalone launch target
-            </p>
-            <div className="mt-2 grid gap-2 sm:grid-cols-2">
-              <label className="block">
-                <span className="text-[10px] font-semibold text-muted dark:text-darkMuted">Patient in context</span>
-                <input
-                  value={launchPatient}
-                  onChange={(event) => setLaunchPatient(event.target.value)}
-                  placeholder="blank = server default"
-                  spellCheck={false}
-                  style={MONO}
-                  className="mt-1 w-full rounded-lg border border-line dark:border-darkBorder bg-white dark:bg-darkCard px-2 py-1.5 text-[11px] text-ink dark:text-darkText outline-none focus:border-accent"
-                />
-              </label>
-              <label className="block">
-                <span className="text-[10px] font-semibold text-muted dark:text-darkMuted">FHIR server (iss)</span>
-                <input
-                  value={launchIss}
-                  onChange={(event) => setLaunchIss(event.target.value)}
-                  placeholder="https://host/fhir"
-                  spellCheck={false}
-                  style={MONO}
-                  className="mt-1 w-full rounded-lg border border-line dark:border-darkBorder bg-white dark:bg-darkCard px-2 py-1.5 text-[11px] text-ink dark:text-darkText outline-none focus:border-accent"
-                />
-              </label>
-            </div>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <Btn icon={ListChecks} onClick={doBrowseCharts} disabled={busy === 'smart-charts'}>
-                {busy === 'smart-charts' ? 'Reading server…' : 'Browse charts on this server'}
+          {/* Session lifecycle sits with the session's own facts. The launch
+              controls moved to their own full-width panel below: picking a chart
+              needs real width, and cramming it in here is what squashed this
+              column into a wall of wrapped input boxes. */}
+          {smart?.connected && (
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <Btn icon={RefreshCw} onClick={doRefreshSmart} disabled={busy === 'smart-refresh'}>
+                Renew token
               </Btn>
-              <input
-                value={chartName}
-                onChange={(event) => setChartName(event.target.value)}
-                placeholder="filter by name (optional)"
-                spellCheck={false}
-                className="min-w-[10rem] flex-1 rounded-lg border border-line dark:border-darkBorder bg-white dark:bg-darkCard px-2 py-1.5 text-[11px] text-ink dark:text-darkText outline-none focus:border-accent"
-              />
+              <Btn icon={XCircle} tone="quiet" onClick={doLogout} disabled={busy === 'smart-logout'}>
+                Disconnect
+              </Btn>
             </div>
+          )}
+          <p className="mt-3 flex items-start gap-1.5 text-[10.5px] leading-relaxed text-muted dark:text-darkMuted">
+            <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
+            Tokens are held server-side and never handed to the browser. A real launch needs a client id
+            registered with the EHR sandbox — an unregistered client is rejected by the EHR, not here.
+          </p>
+        </div>
+      </div>
 
-            {chartError && (
-              <p className="mt-2 flex items-start gap-1.5 rounded-lg border border-tierHigh/35 bg-tierHigh/[0.08] px-2 py-1.5 text-[10.5px] leading-relaxed text-tierHigh">
-                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                <span className="whitespace-pre-line">{chartError}</span>
+      {/* ── Standalone launch ──────────────────────────────────────
+       * Full width on purpose. A SMART launch has to name a patient that exists
+       * ON THE EHR, so choosing one means browsing the server's own charts — and
+       * that list needs room to be readable. This used to live inside the
+       * half-width session column, where it read as a pile of cramped boxes. */}
+      <div className={`${CARD} transition-shadow duration-300 hover:shadow-lift`}>
+        <SectionHeader
+          icon={Target}
+          title="Standalone launch"
+          right={
+            <Pill tone={launchPatient.trim() ? 'accent' : 'muted'}>
+              {launchPatient.trim() ? `targets ${shortId(launchPatient.trim())}` : 'no chart chosen'}
+            </Pill>
+          }
+        />
+        <p className="mt-2 max-w-4xl text-[11px] leading-relaxed text-muted dark:text-darkMuted">
+          A session binds <span className="font-semibold">one</span> chart, and the id has to exist on that server
+          — so browse the EHR and pick, rather than naming a NeuroPilot key it has never heard of. Left blank, the
+          launch falls back to the server's <span style={MONO}>SMART_LAUNCH_PATIENT_ID</span>, which is why every
+          standalone launch otherwise opens the same patient.
+        </p>
+
+        <div className="mt-4 grid gap-5 lg:grid-cols-[minmax(0,23rem)_minmax(0,1fr)]">
+          {/* ── what to launch. No nested card: the panel is already the surface. ── */}
+          <div className="space-y-3.5">
+            <div className="flex items-center gap-2">
+              <span
+                className="flex h-6 w-6 items-center justify-center rounded-lg"
+                style={{ backgroundColor: `${ACCENT}18`, color: ACCENT }}
+              >
+                <Target className="h-3.5 w-3.5" />
+              </span>
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-ink dark:text-darkText">
+                Launch target
               </p>
-            )}
-
-            {charts && (
-              <div className="mt-2 rounded-lg border border-line/70 dark:border-darkBorder/70 bg-white dark:bg-darkCard">
-                <p className="flex flex-wrap items-center gap-1.5 border-b border-line/60 dark:border-darkBorder/60 px-2 py-1.5 text-[10px] text-muted dark:text-darkMuted">
-                  <span className="font-semibold">
-                    {charts.count} chart{charts.count === 1 ? '' : 's'} on {shortId(charts.iss)}
-                  </span>
-                  <Pill tone={charts.authenticated ? 'ok' : 'muted'}>
-                    {charts.authenticated ? 'session token' : 'no token'}
-                  </Pill>
-                  <span className="font-normal">
-                    {charts.provenance === 'smart-session'
-                      ? 'read with the bound session token'
-                      : charts.provenance}
-                    {charts.capped ? ' · truncated — narrow it with the name filter' : ''}
-                  </span>
-                </p>
-                {charts.count === 0 ? (
-                  <p className="px-2 py-3 text-[10.5px] text-muted dark:text-darkMuted">
-                    The server returned no patients{chartName.trim() ? ` matching “${chartName.trim()}”` : ''}. If it
-                    needs credentials it answers 401 rather than an empty list, so an empty result means it really
-                    holds none for this search.
-                  </p>
-                ) : (
-                  <ul className="max-h-56 divide-y divide-line/60 overflow-y-auto dark:divide-darkBorder/60">
-                    {charts.charts.map((chart) => {
-                      const selected = launchPatient.trim() === chart.patient_id;
-                      return (
-                        <li key={chart.patient_id}>
-                          <button
-                            type="button"
-                            onClick={() => setLaunchPatient(chart.patient_id)}
-                            className={`flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left transition hover:bg-tint dark:hover:bg-darkBorderSubtle ${
-                              selected ? 'bg-accent/[0.08]' : ''
-                            }`}
-                          >
-                            <span className="min-w-0">
-                              <span className="block truncate text-[11px] font-semibold text-ink dark:text-darkText">
-                                {chart.name || '(no name on record)'}
-                              </span>
-                              <span style={MONO} className="block truncate text-[10px] text-muted dark:text-darkMuted">
-                                {chart.patient_id}
-                              </span>
-                            </span>
-                            <span className="flex shrink-0 items-center gap-1.5">
-                              {chart.subject_id && <Pill tone="accent">imported · {chart.subject_id}</Pill>}
-                              {[chart.gender, chart.birthDate].filter(Boolean).length > 0 && (
-                                <span className="text-[10px] text-muted dark:text-darkMuted">
-                                  {[chart.gender, chart.birthDate].filter(Boolean).join(' · ')}
-                                </span>
-                              )}
-                              {selected && <CheckCircle2 className="h-3.5 w-3.5 text-accent" />}
-                            </span>
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-            )}
-
-            <label className="mt-2 block">
-              <span className="text-[10px] font-semibold text-muted dark:text-darkMuted">
-                Launch context <span className="font-normal">(optional, opaque — paste what the EHR/simulator issued)</span>
+            </div>
+            <label className="block">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted dark:text-darkMuted">
+                Patient in context
+              </span>
+              <input
+                value={launchPatient}
+                onChange={(event) => setLaunchPatient(event.target.value)}
+                placeholder="blank = server default"
+                spellCheck={false}
+                style={MONO}
+                className="mt-1 w-full rounded-lg border border-line bg-white px-2.5 py-2 text-[11px] text-ink outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20 dark:border-darkBorder dark:bg-darkCard dark:text-darkText"
+              />
+            </label>
+            <label className="block">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted dark:text-darkMuted">
+                FHIR server (iss)
+              </span>
+              <input
+                value={launchIss}
+                onChange={(event) => setLaunchIss(event.target.value)}
+                placeholder="https://host/fhir"
+                spellCheck={false}
+                style={MONO}
+                className="mt-1 w-full rounded-lg border border-line bg-white px-2.5 py-2 text-[11px] text-ink outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20 dark:border-darkBorder dark:bg-darkCard dark:text-darkText"
+              />
+            </label>
+            <label className="block">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted dark:text-darkMuted">
+                Launch context <span className="font-normal normal-case tracking-normal">(optional, opaque)</span>
               </span>
               <input
                 value={launchContext}
                 onChange={(event) => setLaunchContext(event.target.value)}
-                placeholder="leave empty unless the server rejects the launch"
+                placeholder="only if the server demands it"
                 spellCheck={false}
                 style={MONO}
-                className="mt-1 w-full rounded-lg border border-line dark:border-darkBorder bg-white dark:bg-darkCard px-2 py-1.5 text-[11px] text-ink dark:text-darkText outline-none focus:border-accent"
+                className="mt-1 w-full rounded-lg border border-line bg-white px-2.5 py-2 text-[11px] text-ink outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20 dark:border-darkBorder dark:bg-darkCard dark:text-darkText"
               />
             </label>
-            <p className="mt-2 text-[10.5px] leading-relaxed text-muted dark:text-darkMuted">
-              A session binds <span className="font-semibold">one</span> chart, and the id must be one that exists
-              on that server — so browse and pick rather than inventing one. Left blank, the launch inherits{' '}
-              <span style={MONO}>SMART_LAUNCH_PATIENT_ID</span> from the server's environment, which is why every
-              standalone launch otherwise opens the same patient.
+
+            <a
+              href={standaloneLaunchUrl}
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-accent px-3.5 py-2.5 text-[11px] font-bold text-white shadow-soft transition hover:bg-accentHover"
+            >
+              <Plug className="h-3.5 w-3.5" />
+              {smart?.connected
+                ? 'Relaunch from EHR'
+                : launchPatient.trim()
+                  ? `Launch as ${shortId(launchPatient.trim())}`
+                  : 'Launch (standalone)'}
+            </a>
+
+            <p className="text-[10.5px] leading-relaxed text-muted dark:text-darkMuted">
+              Some servers also demand their own launch context — the open SMART sandbox issues base64'd options
+              from its simulator page. If a launch returns{' '}
+              <span style={MONO}>Invalid launch options</span>, paste that value above.
               {smart?.connected && (
                 <>
                   {' '}Relaunching replaces the current session
@@ -672,88 +738,255 @@ export default function Interoperability({
             </p>
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <a
-              href={standaloneLaunchUrl}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-accent px-3.5 py-2 text-[11px] font-bold text-white shadow-soft transition hover:bg-accentHover"
-            >
-              <Plug className="h-3.5 w-3.5" />
-              {smart?.connected
-                ? 'Relaunch from EHR'
-                : launchPatient.trim()
-                  ? `Launch (${shortId(launchPatient.trim())})`
-                  : 'Launch (standalone)'}
-            </a>
-            {smart?.connected && (
-              <>
-                <Btn icon={RefreshCw} onClick={doRefreshSmart} disabled={busy === 'smart-refresh'}>
-                  Renew token
-                </Btn>
-                <Btn icon={XCircle} tone="quiet" onClick={doLogout} disabled={busy === 'smart-logout'}>
-                  Disconnect
-                </Btn>
-              </>
+          {/* ── the EHR's own charts ── */}
+          <div className="flex min-w-0 flex-col">
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                value={chartName}
+                onChange={(event) => setChartName(event.target.value)}
+                placeholder="Filter the server's patients by name…"
+                spellCheck={false}
+                className="min-w-[12rem] flex-1 rounded-lg border border-line bg-white px-2.5 py-2 text-[11px] text-ink outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20 dark:border-darkBorder dark:bg-darkCard dark:text-darkText"
+              />
+              <Btn icon={ListChecks} onClick={doBrowseCharts} disabled={busy === 'smart-charts'}>
+                {busy === 'smart-charts' ? 'Reading server…' : 'Browse charts on this server'}
+              </Btn>
+            </div>
+
+            {chartError && (
+              <p className="mt-3 flex items-start gap-1.5 rounded-xl border border-tierHigh/35 bg-tierHigh/[0.08] px-3 py-2 text-[10.5px] leading-relaxed text-tierHigh">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span className="whitespace-pre-line">{chartError}</span>
+              </p>
+            )}
+
+            {charts ? (
+              <div className="mt-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-line/70 dark:border-darkBorder/70">
+                <p className="flex flex-wrap items-center gap-2 border-b border-line/60 bg-tint/50 px-3 py-2 dark:border-darkBorder/60 dark:bg-darkBorderSubtle">
+                  <span className="text-[10.5px] font-bold text-ink dark:text-darkText">
+                    {charts.count} chart{charts.count === 1 ? '' : 's'}
+                  </span>
+                  <Pill tone={charts.authenticated ? 'ok' : 'muted'}>
+                    {charts.authenticated ? 'session token' : 'no token'}
+                  </Pill>
+                  <span style={MONO} className="min-w-0 flex-1 truncate text-[10px] text-muted dark:text-darkMuted">
+                    {charts.iss}
+                  </span>
+                  {charts.capped && <Pill tone="warn">truncated — narrow by name</Pill>}
+                </p>
+                {charts.count === 0 ? (
+                  <p className="px-3 py-4 text-[10.5px] leading-relaxed text-muted dark:text-darkMuted">
+                    The server returned no patients{chartName.trim() ? ` matching “${chartName.trim()}”` : ''}. A
+                    server that wants credentials answers 401 instead of an empty list, so an empty result really
+                    means it holds none for this search.
+                  </p>
+                ) : (
+                  <ul className="max-h-80 divide-y divide-line/60 overflow-y-auto dark:divide-darkBorder/60">
+                    {charts.charts.map((chart) => {
+                      const selected = launchPatient.trim() === chart.patient_id;
+                      return (
+                        <li key={chart.patient_id}>
+                          <button
+                            type="button"
+                            onClick={() => setLaunchPatient(chart.patient_id)}
+                            className={`flex w-full items-center justify-between gap-3 border-l-2 px-3 py-2 text-left transition ${
+                              selected
+                                ? 'border-accent bg-accent/[0.07]'
+                                : 'border-transparent hover:bg-tint dark:hover:bg-darkBorderSubtle'
+                            }`}
+                          >
+                            <span className="flex min-w-0 items-center gap-2.5">
+                              <span
+                                aria-hidden="true"
+                                style={MONO}
+                                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold ${
+                                  selected
+                                    ? 'bg-accent text-white'
+                                    : 'bg-tint text-muted dark:bg-darkBorderSubtle dark:text-darkMuted'
+                                }`}
+                              >
+                                {initials(chart.name)}
+                              </span>
+                              <span className="min-w-0">
+                                <span className="block truncate text-[11.5px] font-semibold text-ink dark:text-darkText">
+                                  {chart.name || '(no name on record)'}
+                                </span>
+                                <span style={MONO} className="block truncate text-[10px] text-muted dark:text-darkMuted">
+                                  {chart.patient_id}
+                                </span>
+                              </span>
+                            </span>
+                            <span className="flex shrink-0 items-center gap-2">
+                              {chart.subject_id && <Pill tone="accent">imported · {chart.subject_id}</Pill>}
+                              {[chart.gender, chart.birthDate].filter(Boolean).length > 0 && (
+                                <span style={MONO} className="text-[10px] text-muted dark:text-darkMuted">
+                                  {[chart.gender, chart.birthDate].filter(Boolean).join(' · ')}
+                                </span>
+                              )}
+                              {selected && <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-accent" />}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            ) : (
+              !chartError && (
+                <p className="mt-3 flex flex-1 items-center rounded-xl border border-dashed border-line px-3 py-6 text-[10.5px] leading-relaxed text-muted dark:border-darkBorder dark:text-darkMuted">
+                  The list comes from the FHIR server itself — these are the only patient ids a launch can name. On
+                  an open test server it reads with no credentials; a real EHR needs a bound session first.
+                </p>
+              )
             )}
           </div>
-          <p className="mt-3 flex items-start gap-1.5 text-[10.5px] leading-relaxed text-muted dark:text-darkMuted">
-            <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
-            Tokens are held server-side and never handed to the browser. A real launch needs a client id
-            registered with the EHR sandbox — an unregistered client is rejected by the EHR, not here.
-          </p>
         </div>
       </div>
 
-      {/* ── Exchange surface + export/push ─────────────────────── */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className={PANEL_PAD}>
-          <SectionLabel>Exchange surface</SectionLabel>
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            {[
-              ['Patients (resources)', surface.patients],
-              ['RiskAssessments', surface.risk_assessments],
-              ['Observations', surface.observations],
-              ['Orders open', surface.open_orders],
-              ['Orders completed', surface.completed_orders],
-            ].map(([label, value]) => (
-              <div
-                key={label}
-                className="rounded-xl border border-line/70 dark:border-darkBorder/70 bg-tint/50 dark:bg-darkBorderSubtle px-3 py-2"
-              >
-                <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted dark:text-darkMuted">
-                  {label}
-                </p>
-                <p style={MONO} className="mt-1 text-lg font-bold text-ink dark:text-darkText">
-                  {value ?? '—'}
-                </p>
-              </div>
+      {/* ── Fused: what the exchange surface holds, and what leaves it. One
+       * subject read two ways, so it is one card split by a hairline rather
+       * than two cards implying two separate things. ── */}
+      <div className={`${CARD_RIBBON} grid divide-y divide-line lg:grid-cols-2 lg:divide-x lg:divide-y-0 dark:divide-darkBorder`}>
+        <div className="p-6">
+          <SectionHeader icon={Activity} title="Exchange surface" />
+
+          {/* The composition, as one bar. It is the shape of the exchange before
+              it is the count of it, and the row dots below key into it. */}
+          <div className="mt-4 flex h-2.5 w-full overflow-hidden rounded-full bg-line/50 dark:bg-darkBorder">
+            {surfaceMix.map((row) => (
+              <span
+                key={row.label}
+                className="h-full transition-all duration-700 ease-out"
+                style={{ width: `${(row.value / surfaceTotal) * 100}%`, backgroundColor: row.hex }}
+              />
             ))}
           </div>
+
+          <dl className="mt-3 divide-y divide-line/70 dark:divide-darkBorder/70">
+            {surfaceMix.map((row) => (
+              <div
+                key={row.label}
+                className="flex items-baseline justify-between gap-3 py-2.5 transition-colors hover:bg-tint/40 dark:hover:bg-darkBorderSubtle/50"
+              >
+                <dt className="flex min-w-0 items-center gap-2 text-[11px] text-muted dark:text-darkMuted">
+                  <span
+                    aria-hidden="true"
+                    className="h-2 w-2 shrink-0 rounded-full"
+                    style={{ backgroundColor: row.hex }}
+                  />
+                  <span className="truncate">{row.label}</span>
+                  <span style={MONO} className="shrink-0 text-[9.5px] text-dust dark:text-darkMuted">
+                    {Math.round((row.value / surfaceTotal) * 100)}%
+                  </span>
+                </dt>
+                <dd
+                  style={MONO}
+                  className="shrink-0 text-[15px] font-bold text-ink tabular-nums dark:text-darkText"
+                >
+                  {row.value.toLocaleString()}
+                </dd>
+              </div>
+            ))}
+          </dl>
           <p className="mt-3 text-[10.5px] leading-relaxed text-muted dark:text-darkMuted">
-            Live resource counts from the NeuroPilot store. FHIR is the exchange boundary; triage remains
-            internal.
+            Live resource counts from the NeuroPilot store — the share is of these five, not of the cohort.
+            FHIR is the exchange boundary; triage remains internal.
           </p>
         </div>
 
-        <div className={PANEL_PAD}>
-          <SectionLabel>Export &amp; push a patient</SectionLabel>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <select
-              value={patientId}
-              onChange={(e) => setPatientId(e.target.value)}
-              className="min-w-[9rem] flex-1 rounded-xl border border-line dark:border-darkBorder bg-white dark:bg-darkCard px-3 py-2 text-[11px] font-semibold text-ink dark:text-darkText"
-            >
-              {patientOptions.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.id}
-                </option>
-              ))}
-            </select>
-            <Btn icon={Layers} onClick={doExport} disabled={!patientId || busy === 'export'}>
-              Preview full record
-            </Btn>
-            <Btn tone="primary" icon={Upload} onClick={doPush} disabled={!patientId || busy === 'push'}>
-              Push to hospital
-            </Btn>
+        <div className="p-6">
+          <SectionHeader icon={Send} title="Export & push a patient" />
+          {/* A labelled field, then the two actions on their own line: the old
+              single row wrapped unpredictably and read as three equal things. */}
+          <div className="mt-3.5">
+            <label className="block">
+              <span className="text-[9.5px] font-bold uppercase tracking-[0.12em] text-dust dark:text-darkMuted">
+                Patient to export
+              </span>
+              <select
+                value={patientId}
+                onChange={(e) => setPatientId(e.target.value)}
+                style={MONO}
+                className="mt-1.5 w-full rounded-xl border border-line bg-white px-3 py-2 text-[11px] font-semibold text-ink outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20 dark:border-darkBorder dark:bg-darkCard dark:text-darkText"
+              >
+                {patientOptions.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.id}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {/* Two actions that are NOT equals — one reads, one leaves the
+                building — so they get a tile each and say what they do. */}
+            <div className="mt-3.5 grid gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={doExport}
+                disabled={!patientId || busy === 'export'}
+                className="group rounded-xl border border-line bg-white p-3.5 text-left transition hover:border-accent/45 hover:bg-accent/[0.035] disabled:cursor-not-allowed disabled:opacity-50 dark:border-darkBorder dark:bg-darkCard"
+              >
+                <span className="flex items-center gap-2 text-[11.5px] font-bold text-ink dark:text-darkText">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-accent/10 text-accent">
+                    <Layers className="h-3.5 w-3.5" />
+                  </span>
+                  Preview full record
+                </span>
+                <span className="mt-2 block text-[10px] leading-relaxed text-muted dark:text-darkMuted">
+                  Reads the patient out as a FHIR Bundle — Patient, Observation, RiskAssessment, AuditEvent.
+                  Nothing leaves this page.
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={doPush}
+                disabled={!patientId || busy === 'push'}
+                className="group rounded-xl border border-accent/35 bg-gradient-to-br from-accent/[0.07] to-transparent p-3.5 text-left transition hover:border-accent/60 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <span className="flex items-center gap-2 text-[11.5px] font-bold text-ink dark:text-darkText">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-accent text-white">
+                    <Upload className="h-3.5 w-3.5" />
+                  </span>
+                  Push to hospital
+                </span>
+                <span className="mt-2 block text-[10px] leading-relaxed text-muted dark:text-darkMuted">
+                  POSTs one transaction Bundle to the target below. A deliberate act, and never automatic on
+                  a decision-support read.
+                </span>
+              </button>
+            </div>
+
+            {/* Where a push actually lands is not obvious from the button, and
+                the session outranks the static config on the server. */}
+            <p className="mt-3 flex items-start gap-2 rounded-lg border border-line/70 bg-tint/40 px-2.5 py-2 text-[10px] leading-relaxed text-muted dark:border-darkBorder/70 dark:bg-darkBorderSubtle/50 dark:text-darkMuted">
+              <Server className="mt-0.5 h-3 w-3 shrink-0 text-accent" />
+              <span className="min-w-0">
+                {outbound.source === 'smart-session' && outbound.base_url ? (
+                  <>
+                    Target: the session's hospital —{' '}
+                    <span style={MONO} className="break-all text-ink dark:text-darkText">
+                      {outbound.base_url}
+                    </span>{' '}
+                    (a bound session outranks FHIR_BASE_URL).
+                  </>
+                ) : outbound.configured && outbound.base_url ? (
+                  <>
+                    Target:{' '}
+                    <span style={MONO} className="break-all text-ink dark:text-darkText">
+                      {outbound.base_url}
+                    </span>{' '}
+                    from <span style={MONO}>FHIR_BASE_URL</span>.
+                  </>
+                ) : (
+                  <>
+                    No push target yet — set <span style={MONO}>FHIR_BASE_URL</span> or bind a SMART session, and
+                    the destination appears here.
+                  </>
+                )}
+              </span>
+            </p>
           </div>
 
           {exported && (
@@ -852,47 +1085,50 @@ export default function Interoperability({
       </div>
 
       {/* ── Inbound bundle tester ──────────────────────────────── */}
-      <div className={PANEL_PAD}>
-        <SectionLabel right={<Pill tone="accent">atomic — all or nothing</Pill>}>
-          Inbound ingestion
-        </SectionLabel>
-        <p className="mt-2 text-[11px] leading-relaxed text-muted dark:text-darkMuted">
-          Two ways in, one destination: a mapped, re-scored record. <span className="font-semibold">Import
-          patient from EHR</span> reads the chart the SMART session is bound to; the manual tester below
-          posts a Bundle the way a hospital&apos;s own integration would. A wrong UCUM unit or an unmappable
-          resource rejects the <span className="font-semibold">whole</span> bundle with an OperationOutcome
-          naming every offender — no partial writes.
+      <div className={CARD}>
+        <SectionHeader
+          icon={DownloadCloud}
+          title="Inbound ingestion"
+          right={<Pill tone="accent">atomic — all or nothing</Pill>}
+        />
+        <p className="mt-2 max-w-4xl text-[11px] leading-relaxed text-muted dark:text-darkMuted">
+          Ingestion is atomic: a wrong UCUM unit or an unmappable resource rejects the{' '}
+          <span className="font-semibold text-ink dark:text-darkText">whole</span> bundle with an
+          OperationOutcome naming every offender, rather than half-writing a record and scoring the fragment.
         </p>
 
-        <div className="mt-3 rounded-xl border border-accent/35 bg-accent/[0.06] p-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        {/* The primary way in, so it gets the accent — a tinted surface with an
+            accent rule on its leading edge rather than another neutral box. */}
+        <div className="relative mt-3.5 overflow-hidden rounded-xl border border-accent/30 bg-gradient-to-br from-accent/[0.07] via-accent/[0.03] to-transparent p-4">
+          <span aria-hidden="true" className="absolute inset-y-0 left-0 w-[3px] bg-accent" />
+          <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-3 pl-1.5">
             <div className="min-w-[14rem] flex-1">
-              <p className="flex flex-wrap items-center gap-1.5 text-[11px] font-bold text-ink dark:text-darkText">
-                <DownloadCloud className="h-3.5 w-3.5 text-accent" />
+              <p className="flex flex-wrap items-center gap-2 text-[11.5px] font-bold text-ink dark:text-darkText">
+                <DownloadCloud className="h-4 w-4 text-accent" />
                 Import from the EHR session
                 <span
                   style={MONO}
-                  className="rounded-md border border-accent/35 bg-white/70 px-1.5 py-0.5 text-[10px] font-medium text-accent dark:bg-transparent"
+                  className="rounded-md border border-accent/30 bg-white/70 px-1.5 py-0.5 text-[10px] font-medium text-accent dark:bg-transparent"
                 >
                   POST /fhir/smart/import-patient
                 </span>
               </p>
-              <p className="mt-1 text-[10.5px] leading-relaxed text-muted dark:text-darkMuted">
+              <p className="mt-1.5 text-[10.5px] leading-relaxed text-muted dark:text-darkMuted">
                 {canImport ? (
                   <>
                     Reads <span style={MONO}>Patient</span>,{' '}
                     <span style={MONO}>Observation</span> and{' '}
                     <span style={MONO}>DiagnosticReport</span> for{' '}
-                    <span style={MONO}>{shortId(smart.patient)}</span> from{' '}
-                    <span style={MONO}>{outbound.source === 'smart-session' && outbound.base_url ? outbound.base_url : smart.iss}</span>{' '}
-                    — by 3 real reads — then runs them through the same ingestion and re-scoring as a pasted
-                    bundle.
+                    <span style={MONO}>{shortId(smart.patient)}</span> over the session token — three real
+                    reads — then runs them through the same ingestion and re-scoring as a pasted bundle. The
+                    server is named once, under{' '}
+                    <span className="font-semibold">Issuer (iss)</span> in the session panel.
                   </>
                 ) : (
                   <>
                     Needs an active SMART session with a patient in context: launch NeuroPilot from the EHR. For a
                     standalone launch, name the chart under{' '}
-                    <span className="font-semibold">Standalone launch target</span> above and launch again.
+                    <span className="font-semibold">Standalone launch</span> above and launch again.
                   </>
                 )}
               </p>

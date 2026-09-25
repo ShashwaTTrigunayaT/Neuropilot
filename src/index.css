@@ -185,6 +185,51 @@ body {
   animation: band-marker 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+/* ------------------------------------------------------------------ */
+/*  Surface texture                                                    */
+/* ------------------------------------------------------------------ */
+/*
+ * Two decorative surfaces, kept in CSS rather than as long arbitrary utility
+ * strings so the values are readable and change in one place.
+ *
+ * `.card-wash` is the corner wash every panel carries: a barely-there teal
+ * gradient in the top-left, which is what stops a page of white cards reading
+ * as flat. It is a background-image, so it composes with the panel's own
+ * background-color instead of fighting it.
+ */
+.card-wash {
+  background-image: radial-gradient(120% 90% at 0% 0%, rgba(13, 130, 130, 0.055), transparent 58%);
+}
+.dark .card-wash {
+  background-image: radial-gradient(120% 90% at 0% 0%, rgba(13, 130, 130, 0.13), transparent 58%);
+}
+
+/* The masthead's dot grid. It reads as paper texture, not as a pattern, and it
+   gives the top of the page somewhere for the eye to rest. */
+.dot-grid {
+  background-image: radial-gradient(rgba(19, 21, 26, 0.05) 1px, transparent 1px);
+  background-size: 17px 17px;
+  background-position: -1px -1px;
+}
+.dark .dot-grid {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+}
+
+/* A hairline that draws itself across the top of a card on arrival, then stays
+   put. Used on the launch panel, whose whole point is that it changed. */
+@keyframes rule-draw {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+.rule-draw {
+  transform-origin: left center;
+  animation: rule-draw 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 /* Print styles for clinical consultation export */
 @media print {
   body {
