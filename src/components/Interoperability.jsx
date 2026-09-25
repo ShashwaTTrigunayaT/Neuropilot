@@ -86,6 +86,17 @@ export default function Interoperability({
   const [overview, setOverview] = useState(null);
   const [smart, setSmart] = useState(null);
   const [busy, setBusy] = useState('');
+  // What a STANDALONE launch should open. These are per-launch choices, not
+  // configuration: a SMART session binds exactly one patient in context, so a
+  // launch that names none inherits the server's SMART_LAUNCH_PATIENT_ID env
+  // default -- which is how every standalone launch ends up on the same chart.
+  const [launchPatient, setLaunchPatient] = useState('');
+  const [launchIss, setLaunchIss] = useState('');
+  // `launch` is opaque by spec: the EHR (or a simulator's launch page) supplies
+  // it and the app must echo it back unread. Servers that ignore a bare
+  // `patient` -- launch.smarthealthit.org needs base64'd JSON launch options,
+  // for instance -- are driven through this field with the value they handed out.
+  const [launchContext, setLaunchContext] = useState('');
 
   const [patientId, setPatientId] = useState(initialPatientId || patients[0]?.id || '');
   const [exported, setExported] = useState(null);
@@ -105,6 +116,11 @@ export default function Interoperability({
       const [fhir, smartStatus] = await Promise.all([api.fhirStatus(), api.smartStatus()]);
       setOverview(fhir);
       setSmart(smartStatus);
+      // Seed the standalone fields from the server's own defaults without ever
+      // overwriting something the viewer has typed.
+      const defaults = smartStatus?.launch_defaults || {};
+      setLaunchPatient((current) => current || defaults.patient || '');
+      setLaunchIss((current) => current || defaults.iss || '');
       setStatus('ready');
     } catch (err) {
       setError(err.message);
@@ -128,6 +144,20 @@ export default function Interoperability({
   }, [patientId]);
 
   const patientOptions = useMemo(() => patients.slice(0, 400), [patients]);
+
+  /** The standalone launch URL, carrying the chosen chart and server.
+   *
+   * Omitted parameters are omitted on purpose: `iss` then falls back to the
+   * server's FHIR_BASE_URL and `patient` to SMART_LAUNCH_PATIENT_ID, so this
+   * link behaves exactly as before for anyone who does not touch the fields.
+   */
+  const standaloneLaunchUrl = useMemo(() => {
+    const params = { format: 'redirect' };
+    if (launchIss.trim()) params.iss = launchIss.trim();
+    if (launchPatient.trim()) params.patient = launchPatient.trim();
+    if (launchContext.trim()) params.launch = launchContext.trim();
+    return api.smartLaunchUrl(params);
+  }, [launchIss, launchPatient, launchContext]);
 
   const run = async (key, fn) => {
     setBusy(key);
@@ -480,13 +510,71 @@ export default function Interoperability({
             />
           </div>
 
+          <div className="mt-4 rounded-xl border border-line/70 dark:border-darkBorder/70 bg-tint/50 dark:bg-darkBorderSubtle p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted dark:text-darkMuted">
+              Standalone launch target
+            </p>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              <label className="block">
+                <span className="text-[10px] font-semibold text-muted dark:text-darkMuted">Patient in context</span>
+                <input
+                  value={launchPatient}
+                  onChange={(event) => setLaunchPatient(event.target.value)}
+                  placeholder="blank = server default"
+                  spellCheck={false}
+                  style={MONO}
+                  className="mt-1 w-full rounded-lg border border-line dark:border-darkBorder bg-white dark:bg-darkCard px-2 py-1.5 text-[11px] text-ink dark:text-darkText outline-none focus:border-accent"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[10px] font-semibold text-muted dark:text-darkMuted">FHIR server (iss)</span>
+                <input
+                  value={launchIss}
+                  onChange={(event) => setLaunchIss(event.target.value)}
+                  placeholder="https://host/fhir"
+                  spellCheck={false}
+                  style={MONO}
+                  className="mt-1 w-full rounded-lg border border-line dark:border-darkBorder bg-white dark:bg-darkCard px-2 py-1.5 text-[11px] text-ink dark:text-darkText outline-none focus:border-accent"
+                />
+              </label>
+            </div>
+            <label className="mt-2 block">
+              <span className="text-[10px] font-semibold text-muted dark:text-darkMuted">
+                Launch context <span className="font-normal">(optional, opaque — paste what the EHR/simulator issued)</span>
+              </span>
+              <input
+                value={launchContext}
+                onChange={(event) => setLaunchContext(event.target.value)}
+                placeholder="leave empty unless the server rejects the launch"
+                spellCheck={false}
+                style={MONO}
+                className="mt-1 w-full rounded-lg border border-line dark:border-darkBorder bg-white dark:bg-darkCard px-2 py-1.5 text-[11px] text-ink dark:text-darkText outline-none focus:border-accent"
+              />
+            </label>
+            <p className="mt-2 text-[10.5px] leading-relaxed text-muted dark:text-darkMuted">
+              A session binds <span className="font-semibold">one</span> chart. Left blank, the launch inherits{' '}
+              <span style={MONO}>SMART_LAUNCH_PATIENT_ID</span> from the server's environment — which is why every
+              standalone launch otherwise opens the same patient.
+              {smart?.connected && (
+                <>
+                  {' '}Relaunching replaces the current session
+                  {smart?.patient ? ` (${shortId(smart.patient)})` : ''}.
+                </>
+              )}
+            </p>
+          </div>
+
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <a
-              href={api.smartLaunchUrl({ format: 'redirect' })}
+              href={standaloneLaunchUrl}
               className="inline-flex items-center gap-1.5 rounded-xl bg-accent px-3.5 py-2 text-[11px] font-bold text-white shadow-soft transition hover:bg-accentHover"
             >
               <Plug className="h-3.5 w-3.5" />
-              {smart?.connected ? 'Relaunch from EHR' : 'Launch (standalone)'}
+              {smart?.connected
+                ? 'Relaunch from EHR'
+                : launchPatient.trim()
+                  ? `Launch (${shortId(launchPatient.trim())})`
+                  : 'Launch (standalone)'}
             </a>
             {smart?.connected && (
               <>
@@ -694,9 +782,9 @@ export default function Interoperability({
                   </>
                 ) : (
                   <>
-                    Needs an active SMART session with a patient in context: launch NeuroPilot from the EHR.
-                    For a standalone launch, set{' '}
-                    <span style={MONO}>SMART_LAUNCH_PATIENT_ID</span> so the session binds a chart.
+                    Needs an active SMART session with a patient in context: launch NeuroPilot from the EHR. For a
+                    standalone launch, name the chart under{' '}
+                    <span className="font-semibold">Standalone launch target</span> above and launch again.
                   </>
                 )}
               </p>

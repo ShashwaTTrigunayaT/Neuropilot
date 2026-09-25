@@ -141,16 +141,32 @@ export default function App() {
   // SMART on FHIR hand-off: after the backend exchanges the authorization code
   // it redirects the browser back here with ?smart=connected&patient=… — land
   // on the interoperability view and say what was bound.
+  //
+  // A FAILED launch comes back as ?smart=error&reason=… and must be reported too.
+  // Silently ignoring it left whatever session was already bound on screen, so a
+  // launch that never completed looked like a successful one that had connected
+  // "the same patient again".
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('smart') !== 'connected') return;
-    const patient = params.get('patient');
-    setView('interop');
-    setToast({
-      title: 'SMART session connected',
-      message: patient ? `Patient in context: ${patient}` : 'Launch complete.',
-      type: 'success',
-    });
+    const outcome = params.get('smart');
+    if (outcome === 'connected') {
+      const patient = params.get('patient');
+      setView('interop');
+      setToast({
+        title: 'SMART session connected',
+        message: patient ? `Patient in context: ${patient}` : 'Launch complete.',
+        type: 'success',
+      });
+    } else if (outcome === 'error') {
+      setView('interop');
+      setToast({
+        title: 'SMART launch failed',
+        message: params.get('reason') || 'The EHR rejected the launch request.',
+        type: 'error',
+      });
+    } else {
+      return;
+    }
     window.history.replaceState({}, '', window.location.pathname);
   }, []);
 

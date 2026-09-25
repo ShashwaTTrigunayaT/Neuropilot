@@ -173,6 +173,44 @@ def test_standalone_launch_can_request_a_patient_context():
     assert started["mode"] == "standalone-launch"
 
 
+def test_a_per_launch_patient_overrides_the_environment_pin(monkeypatch):
+    """The reason every standalone launch used to open the SAME chart.
+
+    With nothing in the request, the launch falls back to the operator's
+    SMART_LAUNCH_PATIENT_ID -- one constant, so one patient, forever. A caller
+    that names a chart must win, otherwise "standalone launch" cannot be aimed.
+    """
+    monkeypatch.setattr(config, "SMART_LAUNCH_PATIENT_ID", "ehr-pinned")
+    transport = httpx.MockTransport(_well_known_server())
+    real_client = httpx.Client
+
+    def factory(*args, **kwargs):
+        kwargs.setdefault("transport", transport)
+        return real_client(*args, **kwargs)
+
+    monkeypatch.setattr(httpx, "Client", factory)
+
+    pinned = client.get("/fhir/smart/launch", params={"iss": ISS, "format": "json"}).json()
+    assert dict(httpx.URL(pinned["authorization_url"]).params)["patient"] == "ehr-pinned"
+
+    chosen = client.get("/fhir/smart/launch",
+                        params={"iss": ISS, "patient": "ehr-chooser", "format": "json"}).json()
+    assert dict(httpx.URL(chosen["authorization_url"]).params)["patient"] == "ehr-chooser"
+
+
+def test_an_ehr_launch_context_is_echoed_back_verbatim():
+    """`launch` is opaque by spec, so it must survive encoding untouched.
+
+    Servers that ignore a bare `patient` drive the context through this value
+    instead (launch.smarthealthit.org wants base64'd JSON launch options), so
+    re-encoding or unquoting it would break exactly those servers.
+    """
+    opaque = "eyJwYXRpZW50IjogImFiYyJ9== +/=?&ok"
+    started = smart.begin_launch(ISS, launch=opaque, client=_mock(_well_known_server()))
+    assert dict(httpx.URL(started["authorization_url"]).params)["launch"] == opaque
+    assert started["mode"] == "ehr-launch"
+
+
 def test_scopes_are_minimum_necessary():
     scopes = smart.scopes()
     assert "patient/Patient.read" in scopes
@@ -345,16 +383,60 @@ def test_smart_launch_without_a_server_explains_itself():
     assert "iss" in body["issue"][0]["diagnostics"]
 
 
-def test_smart_callback_failure_is_an_operation_outcome():
-    body = client.get("/fhir/smart/callback", params={"code": "x", "state": "bogus"}).json()
+def test_smart_launch_failure_hands_the_browser_back_with_the_reason(monkeypatch):
+    """A launch that cannot even start must not render a JSON document in a tab.
+
+    Leaving the OperationOutcome on screen meant no movement happened, the older
+    session stayed visible, and the result looked like the same patient
+    connecting yet again.
+    """
+    monkeypatch.setattr(config, "FHIR_BASE_URL", "")
+    response = client.get("/fhir/smart/launch", follow_redirects=False)
+    assert response.status_code == 302
+    location = response.headers["location"]
+    assert "smart=error" in location
+    assert "iss" in location
+
+
+def test_smart_callback_failure_is_an_operation_outcome_for_api_clients():
+    body = client.get("/fhir/smart/callback",
+                      params={"code": "x", "state": "bogus", "format": "json"}).json()
     assert body["resourceType"] == "OperationOutcome"
     assert "state" in body["issue"][0]["diagnostics"]
 
 
+def test_smart_callback_failure_hands_the_browser_back_with_the_reason():
+    """A failed launch must not look like a stale session on the dashboard.
+
+    The default (browser) path redirects to the SPA carrying the reason; the
+    previous behaviour returned an OperationOutcome document to the tab, so a
+    launch that never completed left the OLD session on screen and read as "the
+    same patient keeps connecting".
+    """
+    response = client.get("/fhir/smart/callback",
+                          params={"code": "x", "state": "bogus"},
+                          follow_redirects=False)
+    assert response.status_code == 302
+    location = response.headers["location"]
+    assert "smart=error" in location
+    assert "state" in location          # the reason travels with it
+    assert smart.context()["connected"] is False
+
+
 def test_smart_callback_reports_an_ehr_error_verbatim():
     body = client.get("/fhir/smart/callback",
-                      params={"error": "access_denied", "error_description": "clinician declined"}).json()
+                      params={"error": "access_denied", "error_description": "clinician declined",
+                              "format": "json"}).json()
     assert body["issue"][0]["diagnostics"].startswith("EHR returned access_denied")
+
+
+def test_status_reports_what_a_standalone_launch_would_use(monkeypatch):
+    """One env var pinning every launch is the reason a UI needs these fields."""
+    monkeypatch.setattr(config, "FHIR_BASE_URL", "https://ehr.test/fhir")
+    monkeypatch.setattr(config, "SMART_LAUNCH_PATIENT_ID", "ehr-77")
+    defaults = smart.status()["launch_defaults"]
+    assert defaults == {"iss": "https://ehr.test/fhir", "patient": "ehr-77"}
+    assert "access_token" not in smart.status()
 
 
 def test_smart_logout_endpoint():

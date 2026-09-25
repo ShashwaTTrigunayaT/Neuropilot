@@ -36,6 +36,7 @@ import hashlib
 import secrets
 import time
 from typing import Any, Optional
+from urllib.parse import quote, urlencode
 
 import httpx
 
@@ -91,6 +92,19 @@ def frontend_redirect_uri() -> str:
     """Where the browser lands after the backend has exchanged the code."""
     base = config.FRONTEND_BASE_URL or "http://localhost:5173"
     return f"{base}/?smart=connected"
+
+
+def frontend_error_uri(message: str) -> str:
+    """Where the browser lands when the launch FAILED, with the reason attached.
+
+    A browser handed an OperationOutcome document has no way to tell it is looking
+    at a failed launch, and the PREVIOUS session stays on the dashboard — which is
+    how a launch that never completed reads as "the same patient keeps
+    connecting". The reason therefore travels back to the dashboard as a query
+    parameter it can toast.
+    """
+    base = config.FRONTEND_BASE_URL or "http://localhost:5173"
+    return f"{base}/?smart=error&{urlencode({'reason': message})}"
 
 
 # --------------------------------------------------------------------------- #
@@ -227,7 +241,12 @@ def begin_launch(iss: str, launch: Optional[str] = None, patient: Optional[str] 
     if patient:
         params["patient"] = patient
 
-    query = "&".join(f"{k}={httpx.QueryParams({k: v})[k]}" for k, v in params.items())
+    # Properly percent-encoded, because a `launch` context is base64 in the wild
+    # (launch.smarthealthit.org's standalone options are exactly that) and base64
+    # contains '+', '/' and '='. Concatenating the values raw turned '+' into a
+    # space and split the parameter on '&', which corrupted the very servers that
+    # ignore a bare `patient`.
+    query = urlencode(params, quote_via=quote, safe="")
     return {
         "authorization_url": f"{meta['authorization_endpoint']}?{query}",
         "state": state,
@@ -413,5 +432,14 @@ def status() -> dict:
         "frontend_redirect_uri": frontend_redirect_uri(),
         "scopes": scopes(),
         "pending_launches": len(_PENDING),
+        # What a standalone launch uses when the caller passes NOTHING. Exposed so
+        # the dashboard can pre-fill the fields and, more importantly, so it can
+        # say out loud that every launch is currently pinned to one chart — a
+        # single `SMART_LAUNCH_PATIENT_ID` in the environment is exactly how "the
+        # same patient connects every time" happens. No secret material here.
+        "launch_defaults": {
+            "iss": config.FHIR_BASE_URL or None,
+            "patient": config.SMART_LAUNCH_PATIENT_ID or None,
+        },
         **context(),
     }

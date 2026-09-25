@@ -485,7 +485,14 @@ def fhir_smart_launch(
     try:
         started = smart.begin_launch(target, launch=launch, patient=launch_patient)
     except smart.SmartError as exc:
-        return _json_fhir(fhir._operation_outcome("error", "login", exc.message))
+        # Same contract as the callback: an API client gets the OperationOutcome,
+        # a browser is sent back to the dashboard carrying the reason. Returning
+        # the document to a tab looks like the app breaking and leaves the
+        # PREVIOUS session on screen, so a launch that never happened reads as
+        # one that reconnected the same patient.
+        if format == "json":
+            return _json_fhir(fhir._operation_outcome("error", "login", exc.message))
+        return RedirectResponse(smart.frontend_error_uri(exc.message), status_code=302)
     if format == "json":
         return started
     return RedirectResponse(started["authorization_url"], status_code=302)
@@ -504,14 +511,25 @@ def fhir_smart_callback(
 
     from . import smart
 
+    def failed(message: str):
+        """Report a failed launch where the person can actually read it.
+
+        `format=json` is the API-client path and keeps the OperationOutcome; a
+        browser is sent back to the dashboard with the reason, because an
+        OperationOutcome document in a tab reads as the app breaking — and it
+        leaves the previous session on screen, so a launch that never completed
+        looks like "the same patient keeps connecting".
+        """
+        if format == "json":
+            return _json_fhir(fhir._operation_outcome("error", "login", message))
+        return RedirectResponse(smart.frontend_error_uri(message), status_code=302)
+
     if error:
-        return _json_fhir(
-            fhir._operation_outcome("error", "login", f"EHR returned {error}: {error_description or ''}")
-        )
+        return failed(f"EHR returned {error}: {error_description or ''}")
     try:
         session = smart.handle_callback(code or "", state or "")
     except smart.SmartError as exc:
-        return _json_fhir(fhir._operation_outcome("error", "login", exc.message))
+        return failed(exc.message)
     if format == "json":
         return smart.context()
     from urllib.parse import urlencode
