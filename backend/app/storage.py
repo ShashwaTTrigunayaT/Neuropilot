@@ -349,6 +349,21 @@ def load_patients() -> tuple[dict[str, dict], str]:
                 return {r["id"]: r for r in usable}, f"{origin}+{db_name}"
         except Exception as exc:  # noqa: BLE001 -- DB down should not crash the API
             print(f"[storage] Database unavailable ({exc}); using in-memory store")
+            if not records:
+                # Otherwise this failure is indistinguishable from a temporary
+                # outage, and the boot ends on a healthy-looking "data source:
+                # adni-missing (0 patients loaded)". Without a cohort file the
+                # database is the ONLY source of patients -- so a missing driver,
+                # an unreachable host and an unseeded database are all a total
+                # outage here, not a degradation, and the operator needs to be
+                # told that rather than left to read the request log.
+                print(
+                    "[storage] WARNING: no cohort file is present either, so this "
+                    "deployment serves 0 patients. In a deployment the database is "
+                    "the store of record: check that the driver is installed "
+                    "(backend/requirements.txt), that the host is reachable from "
+                    "here, and that it has been seeded (scripts/seed_db.py)."
+                )
     else:
         print("[storage] DATABASE_URL not set -- using in-memory store (no persistence)")
     return {r["id"]: r for r in records}, source

@@ -11,6 +11,12 @@ import pytest
 
 from app import db, storage
 from app.config import MISSING_DATA_SOURCE, STUB_DATA_SOURCE
+from app.db import POSTGRES_DRIVER
+
+# A driver-less Postgres URL is pinned to this project's installed driver (see
+# test_pg_driver.py); these expectations are built from the constant rather than
+# hardcoding it so the pin and its assertions cannot drift apart.
+PG = f"postgresql+{POSTGRES_DRIVER}"
 
 
 def _record(pid: str, *, biomarker: bool = True, score: float = 0.5, stage: int = 2) -> dict:
@@ -68,9 +74,10 @@ def test_relative_sqlite_path_is_pinned_to_the_project_root(monkeypatch, tmp_pat
     monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
     assert db.get_database_url() == "sqlite:///:memory:"
 
-    # Postgres URLs are untouched (only the scheme alias is normalised).
+    # Postgres URLs keep the host/path they were written with -- only the scheme
+    # alias is normalised and the driver is pinned.
     monkeypatch.setenv("DATABASE_URL", "postgres://u:p@host:5432/db")
-    assert db.get_database_url() == "postgresql://u:p@host:5432/db"
+    assert db.get_database_url() == f"{PG}://u:p@host:5432/db"
 
 
 def test_pg_env_vars_build_a_connection_string(monkeypatch):
@@ -92,7 +99,7 @@ def test_pg_env_vars_build_a_connection_string(monkeypatch):
     url = db.get_database_url()
 
     assert url == (
-        "postgresql://postgres:p%40ss%3Aword%2Fwith%23chars"
+        f"{PG}://postgres:p%40ss%3Aword%2Fwith%23chars"
         "@turntable.proxy.rlwy.net:41234/railway"
     )
 
@@ -111,7 +118,7 @@ def test_pg_vars_override_a_dotenv_database_url(monkeypatch):
     monkeypatch.setenv("PGDATABASE", "railway")
 
     assert db.get_database_url() == (
-        "postgresql://postgres:pw@proxy.example.net:41234/railway"
+        f"{PG}://postgres:pw@proxy.example.net:41234/railway"
     )
 
 
@@ -124,7 +131,7 @@ def test_exported_database_url_still_wins_over_pg_vars(monkeypatch):
     monkeypatch.setenv("PGHOST", "proxy.example.net")
     monkeypatch.setenv("PGDATABASE", "railway")
 
-    assert db.get_database_url() == "postgresql://u:p@exported:5432/db"
+    assert db.get_database_url() == f"{PG}://u:p@exported:5432/db"
 
 
 def test_stub_cohort_cannot_replace_a_stored_real_cohort(sqlite_store):

@@ -757,7 +757,12 @@ across restarts. Verified on Railway: the single `Dockerfile` builds the React
 bundle (stage 1) and serves it from the FastAPI process alongside the API on
 `$PORT`; committed artifacts mean no re-training on boot.
 (If you add a Railway Postgres plugin, `DATABASE_URL=${{Postgres.DATABASE_PRIVATE_URL}}`
-and the store activates automatically.)
+and the store activates automatically. A driver-less `postgresql://` URL is pinned
+to the psycopg2 driver declared in `backend/requirements.txt`
+(`db._pin_postgres_driver`) — SQLAlchemy 2.1 changed the default driver to
+psycopg 3, which this project does not install, and the unpinned `>=2.0`
+requirement let a rebuild boot against it: `Database unavailable (No module named
+'psycopg')`, `0 patients loaded`.)
 
 ### Where the cohort lives in a deployment
 

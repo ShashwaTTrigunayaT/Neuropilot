@@ -16,8 +16,18 @@ scikit-learn>=1.3
 xgboost>=2.0
 shap>=0.44
 
-# Optional PostgreSQL store (used when DATABASE_URL is set)
-sqlalchemy>=2.0
+# Optional PostgreSQL store (used when DATABASE_URL is set).
+#
+# CAPPED BELOW 2.1 ON PURPOSE. SQLAlchemy 2.1.0 (released 2026-09-24) changed the
+# default DBAPI for a driver-less `postgresql://` URL from psycopg2 to psycopg
+# (version 3). An uncapped `>=2.0` therefore rebuilt the image onto a library
+# that asked for a package this file does not install, and the deployment booted
+# with `Database unavailable (No module named 'psycopg')` -- 0 patients served
+# from a database that was seeded and healthy.
+# db._pin_postgres_driver() now writes the driver into the URL so the two cannot
+# drift apart again; the cap keeps the rest of 2.1's untested behavioural changes
+# (Session autoflush, Row semantics) out until they are migrated deliberately.
+sqlalchemy>=2.0,<2.1
 psycopg2-binary>=2.9
 
 # NOTE: keep every import in backend/app/* covered by this file. A module-level

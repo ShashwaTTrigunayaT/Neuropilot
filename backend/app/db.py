@@ -33,6 +33,12 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
+# The DBAPI SQLAlchemy is told to load for a driver-less postgres URL. Declared
+# once because two things have to agree about it: get_database_url() (below) and
+# backend/requirements.txt -- which installs psycopg2-binary. See
+# _pin_postgres_driver for the deploy that made this an explicit constant.
+POSTGRES_DRIVER = "psycopg2"
+
 Base = declarative_base()
 
 
@@ -133,6 +139,37 @@ def _resolve_sqlite_url(url: str) -> str:
     return prefix + (PROJECT_ROOT / path).resolve().as_posix()
 
 
+def _pin_postgres_driver(url: str) -> str:
+    """Give a driver-less Postgres URL an EXPLICIT driver.
+
+    `postgresql://` does not mean psycopg2 forever. SQLAlchemy 2.1.0 (released
+    2026-09-24) changed the default DBAPI for the bare `postgresql` dialect from
+    psycopg2 to psycopg (version 3), and this file asks for `sqlalchemy>=2.0` --
+    so the next image build installed 2.1, looked for a package this project
+    does not install, and the deploy log recorded exactly what that costs:
+
+        [storage] Database unavailable (No module named 'psycopg'); using in-memory store
+        [api] data source: adni-missing (0 patients loaded)
+
+    Nothing was wrong with the database or the connection string. The code asked
+    a freshly-installed library for a driver that was never installed next to it
+    (requirements.txt declares psycopg2-binary), and the default that changed was
+    invisible from here because the local dev environment still holds 2.0.
+
+    So the driver is pinned in the URL rather than inherited from a default: the
+    dialect the app asks for is now the dialect the project ships. An operator who
+    wants another driver writes it into the URL (`postgresql+psycopg://...`) and
+    this leaves it alone -- which also means a future default change can never
+    silently pick a package that is not in requirements.txt.
+    """
+    if not url or not url.startswith(("postgresql://", "postgres://")):
+        return url
+    scheme, sep, rest = url.partition("://")
+    if "+" in scheme:  # operator (or docker-compose) named a driver explicitly
+        return url
+    return f"{scheme}+{POSTGRES_DRIVER}{sep}{rest}"
+
+
 def get_database_url() -> Optional[str]:
     # `PG*` variables and a `.env` DATABASE_URL can disagree, and the operator's
     # explicit intent must win. A local `.env` typically points at sqlite for
@@ -168,6 +205,7 @@ def get_database_url() -> Optional[str]:
 
     if url and url.startswith("postgres://"):
         url = url.replace("postgres://", "postgresql://", 1)
+    url = _pin_postgres_driver(url) if url else url
     return _resolve_sqlite_url(url) if url else url
 
 
