@@ -953,20 +953,35 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
                     0{s.n}
                   </p>
                   <p className="text-[12.5px] font-bold text-ink dark:text-darkText">{s.name}</p>
+                  {/*
+                   * The control sits on the title line.
+                   *
+                   * A bare glyph alone at the foot of the cell read as
+                   * unfinished and left a band of empty space under every
+                   * stage; up here it belongs to the stage it switches.
+                   */}
+                  <span className="ml-auto flex shrink-0 items-center">
+                    {s.always ? (
+                      <CheckCircle2 className="h-3.5 w-3.5 text-accent" aria-hidden="true" />
+                    ) : (
+                      <StageToggle on={stages[s.key]} onClick={() => toggleStage(s.key)} />
+                    )}
+                  </span>
                 </div>
 
+                {/*
+                 * The readings are the content of the cell, so they are set like
+                 * data — full size, full contrast — rather than like a caption
+                 * under the stage name. This is the part a reader came for.
+                 */}
                 <p
                   style={MONO}
-                  className="mt-2 text-[10.5px] leading-relaxed tabular-nums text-muted dark:text-darkMuted"
+                  className={`mt-2.5 text-[12.5px] leading-relaxed tabular-nums ${
+                    on ? 'text-ink dark:text-darkText' : 'text-muted dark:text-darkMuted'
+                  }`}
                 >
                   {on ? s.read(features) : 'scored as a missing value'}
                 </p>
-
-                <div className="mt-auto pt-3">
-                  {!s.always && (
-                    <StageToggle on={stages[s.key]} onClick={() => toggleStage(s.key)} />
-                  )}
-                </div>
               </div>
             );
           })}

@@ -30,7 +30,6 @@ import {
   Pill,
   RibbonStat,
   Row,
-  STAGE_STRIP_GRID,
   FoldHeader,
   shortId,
 } from './widgets.jsx';
@@ -63,7 +62,22 @@ const initials = (name) => {
  * whether an outbound hospital server is reachable, whether a SMART session is
  * bound, what an order looks like as a real ServiceRequest, and what the
  * inbound ingestion path actually does with a bundle — including refusing one.
+ *
+ * The four capability phases are desktop-only: they are reference material —
+ * what each phase IS, which endpoints exist — and on a phone they were four
+ * screens of reading before anything could be done.
  */
+
+const PHASE_KEYS = ['1_export', '2_inbound', '3_bidirectional', '4_smart'];
+const PHASE_TITLES = {
+  '1_export': 'Export',
+  '2_inbound': 'Inbound',
+  '3_bidirectional': 'Bidirectional',
+  '4_smart': 'SMART launch',
+};
+
+// One icon per phase, so the rail reads the same way the status ribbon does.
+const PHASE_ICONS = [Upload, DownloadCloud, Link2, Plug];
 
 const SAMPLE_BUNDLE = (patientId) => ({
   resourceType: 'Bundle',
@@ -449,40 +463,91 @@ export default function Interoperability({
         </div>
       </div>
 
-      {/* ── Status ribbon: the stage-strip frame, one cell per fact ── */}
-      <div className={STAGE_STRIP_GRID} data-np-keep="">
-        <RibbonStat
-          variant="stage"
-          icon={Server}
-          label="Hospital server"
-          value={outbound.reachable ? outbound.software || 'Reachable' : 'Not connected'}
-          tone={outbound.reachable ? 'ok' : 'warn'}
-          hint={outbound.reachable ? `FHIR ${outbound.fhir_version || 'R4'}` : 'No hospital server connected'}
-        />
-        <RibbonStat
-          variant="stage"
-          icon={Plug}
-          label="SMART session"
-          value={smart?.connected ? 'Bound' : 'No session'}
-          tone={smart?.connected ? 'ok' : 'muted'}
-          hint={smart?.patient || 'launch from the EHR'}
-        />
-        <RibbonStat
-          variant="stage"
-          icon={Upload}
-          label="Outbound push"
-          value={overview.push_orders_on_order ? 'Enabled' : 'Disabled'}
-          tone={overview.push_orders_on_order ? 'accent' : 'muted'}
-          hint="on order placement"
-        />
-        <RibbonStat
-          variant="stage"
-          icon={Activity}
-          label="Exchange surface"
-          value={`${(surface.patients ?? 0).toLocaleString()} patients`}
-          tone="accent"
-          hint={`${(surface.observations ?? 0).toLocaleString()} observations`}
-        />
+      {/* ── Status ribbon: one panel instead of four competing cards ── */}
+      <div className={`${CARD_RIBBON} divide-y divide-line dark:divide-darkBorder sm:grid sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4`}>
+        <div className="sm:border-r sm:border-line dark:sm:border-darkBorder">
+          <RibbonStat
+            icon={Server}
+            label="Hospital server"
+            value={outbound.reachable ? outbound.software || 'Reachable' : 'Not connected'}
+            tone={outbound.reachable ? 'ok' : 'warn'}
+            hint={outbound.reachable ? `FHIR ${outbound.fhir_version || 'R4'}` : 'No hospital server connected'}
+          />
+        </div>
+        <div className="lg:border-r lg:border-line dark:lg:border-darkBorder">
+          <RibbonStat
+            icon={Plug}
+            label="SMART session"
+            value={smart?.connected ? 'Bound' : 'No session'}
+            tone={smart?.connected ? 'ok' : 'muted'}
+            hint={smart?.patient || 'launch from the EHR'}
+          />
+        </div>
+        <div className="sm:border-r sm:border-line dark:sm:border-darkBorder">
+          <RibbonStat
+            icon={Upload}
+            label="Outbound push"
+            value={overview.push_orders_on_order ? 'Enabled' : 'Disabled'}
+            tone={overview.push_orders_on_order ? 'accent' : 'muted'}
+            hint="on order placement"
+          />
+        </div>
+        <div>
+          <RibbonStat
+            icon={Activity}
+            label="Exchange surface"
+            value={`${(surface.patients ?? 0).toLocaleString()} patients`}
+            tone="accent"
+            hint={`${(surface.observations ?? 0).toLocaleString()} observations`}
+          />
+        </div>
+      </div>
+
+      {/*
+       * FHIR R4 capability phases — desktop only.
+       *
+       * The four phases, each with what it is and whether it is live. Dropped on
+       * phones because the same facts already reach a phone through the status
+       * ribbon above, and this board is four screens of reference material that
+       * would sit between the reader and the panels they came to use.
+       */}
+      <div className={`${CARD_RIBBON} hidden overflow-hidden md:block`}>
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-line bg-tint/40 px-5 py-2.5 dark:border-darkBorder dark:bg-darkBorderSubtle/40">
+          <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-muted dark:text-darkMuted">
+            <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-accent" />
+            FHIR R4 capability phases
+          </p>
+          <p style={MONO} className="text-[10.5px] font-bold text-ink dark:text-darkText">
+            {PHASE_KEYS.filter((key) => overview.phases?.[key]?.implemented).length}/{PHASE_KEYS.length} live
+          </p>
+        </div>
+
+        <div className="divide-y divide-line dark:divide-darkBorder sm:grid sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4">
+          {PHASE_KEYS.map((key, i) => {
+            const phase = overview.phases?.[key] || {};
+            const PhaseIcon = PHASE_ICONS[i];
+            return (
+              <div
+                key={key}
+                className={
+                  (i % 2 === 0 ? 'sm:border-r sm:border-line dark:sm:border-darkBorder ' : '') +
+                  (i < PHASE_KEYS.length - 1 ? 'lg:border-r lg:border-line dark:lg:border-darkBorder' : '')
+                }
+              >
+                <RibbonStat
+                  icon={PhaseIcon}
+                  label={`0${i + 1} · ${PHASE_TITLES[key]}`}
+                  value={phase.implemented ? 'Live' : 'Planned'}
+                  tone={phase.implemented ? 'ok' : 'muted'}
+                  hint={phase.detail}
+                  // A live phase pulses where a planned one shows its icon: the
+                  // glyph itself carries the state, so the cell is not static.
+                  dot={phase.implemented}
+                />
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* ── Connection detail — one surface split by a hairline ────── */}

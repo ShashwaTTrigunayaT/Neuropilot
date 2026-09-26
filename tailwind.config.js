@@ -6,24 +6,27 @@ export default {
     extend: {
       colors: {
         // Light palette: Warm clinical precision
-        ink: '#13151A',
-        // The page surfaces are variables too, so a theme can re-tint the paper
-        // and the console black without touching a component.
+        //
+        // EVERY neutral is a variable. That is what lets the phone theme be a
+        // whole design system rather than a handful of accent tweaks: one block
+        // of values in index.css re-colours paper, cards, borders and text
+        // across every component, none of which names a colour itself.
+        ink: 'rgb(var(--ink-rgb) / <alpha-value>)',
         paper: 'rgb(var(--paper-rgb) / <alpha-value>)',
-        muted: '#6E7175',
-        dust: '#C7C4BC',
-        line: '#E6E2DA',
-        surface: '#FFFFFF',
-        tint: '#F4F1EC',
+        muted: 'rgb(var(--muted-rgb) / <alpha-value>)',
+        dust: 'rgb(var(--dust-rgb) / <alpha-value>)',
+        line: 'rgb(var(--line-rgb) / <alpha-value>)',
+        surface: 'rgb(var(--surface-rgb) / <alpha-value>)',
+        tint: 'rgb(var(--tint-rgb) / <alpha-value>)',
 
         // Dark palette: Neuro Console
         darkBg: 'rgb(var(--dark-bg-rgb) / <alpha-value>)',
-        darkCard: '#11151C',
-        darkCardHover: '#161B24',
-        darkBorder: '#1F2633',
-        darkBorderSubtle: '#181E29',
-        darkMuted: '#818B99',
-        darkText: '#E6EDF5',
+        darkCard: 'rgb(var(--dark-card-rgb) / <alpha-value>)',
+        darkCardHover: 'rgb(var(--dark-card-hover-rgb) / <alpha-value>)',
+        darkBorder: 'rgb(var(--dark-border-rgb) / <alpha-value>)',
+        darkBorderSubtle: 'rgb(var(--dark-border-subtle-rgb) / <alpha-value>)',
+        darkMuted: 'rgb(var(--dark-muted-rgb) / <alpha-value>)',
+        darkText: 'rgb(var(--dark-text-rgb) / <alpha-value>)',
 
         // Clinical Accent
         // The accent is a CSS variable so it can differ per theme: teal on the
@@ -41,9 +44,10 @@ export default {
         tierLow: '#1EB980',
         tierLowSoft: '#1EB9801C',
       },
+      // Both faces are variables, so a type theme re-fonts the whole app.
       fontFamily: {
-        sans: ['"Inter"', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
-        mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+        sans: ['var(--font-sans)'],
+        mono: ['var(--font-mono)'],
       },
       boxShadow: {
         soft: '0 1px 2px rgba(19,21,26,0.03), 0 10px 24px -22px rgba(19,21,26,0.12)',

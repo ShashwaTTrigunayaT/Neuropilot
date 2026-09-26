@@ -87,7 +87,9 @@ export const STAGE_LABELS = ['Cognitive assessment', 'Blood biomarkers', 'MRI vo
 export const STAGE_STRIP_GRID =
   'grid gap-px overflow-hidden rounded-2xl border border-line/70 bg-line/60 dark:border-darkBorder/70 dark:bg-darkBorder/60 sm:grid-cols-2 lg:grid-cols-4';
 
-export const MONO = { fontFamily: "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" };
+// Every figure, id and value in the app is set in this. It resolves to a
+// variable rather than naming a family, so a type theme re-fonts the data too.
+export const MONO = { fontFamily: 'var(--font-mono)' };
 
 export const controlBase =
   'h-9 rounded-xl border border-line dark:border-darkBorder bg-white dark:bg-darkCard px-3.5 text-xs text-ink dark:text-darkText shadow-soft outline-none transition placeholder:text-muted dark:placeholder:text-darkMuted focus:border-accent dark:focus:border-accent focus:ring-1 focus:ring-accent';
@@ -150,7 +152,7 @@ export function Btn({ tone = 'ghost', icon: Icon, children, className = '', ...r
  * the smallest thing in the row. The bar is optional because only counts that
  * are a share of a whole have something honest to show.
  */
-export function RibbonStat({ icon: Icon, label, value, tone = 'muted', hint, dot, bar, variant = 'ribbon' }) {
+export function RibbonStat({ icon: Icon, label, value, tone = 'muted', hint, dot, bar }) {
   // The tone's TEXT colour applies at every width; its chip FILL only above
   // `md`. On a phone a filled, rounded icon badge is the one thing here that
   // still reads as a little card, so the phone drops it and keeps the bare
@@ -176,50 +178,6 @@ export function RibbonStat({ icon: Icon, label, value, tone = 'muted', hint, dot
     muted: '#6E7175',
     accent: 'var(--accent)',
   };
-
-  /*
-   * The Risk Simulator's stage-strip cell, used as a stat cell.
-   *
-   * That strip is the app's clearest layout: a tone dot and the name on the
-   * first line, the reading under it, the state pinned to the bottom, and the
-   * frame drawn once by the shared grid's hairlines. The Interoperability and
-   * Autonomous Neuro ribbons reuse it so they read like the pathway they
-   * summarise, instead of like a row of little tiles of their own invention.
-   */
-  if (variant === 'stage') {
-    return (
-      <div className="flex h-full flex-col bg-white/85 p-4 text-left dark:bg-darkCard/85">
-        <div className="flex items-center gap-2">
-          <span
-            aria-hidden="true"
-            className="h-2 w-2 shrink-0 rounded-full"
-            style={{ background: accents[tone], opacity: dot ? 1 : 0.8 }}
-          />
-          <p className="text-[12.5px] font-bold tracking-[-0.01em] text-ink dark:text-darkText">{label}</p>
-        </div>
-
-        <p
-          style={MONO}
-          className="mt-2 text-[16px] font-bold leading-none tabular-nums text-ink dark:text-darkText"
-        >
-          {value}
-        </p>
-
-        {bar != null && (
-          <div className="mt-2.5 h-1 w-full overflow-hidden rounded-full bg-line/60 dark:bg-darkBorder">
-            <div
-              className="h-full rounded-full transition-all duration-700"
-              style={{ width: `${Math.max(2, Math.min(100, bar))}%`, background: accents[tone] }}
-            />
-          </div>
-        )}
-
-        {hint && (
-          <p className="mt-auto pt-3 text-[10px] leading-snug text-muted dark:text-darkMuted">{hint}</p>
-        )}
-      </div>
-    );
-  }
 
   return (
     /*

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700;800;900&family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -16,10 +16,37 @@
   --accent-rgb: 13 130 130;
   --accent-hover-rgb: 11 110 110;
   --accent: rgb(var(--accent-rgb));
+  /*
+   * Type, as variables.
+   *
+   * The UI face is one variable and the mono face is another, so a type theme
+   * re-fonts the whole app — including `MONO`, which resolves to `--font-mono`
+   * rather than naming a family — without touching a component.
+   */
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   /* The page surfaces, as variables, so a theme can re-tint the paper and the
      console black without any component knowing. */
   --paper-rgb: 250 248 244;
   --dark-bg-rgb: 9 11 14;
+  /*
+   * The neutral scale, as variables. Defaults are the original desktop values;
+   * the phone theme redefines this whole block, which is how mobile gets an
+   * entirely different design system without a single component changing.
+   */
+  --ink-rgb: 19 21 26;
+  --muted-rgb: 110 113 117;
+  --dust-rgb: 199 196 188;
+  --line-rgb: 230 226 218;
+  --surface-rgb: 255 255 255;
+  --tint-rgb: 244 241 236;
+  --dark-card-rgb: 17 21 28;
+  --dark-card-hover-rgb: 22 27 36;
+  --dark-border-rgb: 31 38 51;
+  --dark-border-subtle-rgb: 24 30 41;
+  --dark-muted-rgb: 129 139 153;
+  --dark-text-rgb: 230 237 245;
   /* How much atmosphere a theme carries: the strength of the page's radial
      wash. A minimal theme sets it near 0 for a flat sheet; a premium one
      pushes it up so the page has some depth. */
@@ -66,8 +93,7 @@ html {
 body {
   background-color: rgb(var(--paper-rgb));
   color: #13151A;
-  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
-    'Helvetica Neue', Arial, sans-serif;
+  font-family: var(--font-sans);
   letter-spacing: -0.014em;
   background-image: radial-gradient(920px 480px at 82% -8%, rgb(var(--accent-rgb) / calc(0.05 * var(--np-atmosphere))), transparent 60%),
                     radial-gradient(700px 400px at 18% 92%, rgb(var(--accent-rgb) / calc(0.04 * var(--np-atmosphere))), transparent 65%);
@@ -309,39 +335,64 @@ body {
  * colours, the risk bands, the accent rules. Atmosphere is dropped.
  */
 @media (max-width: 767px) {
-  /* amber replaces the teal: green reads muddy against true black, and amber is
-     both higher-contrast and clearly distinct from the risk-tier colours */
-  :root {
-    --accent-rgb: 231 235 240;
-    --accent-hover-rgb: 198 204 212;
-    /* the phone theme is black and grey only: the accent is a neutral, and a
-       filled accent surface stays DARK so white text reads on it */
-    --accent-surface-top: #1e222a;
-    --accent-surface-mid: #15181e;
-    --accent-surface-bottom: #0d0f13;
-    /* pure white paper and a true-black console on a phone */
-    --paper-rgb: 255 255 255;
-    --dark-bg-rgb: 7 9 12;
-    /* the glow/wash family is derived from --accent-rgb (see :root), so it
-       follows the phone's neutral accent without being restated here */
+  /*
+   * THE PHONE DESIGN SYSTEM.
+   *
+   * One block, applied at BOTH modes, because a phone is a single design rather
+   * than a light and a dark variant of one: a deep navy page, violet containers,
+   * a neon pink-red for anything pressable, and soft grey-blue for everything
+   * secondary. Every value below is already a token the components read, so the
+   * rest of the app needed no changes at all.
+   */
+  :root,
+  html.dark {
+    /* — page and containers — */
+    --paper-rgb: 18 20 45;
+    --dark-bg-rgb: 18 20 45;
+    --dark-card-rgb: 74 81 163;
+    --dark-card-hover-rgb: 88 96 184;
+    --surface-rgb: 255 255 255;
+
+    /* — lines, in the indigo family rather than grey — */
+    --line-rgb: 46 51 117;
+    --tint-rgb: 46 51 117;
+    --dark-border-rgb: 46 51 117;
+    --dark-border-subtle-rgb: 46 51 117;
+
+    /* — text — */
+    --ink-rgb: 30 34 69;
+    --dark-text-rgb: 255 255 255;
+    --muted-rgb: 142 149 183;
+    --dust-rgb: 142 149 183;
+    --dark-muted-rgb: 142 149 183;
+
+    /* — the accent: the one thing on the page allowed to shout — */
+    --accent-rgb: 255 46 99;
+    --accent-hover-rgb: 224 38 84;
+    --accent-surface-top: #ff4d78;
+    --accent-surface-mid: #ff2e63;
+    --accent-surface-bottom: #e02654;
+
+    /* — rounded, welcoming type — */
+    --font-sans: 'Poppins', ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+    --np-atmosphere: 0.8;
   }
 
   /*
-   * Black theme: the accent draws EDGES, never fills.
+   * A filled accent is a filled accent.
    *
-   * A light-filled control is the one thing a black theme must not have, so
-   * whatever the accent would have filled instead takes the page's own dark
-   * surface and carries the accent as its text — and, where the element has a
-   * border to begin with, draws that border in the accent. A primary action
-   * stays legible and still reads as the primary action, without a light block
-   * sitting on a black page.
+   * The pink-red is dark enough to carry white text on its own, so whatever the
+   * accent fills is simply that colour, at whatever width. (The old black theme
+   * had to hollow these out because its accent was a near-white neutral; this
+   * one does not.)
    */
   .bg-accent,
   .from-accent,
   .to-accent {
-    background-color: #14181e !important;
+    background-color: rgb(var(--accent-rgb)) !important;
     background-image: none !important;
-    color: rgb(var(--accent-rgb)) !important;
+    color: #ffffff !important;
   }
   /* specificity over the generic button rule, which clears borders */
   button.bg-accent:not([data-np-keep]),
@@ -394,32 +445,36 @@ body {
     box-shadow: none;
   }
 
-  /* depth collapses to a single hairline */
+  /*
+   * Depth, and the shapes things come in.
+   *
+   * Cards KEEP their surface on a phone now — the violet container is the design
+   * rather than something to flatten away — and carry a soft, low shadow instead
+   * of the hairline the old black theme used. Corners are generous (cards ~20px,
+   * fields ~14px, buttons pill), which together with the rounded face is most of
+   * what makes this read as soft rather than clinical.
+   */
   .shadow-lift,
   .shadow-float,
-  .shadow-soft {
-    box-shadow: 0 1px 2px rgba(19, 21, 26, 0.04);
-  }
+  .shadow-soft,
   .dark .shadow-lift,
   .dark .shadow-float,
   .dark .shadow-soft {
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
   }
 
-  /*
-   * Cards stop being cards.
-   *
-   * On a phone a page of bordered, rounded, shadowed boxes reads as a dashboard
-   * of widgets; the same content on one surface reads as a document. Every
-   * non-interactive bordered surface therefore loses its chrome below `md` —
-   * buttons, links and form fields keep theirs, and anything marked
-   * `data-np-keep` (the toast) is exempt so it stays legible while it floats.
-   */
-  .rounded-2xl.border:not(button):not(a):not(input):not(select):not(textarea):not([data-np-keep]),
-  .rounded-xl.border:not(button):not(a):not(input):not(select):not(textarea):not([data-np-keep]) {
-    border-color: transparent;
-    background-color: transparent;
-    box-shadow: none;
+  .rounded-2xl {
+    border-radius: 20px;
+  }
+  input,
+  select,
+  textarea {
+    border-radius: 14px;
+  }
+  button.bg-accent,
+  button.from-accent,
+  a.bg-accent {
+    border-radius: 999px !important;
   }
 
   /*
@@ -685,6 +740,18 @@ html[data-np-theme='teal'] {
   --np-atmosphere: 1;
 }
 
+/* Teal on PURE white paper, as against `teal`'s warm off-white. */
+html[data-np-theme='teal-white'] {
+  --accent-rgb: 13 130 130;
+  --accent-hover-rgb: 11 110 110;
+  --accent-surface-top: #0f8f8f;
+  --accent-surface-mid: #0d8282;
+  --accent-surface-bottom: #0a6a6a;
+  --paper-rgb: 255 255 255;
+  --dark-bg-rgb: 9 11 14;
+  --np-atmosphere: 0.6;
+}
+
 html[data-np-theme='cobalt'] {
   --accent-rgb: 37 99 235;
   --accent-hover-rgb: 29 78 216;
@@ -854,4 +921,38 @@ html[data-np-theme='amber'] {
   --paper-rgb: 253 250 245;
   --dark-bg-rgb: 12 9 5;
   --np-atmosphere: 1.4;
+}
+
+/* ================================================================== */
+/*  TEMPORARY — type previews                                         */
+/*                                                                    */
+/*  The UI face and the mono face are single variables, so re-fonting  */
+/*  the app is one attribute. Poppins is the face named by the design  */
+/*  pack in `/fonts`; the rest are candidates beside it. Independent   */
+/*  of the colour palettes above, and applies on a phone the same way. */
+/* ================================================================== */
+
+html[data-np-font='poppins'] {
+  --font-sans: 'Poppins', ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+html[data-np-font='manrope'] {
+  --font-sans: 'Manrope', ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+html[data-np-font='grotesk'] {
+  --font-sans: 'Space Grotesk', ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+html[data-np-font='plex'] {
+  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+/* Monospace, used for every figure, id and value in the app. */
+html[data-np-font-mono='plex'] {
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+html[data-np-font-mono='space'] {
+  --font-mono: 'Space Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 }

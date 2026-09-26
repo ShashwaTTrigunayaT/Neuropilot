@@ -4,15 +4,20 @@ import { Palette } from 'lucide-react';
 /**
  * TEMPORARY — a theme preview control.
  *
- * A library of candidate palettes, switchable here on a phone or a desktop so
- * the same choice can be judged at both widths. It does one thing: it sets
- * `data-np-theme` on <html>, which the theme blocks at the end of index.css
- * read. Everything else — accent, halos, washes, rings, paper, console black
- * and atmosphere — follows from that.
+ * Three independent dimensions, switchable here on a phone or a desktop so each
+ * can be judged at both widths:
  *
- * The choice is kept in localStorage so a reload does not lose it while the
- * palettes are being compared. Delete this file, the `data-np-theme` blocks in
- * index.css and the mount in App.jsx once a winner is picked.
+ *   • colour  — `data-np-theme`, the palette (accent + paper + console + atmosphere)
+ *   • type    — `data-np-font`, the UI face
+ *   • mono    — `data-np-font-mono`, the face every figure and id is set in
+ *
+ * Each is one attribute on <html>, read by the preview blocks at the end of
+ * index.css. Choices are kept in localStorage so a reload does not lose them
+ * while they are being compared. Delete this file, those blocks and the mount in
+ * App.jsx once the winners are picked.
+ *
+ * Poppins is the face named by the design pack in `/fonts`; the rest are
+ * candidates beside it.
  */
 
 const GROUPS = [
@@ -21,6 +26,7 @@ const GROUPS = [
     note: 'The app’s own register',
     themes: [
       { key: 'teal', label: 'Teal', swatch: '#0D8282' },
+      { key: 'teal-white', label: 'Teal · white', swatch: '#E6F2F2' },
       { key: 'cobalt', label: 'Cobalt', swatch: '#2563EB' },
       { key: 'graphite', label: 'Graphite', swatch: '#E7EBF0' },
     ],
@@ -58,32 +64,105 @@ const GROUPS = [
   },
 ];
 
-const STORE = 'npThemePreview';
+// Each option is shown in its OWN face, so the list is the specimen.
+const TYPES = [
+  { key: '', label: 'Inter', note: 'current', stack: "'Inter', ui-sans-serif, system-ui, sans-serif" },
+  { key: 'poppins', label: 'Poppins', note: 'design pack', stack: "'Poppins', ui-sans-serif, system-ui, sans-serif" },
+  { key: 'manrope', label: 'Manrope', stack: "'Manrope', ui-sans-serif, system-ui, sans-serif" },
+  { key: 'grotesk', label: 'Space Grotesk', stack: "'Space Grotesk', ui-sans-serif, system-ui, sans-serif" },
+  { key: 'plex', label: 'IBM Plex Sans', stack: "'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif" },
+];
 
-const read = () => {
+const MONOS = [
+  { key: '', label: 'JetBrains Mono', stack: "'JetBrains Mono', ui-monospace, monospace" },
+  { key: 'plex', label: 'IBM Plex Mono', stack: "'IBM Plex Mono', ui-monospace, monospace" },
+  { key: 'space', label: 'Space Mono', stack: "'Space Mono', ui-monospace, monospace" },
+];
+
+const STORE = { theme: 'npThemePreview', font: 'npFontPreview', mono: 'npMonoPreview' };
+
+/** Read a stored choice, treating "never set" as the first option. */
+const read = (key, fallback) => {
   try {
-    const saved = localStorage.getItem(STORE);
-    return saved == null ? 'teal' : saved;
+    const saved = localStorage.getItem(STORE[key]);
+    return saved == null ? fallback : saved;
   } catch {
     /* storage can be unavailable; the preview still works for this session */
-    return 'teal';
+    return fallback;
   }
 };
 
-export default function ThemePreview() {
-  const [open, setOpen] = useState(false);
-  const [theme, setTheme] = useState(read);
-
+/** Keep one attribute on <html> in step with one piece of state. */
+function useAttribute(attr, value, storeKey) {
   useEffect(() => {
     const root = document.documentElement;
-    if (theme) root.setAttribute('data-np-theme', theme);
-    else root.removeAttribute('data-np-theme');
+    if (value) root.setAttribute(attr, value);
+    else root.removeAttribute(attr);
     try {
-      localStorage.setItem(STORE, theme);
+      localStorage.setItem(STORE[storeKey], value);
     } catch {
       /* see above */
     }
-  }, [theme]);
+  }, [attr, value, storeKey]);
+}
+
+export default function ThemePreview() {
+  const [open, setOpen] = useState(false);
+  // Default to the app's own design (including the phone design system) rather
+  // than to a palette, so opening the panel does not silently re-skin anything.
+  const [theme, setTheme] = useState(() => read('theme', ''));
+  const [font, setFont] = useState(() => read('font', ''));
+  const [mono, setMono] = useState(() => read('mono', ''));
+
+  useAttribute('data-np-font', font, 'font');
+  useAttribute('data-np-font-mono', mono, 'mono');
+  useAttribute('data-np-theme', theme, 'theme');
+
+  /** One row of the list: a swatch (or not), a label, and a tick. */
+  const row = (key, label, active, onPick, { swatch, stack, note } = {}) => (
+    <button
+      key={key || 'default'}
+      type="button"
+      onClick={onPick}
+      aria-pressed={active}
+      className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[11.5px] font-semibold transition ${
+        active
+          ? 'bg-accent/10 text-accent'
+          : 'text-ink hover:bg-tint dark:text-darkText dark:hover:bg-darkBorderSubtle'
+      }`}
+    >
+      {swatch ? (
+        <span
+          aria-hidden="true"
+          className="h-3.5 w-3.5 shrink-0 rounded-full border border-black/10 dark:border-white/20"
+          style={{ background: swatch }}
+        />
+      ) : (
+        <span
+          aria-hidden="true"
+          className="w-3.5 shrink-0 text-center text-[10px] font-bold opacity-70"
+        >
+          Aa
+        </span>
+      )}
+      <span className="min-w-0 truncate" style={stack ? { fontFamily: stack } : undefined}>
+        {label}
+      </span>
+      {note && <span className="shrink-0 text-[8.5px] uppercase tracking-[0.1em] opacity-60">{note}</span>}
+      {active && !note && (
+        <span className="ml-auto shrink-0 text-[9px] font-bold uppercase tracking-[0.1em]">on</span>
+      )}
+    </button>
+  );
+
+  const section = (name, note) => (
+    <p data-np-keep="" className="mt-1 flex items-baseline justify-between gap-2 px-2 pb-0.5 pt-1.5">
+      <span className="text-[9.5px] font-bold uppercase tracking-[0.12em] text-ink dark:text-darkText">
+        {name}
+      </span>
+      <span className="truncate text-[9px] text-muted dark:text-darkMuted">{note}</span>
+    </p>
+  );
 
   return (
     <div className="no-print fixed bottom-3 left-3 z-[70]">
@@ -96,7 +175,7 @@ export default function ThemePreview() {
          */
         <div
           data-np-keep=""
-          className="mb-2 max-h-[70vh] w-52 overflow-y-auto overscroll-contain rounded-xl border border-line bg-white/95 p-1.5 shadow-float backdrop-blur dark:border-darkBorder dark:bg-darkCard/95"
+          className="mb-2 max-h-[72vh] w-56 overflow-y-auto overscroll-contain rounded-xl border border-line bg-white/95 p-1.5 shadow-float backdrop-blur dark:border-darkBorder dark:bg-darkCard/95"
         >
           <p
             data-np-keep=""
@@ -107,57 +186,24 @@ export default function ThemePreview() {
 
           {GROUPS.map((group) => (
             <div key={group.name}>
-              <p
-                data-np-keep=""
-                className="mt-1 flex items-baseline justify-between gap-2 px-2 pb-0.5 pt-1.5"
-              >
-                <span className="text-[9.5px] font-bold uppercase tracking-[0.12em] text-ink dark:text-darkText">
-                  {group.name}
-                </span>
-                <span className="truncate text-[9px] text-muted dark:text-darkMuted">{group.note}</span>
-              </p>
-
-              {group.themes.map((t) => (
-                <button
-                  key={t.key}
-                  type="button"
-                  onClick={() => setTheme(t.key)}
-                  aria-pressed={theme === t.key}
-                  className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[11.5px] font-semibold transition ${
-                    theme === t.key
-                      ? 'bg-accent/10 text-accent'
-                      : 'text-ink hover:bg-tint dark:text-darkText dark:hover:bg-darkBorderSubtle'
-                  }`}
-                >
-                  <span
-                    aria-hidden="true"
-                    className="h-3.5 w-3.5 shrink-0 rounded-full border border-black/10 dark:border-white/20"
-                    style={{ background: t.swatch }}
-                  />
-                  {t.label}
-                  {theme === t.key && (
-                    <span className="ml-auto text-[9px] font-bold uppercase tracking-[0.1em]">on</span>
-                  )}
-                </button>
-              ))}
+              {section(group.name, group.note)}
+              {group.themes.map((t) =>
+                row(t.key, t.label, theme === t.key, () => setTheme(t.key), { swatch: t.swatch })
+              )}
             </div>
           ))}
 
-          <button
-            type="button"
-            onClick={() => setTheme('')}
-            className={`mt-1 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[11px] font-semibold transition ${
-              theme
-                ? 'text-muted hover:bg-tint dark:text-darkMuted dark:hover:bg-darkBorderSubtle'
-                : 'bg-accent/10 text-accent'
-            }`}
-          >
-            <span
-              aria-hidden="true"
-              className="h-3.5 w-3.5 shrink-0 rounded-full border border-dashed border-line dark:border-darkBorder"
-            />
-            Default
-          </button>
+          <div className="mt-1.5 border-t border-line/70 pt-1 dark:border-darkBorder/70">
+            {section('Type', 'the UI face')}
+            {TYPES.map((t) =>
+              row(t.key, t.label, font === t.key, () => setFont(t.key), { stack: t.stack, note: t.note })
+            )}
+          </div>
+
+          <div className="mt-1.5 border-t border-line/70 pt-1 dark:border-darkBorder/70">
+            {section('Figures', 'the mono face')}
+            {MONOS.map((m) => row(m.key, m.label, mono === m.key, () => setMono(m.key), { stack: m.stack }))}
+          </div>
         </div>
       )}
 

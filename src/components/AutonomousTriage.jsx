@@ -25,7 +25,6 @@ import {
   Pill,
   RibbonStat,
   STAGE_LABELS,
-  STAGE_STRIP_GRID,
   SectionLabel,
   useIsPhone,
 } from './widgets.jsx';
@@ -594,39 +593,45 @@ export default function AutonomousTriage({
 
       {/* ── Cohort ribbon: one panel instead of four competing cards ──── */}
       {cohort && (
-        <div className={STAGE_STRIP_GRID} data-np-keep="">
-          <RibbonStat
-            variant="stage"
-            icon={Users}
-            label="Awaiting workup"
-            value={(cohort.awaiting_workup ?? 0).toLocaleString()}
-            tone="accent"
-            hint={`of ${(cohort.total ?? 0).toLocaleString()} subjects served`}
-          />
-          <RibbonStat
-            variant="stage"
-            icon={CheckCircle2}
-            label="Pathway complete"
-            value={(cohort.complete ?? 0).toLocaleString()}
-            tone="ok"
-            hint="Stage 4 reached"
-          />
-          <RibbonStat
-            variant="stage"
-            icon={AlertTriangle}
-            label="High tier"
-            value={(cohort.tier_counts?.high ?? 0).toLocaleString()}
-            tone="bad"
-            hint="Corroborated by a biomarker"
-          />
-          <RibbonStat
-            variant="stage"
-            icon={Activity}
-            label="Medium / low"
-            value={`${(cohort.tier_counts?.medium ?? 0).toLocaleString()} / ${(cohort.tier_counts?.low ?? 0).toLocaleString()}`}
-            tone="muted"
-            hint="Cognition-led, awaiting confirmation"
-          />
+        <div
+          className={`${PANEL} divide-y divide-line dark:divide-darkBorder sm:grid sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4`}
+        >
+          <div className="sm:border-r sm:border-line dark:sm:border-darkBorder">
+            <RibbonStat
+              icon={Users}
+              label="Awaiting workup"
+              value={(cohort.awaiting_workup ?? 0).toLocaleString()}
+              tone="accent"
+              hint={`of ${(cohort.total ?? 0).toLocaleString()} subjects served`}
+            />
+          </div>
+          <div className="lg:border-r lg:border-line dark:lg:border-darkBorder">
+            <RibbonStat
+              icon={CheckCircle2}
+              label="Pathway complete"
+              value={(cohort.complete ?? 0).toLocaleString()}
+              tone="ok"
+              hint="Stage 4 reached"
+            />
+          </div>
+          <div className="sm:border-r sm:border-line dark:sm:border-darkBorder">
+            <RibbonStat
+              icon={AlertTriangle}
+              label="High tier"
+              value={(cohort.tier_counts?.high ?? 0).toLocaleString()}
+              tone="bad"
+              hint="Corroborated by a biomarker"
+            />
+          </div>
+          <div>
+            <RibbonStat
+              icon={Activity}
+              label="Medium / low"
+              value={`${(cohort.tier_counts?.medium ?? 0).toLocaleString()} / ${(cohort.tier_counts?.low ?? 0).toLocaleString()}`}
+              tone="muted"
+              hint="Cognition-led, awaiting confirmation"
+            />
+          </div>
         </div>
       )}
 

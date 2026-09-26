@@ -50,16 +50,26 @@ export default function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
 
   /*
-   * Phones are no longer forced dark.
+   * Phones are always dark.
    *
-   * The black console used to be the phone default, but that hid every light
-   * palette — which is exactly what the theme preview exists to compare — so a
-   * phone now follows the same toggle as a desktop and therefore starts on the
-   * light theme, i.e. on white paper. The phone LAYOUT rules (folded sections,
-   * flat surfaces, dropped prose) are width-based and apply either way; only
-   * the colours follow the toggle.
+   * The phone design system is a dark one — navy page, violet containers, white
+   * text — and it is defined in the dark tokens, so a phone has to be in dark
+   * mode for it to apply. The desktop toggle still works; it simply does not
+   * govern under 768px. Tracked with a matchMedia listener rather than a resize
+   * handler so rotating the device settles it too.
    */
-  const darkActive = theme === 'dark';
+  const [isPhone, setIsPhone] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
+  );
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    const onChange = (event) => setIsPhone(event.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
+  const darkActive = isPhone || theme === 'dark';
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkActive);
