@@ -594,7 +594,7 @@ export default function AutonomousTriage({
       {/* ── Cohort ribbon: one panel instead of four competing cards ──── */}
       {cohort && (
         <div
-          className={`${PANEL} divide-y divide-line dark:divide-darkBorder sm:grid sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4`}
+          className={`${PANEL} np-ribbon divide-y divide-line dark:divide-darkBorder sm:grid sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4`}
         >
           <div className="sm:border-r sm:border-line dark:sm:border-darkBorder">
             <RibbonStat

@@ -14,28 +14,32 @@
 import { useEffect } from 'react';
 
 /*
- * The panel and the page, on the light palette the phone now renders: a near-white
- * page, a white panel on it, ink for the heading and a muted grey for the
- * supporting line. The mark, the artwork and the button stay the pink accent, so
- * the accent is the only strong colour on the screen.
+ * The panel is where the blue lives.
+ *
+ * The app's surfaces are light and the accent is pink, and a screen of nothing but
+ * near-white reads as having had its colour taken out — so the landing panel keeps
+ * the deep blue it was designed in, with white type on it and the periwinkle
+ * supporting line. It is one deliberate block of blue on an otherwise light page,
+ * rather than the page, the cards and the dividers all being blue.
  */
-const PAGE = '#F6F5FA';
-const PANEL = '#FFFFFF';
-const INK = '#262530';
-const MUTED = '#77747F';
-const PINK = '#FF2E63';
-const PINK_HOVER = '#E02654';
+const PAGE = '#F5F9F9';
+const PANEL = '#0F7F78';
+const ON_PANEL = '#FFFFFF';
+const PERI = '#A8E6DD';
+/* the mark and the artwork, in aquamarine, so they read against the panel */
+const AQUA_LIGHT = '#7DE9D8';
+const AQUA = '#12A594';
 
 /* The mark, in the accent: on a phone it is pink throughout, not periwinkle. */
 function Mark() {
   return (
     <svg width="46" height="46" viewBox="0 0 46 46" fill="none" aria-hidden="true">
-      <circle cx="6" cy="6" r="6" stroke={PINK} strokeWidth="2.4" />
-      <circle cx="40" cy="6" r="6" stroke={PINK} strokeWidth="2.4" />
-      <circle cx="23" cy="23" r="6" fill={PINK} />
-      <circle cx="6" cy="40" r="6" stroke={PINK} strokeWidth="2.4" />
-      <circle cx="40" cy="40" r="6" stroke={PINK} strokeWidth="2.4" />
-      <path d="M10 10L18 18M36 10L28 18M10 36L18 28M36 36L28 28" stroke={PINK} strokeWidth="2" />
+      <circle cx="6" cy="6" r="6" stroke={AQUA_LIGHT} strokeWidth="2.4" />
+      <circle cx="40" cy="6" r="6" stroke={AQUA_LIGHT} strokeWidth="2.4" />
+      <circle cx="23" cy="23" r="6" fill={AQUA_LIGHT} />
+      <circle cx="6" cy="40" r="6" stroke={AQUA_LIGHT} strokeWidth="2.4" />
+      <circle cx="40" cy="40" r="6" stroke={AQUA_LIGHT} strokeWidth="2.4" />
+      <path d="M10 10L18 18M36 10L28 18M10 36L18 28M36 36L28 28" stroke={AQUA_LIGHT} strokeWidth="2" />
     </svg>
   );
 }
@@ -58,7 +62,7 @@ function Artwork() {
 
   return (
     <svg viewBox="0 0 260 340" style={{ maxWidth: 230, width: '100%', height: '100%' }} aria-hidden="true">
-      <g stroke={PINK} strokeWidth="2" opacity="0.9">
+      <g stroke={AQUA_LIGHT} strokeWidth="2" opacity="0.9">
         <line x1="30" y1="20" x2="90" y2="55" />
         <line x1="90" y1="55" x2="70" y2="115" />
         <line x1="90" y1="55" x2="150" y2="35" />
@@ -71,24 +75,24 @@ function Artwork() {
         <line x1="20" y1="80" x2="70" y2="115" />
       </g>
 
-      <g fill={PINK}>
+      <g fill={AQUA_LIGHT}>
         <circle cx="90" cy="55" r="6.5" />
         <circle cx="165" cy="90" r="6.5" />
       </g>
-      <g fill={PINK}>
+      <g fill={AQUA_LIGHT}>
         {nodes.map(([cx, cy]) => (
           <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="5" />
         ))}
       </g>
 
       <g transform="translate(130,240)">
-        <polygon points={hex(85)} stroke={PINK} strokeWidth="1.4" fill="none" opacity="0.5" />
-        <polygon points={hex(56)} stroke={PINK} strokeWidth="1.4" fill="none" opacity="0.35" />
+        <polygon points={hex(85)} stroke={AQUA_LIGHT} strokeWidth="1.4" fill="none" opacity="0.5" />
+        <polygon points={hex(56)} stroke={AQUA_LIGHT} strokeWidth="1.4" fill="none" opacity="0.35" />
         <polygon
           points="0,-72 61,-13 37,48 -13,67 -61,13 -24,-48"
-          fill={PINK}
+          fill={AQUA_LIGHT}
           opacity="0.4"
-          stroke={PINK}
+          stroke={AQUA_LIGHT}
           strokeWidth="2"
         />
         {[
@@ -99,7 +103,7 @@ function Artwork() {
           [-61, 13],
           [-24, -48],
         ].map(([cx, cy]) => (
-          <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="4" fill={PINK} />
+          <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="4" fill={AQUA_LIGHT} />
         ))}
       </g>
     </svg>
@@ -166,7 +170,7 @@ export default function MobileWelcome({ onLaunch }) {
         <h1
           style={{
             fontFamily: "'Space Grotesk', ui-sans-serif, system-ui, sans-serif",
-            color: INK,
+            color: ON_PANEL,
             fontSize: 34,
             fontWeight: 700,
             lineHeight: 1.1,
@@ -175,8 +179,9 @@ export default function MobileWelcome({ onLaunch }) {
         >
           NeuroPilot
         </h1>
-        <p style={{ color: MUTED, fontSize: 15, fontWeight: 500, margin: '0 0 22px' }}>
-          AI-driven Alzheimer&rsquo;s triage
+        {/* the app's own line, as the header and footer carry it */}
+        <p style={{ color: PERI, fontSize: 15, fontWeight: 500, margin: '0 0 22px' }}>
+          Clinical Decision Support &amp; Risk Triage
         </p>
 
         <button
@@ -186,7 +191,7 @@ export default function MobileWelcome({ onLaunch }) {
           className="mobile-welcome-cta"
           style={{
             alignSelf: 'flex-start',
-            background: PINK,
+            background: AQUA,
             color: '#FFFFFF',
             border: 'none',
             borderRadius: 50,

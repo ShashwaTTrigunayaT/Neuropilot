@@ -46,7 +46,8 @@ import {
 const CARD_DEPTH =
   'shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_1px_2px_rgba(19,21,26,0.03),0_10px_24px_-22px_rgba(19,21,26,0.14)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_2px_10px_-6px_rgba(0,0,0,0.55)] card-wash';
 const CARD = `${PANEL} ${CARD_DEPTH} p-4 sm:p-6`;
-const CARD_RIBBON = `${PANEL} ${CARD_DEPTH}`;
+/* `np-ribbon` takes the cells apart into separate cards below `sm` — see index.css. */
+const CARD_RIBBON = `${PANEL} ${CARD_DEPTH} np-ribbon`;
 
 /** Two letters for a chart row's monogram — a name reads as a person, not a row. */
 const initials = (name) => {

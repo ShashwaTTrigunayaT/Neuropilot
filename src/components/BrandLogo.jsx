@@ -81,9 +81,19 @@ export function NeuroPilotLogo({
   onClick,
 }) {
   const Comp = onClick ? 'button' : 'div';
+  /*
+   * `data-np-keep` opts the lockup out of the phone button rules.
+   *
+   * The phone stylesheet shrinks every control it is not told to leave alone —
+   * smaller padding, 11px type, 0.75rem glyphs — which is right for a button and
+   * wrong for the brand: it made the header's mark a visibly smaller,
+   * differently-proportioned logo than the identical one in the footer, purely
+   * because the footer's is not a button.
+   */
   return (
     <Comp
       onClick={onClick}
+      data-np-keep=""
       className={`flex items-center gap-3 text-left transition ${onClick ? 'hover:opacity-90 active:scale-[0.99]' : ''}`}
     >
       <NeuroPilotIcon size={size} />
@@ -93,7 +103,7 @@ export function NeuroPilotLogo({
          * title -- the landing page ended up with two top-level headings, the
          * brand and the actual subject of the page.
          */}
-        <p className="text-[16px] font-black tracking-tight text-ink dark:text-darkText">
+        <p className="np-wordmark text-[16px] font-black tracking-tight text-ink dark:text-darkText">
           NeuroPilot
         </p>
         {showSubtitle && (

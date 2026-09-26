@@ -12,7 +12,7 @@
  * and `data-np-keep` on the element so the phone button rules leave it alone.
  */
 .mobile-welcome-cta:hover {
-  background: #E02654 !important;
+  background: #0E8A7C !important;
 }
 
 /*
@@ -376,29 +376,30 @@ body {
    */
   :root,
   html.dark {
-    /* — the accent: the one strong colour a phone screen gets — */
-    --accent-rgb: 255 46 99;
-    --accent-hover-rgb: 224 38 84;
-    --accent-surface-top: #ff4d78;
-    --accent-surface-mid: #ff2e63;
-    --accent-surface-bottom: #e02654;
+    /* — the accent: aquamarine, the one strong colour a phone screen gets — */
+    --accent-rgb: 18 165 148;
+    --accent-hover-rgb: 14 138 124;
+    --accent-surface-top: #2fbfae;
+    --accent-surface-mid: #12a594;
+    --accent-surface-bottom: #0e8a7c;
 
     /*
      * — the page: a LIGHT near-neutral, not a colour —
      *
      * A coloured page made the page, the cards and the dividers all the same blue,
-     * which is what read as "blue everywhere". Here the page is a near-white with
-     * only a trace of the theme in it, cards are pure white and sit ABOVE the page,
-     * and the dividers are a light grey — so the surfaces read as three different
-     * shades rather than one flat field.
+     * which is what read as "blue everywhere". Here the blue is present but quiet —
+     * the page is a pale blue-tinted white, the quiet surfaces a shade deeper, cards
+     * pure white sitting above both — and the strong blues are kept for the few
+     * places that should carry them (the landing panel, the brand tile), so the
+     * screen reads as shades rather than one flat field of blue.
      */
-    --paper-rgb: 246 245 250;
-    --ink-rgb: 38 37 48;
-    --muted-rgb: 119 116 127;
-    --dust-rgb: 214 211 222;
-    --line-rgb: 228 226 235;
+    --paper-rgb: 245 249 249;
+    --ink-rgb: 26 38 37;
+    --muted-rgb: 98 122 120;
+    --dust-rgb: 198 224 220;
+    --line-rgb: 210 232 228;
     --surface-rgb: 255 255 255;
-    --tint-rgb: 244 242 248;
+    --tint-rgb: 226 243 240;
 
     /*
      * The dark side, for the mode toggle: a neutral dark rather than the cool
@@ -439,7 +440,12 @@ body {
    * the violet page it sits on, so on a phone the whole tile is the accent.
    */
   .np-brand {
-    background-image: linear-gradient(to top right, #ff2e63 0%, #ff4d78 55%, #e02654 100%) !important;
+    background-image: linear-gradient(to top right, #12a594 0%, #2fbfae 55%, #0e8a7c 100%) !important;
+  }
+
+  /* the wordmark beside it is the accent too, so the lockup reads as one mark */
+  .np-wordmark {
+    color: rgb(var(--accent-rgb)) !important;
   }
 
   /*
@@ -816,6 +822,63 @@ body {
   }
   [class~="sm:grid"]:not([data-np-preview] *) > * {
     border-top-width: 0 !important;
+  }
+
+  /*
+   * Ribbon cells come apart on a phone.
+   *
+   * A ribbon is ONE panel divided by hairlines on a wide screen — four facts read
+   * in order, which is the point of it. On a phone the same cells stack into a
+   * column, and a column of hairlines with no gaps reads as a single fused block:
+   * you cannot see where one fact ends and the next begins. Below `sm` — the width
+   * at which the ribbon is still a stack rather than a grid — each cell becomes
+   * its own card: its own border, its own surface, and a gap between them.
+   */
+  @media (max-width: 639px) {
+    /*
+     * The stack becomes a one-column GRID with equal rows.
+     *
+     * A minimum height was not enough: the cells hold different amounts — two
+     * lines here, three there — so the ones with more content were still taller
+     * than the rest and the column read as a ragged pile. Equal rows (`1fr`) make
+     * every card in a ribbon exactly as tall as the tallest, so they are uniform
+     * whatever they contain.
+     */
+    /*
+     * `:not(.hidden)` is load-bearing, not tidiness.
+     *
+     * `display` here is `!important` — it has to be, to win over the ribbon's own
+     * `divide-y` — which means it also beats the `hidden` a board is given when it
+     * is desktop-only. The capability-phases board is exactly that, and it came
+     * back onto phones the moment this rule existed. Anything deliberately hidden
+     * is left hidden.
+     */
+    .np-ribbon:not([data-np-preview] *):not(.hidden) {
+      border-width: 0 !important;
+      background-color: transparent !important;
+      background-image: none !important;
+      box-shadow: none !important;
+      border-radius: 0 !important;
+      overflow: visible !important;
+      display: grid !important;
+      grid-template-columns: minmax(0, 1fr) !important;
+      grid-auto-rows: 1fr !important;
+      align-items: stretch !important;
+      gap: 0.6rem !important;
+    }
+    .np-ribbon:not([data-np-preview] *):not(.hidden) > *:not(.hidden) {
+      border: 1px solid rgb(var(--line-rgb)) !important;
+      border-radius: 0.75rem !important;
+      background-color: rgb(var(--surface-rgb)) !important;
+      box-shadow: 0 1px 2px rgb(16 24 40 / 0.05) !important;
+      display: flex !important;
+      flex-direction: column !important;
+      min-width: 0 !important;
+      min-height: 4.75rem !important;
+    }
+    .np-ribbon:not([data-np-preview] *):not(.hidden) > *:not(.hidden) > * {
+      flex: 1 1 auto !important;
+    }
   }
 
   /*
