@@ -327,12 +327,14 @@ body {
 /*
  * Below `md` the desktop treatments stop earning their keep: the radial tint
  * behind the page, the corner wash on every panel, the dot-grid texture and the
- * coloured glows all read as noise at ~375px, and every tinted surface lowers
- * the contrast of text that is already small. The phone palette is therefore
- * flattened — plain white surfaces on a near-white page, decorative layers off.
- *
- * Colour survives only where it carries meaning: the tier accents, the stage
- * colours, the risk bands, the accent rules. Atmosphere is dropped.
+ * coloured glows all read as noise at ~375px, so the decorative layers come off
+ * and the palette does the work instead: a deep navy page, violet containers,
+ * one pink-red for anything pressable. Colour survives where it carries
+ * meaning — tiers, stages, risk bands — and the rest is navy, violet and white.
+ */
+/*
+ * Layout rules below are WIDTH-only and apply in either mode; the palette block
+ * inside is what defines the phone look. Desktop is untouched by all of it.
  */
 @media (max-width: 767px) {
   /*
@@ -353,7 +355,7 @@ body {
     --dark-card-hover-rgb: 88 96 184;
     --surface-rgb: 255 255 255;
 
-    /* — lines, in the indigo family rather than grey — */
+    /* — lines — */
     --line-rgb: 46 51 117;
     --tint-rgb: 46 51 117;
     --dark-border-rgb: 46 51 117;
@@ -475,6 +477,47 @@ body {
   button.from-accent,
   a.bg-accent {
     border-radius: 999px !important;
+  }
+
+  /*
+   * The container colour is applied WHOLE.
+   *
+   * Components ask for it at partial alpha (40%, 60%, 85%…) so that cards sit a
+   * shade apart on desktop. Over a #12142D page those alphas average down to a
+   * near-black indigo — the result read as a black page with pink on it, and the
+   * violet the whole design is built around never actually appeared. On a phone
+   * these surfaces take the colour at full strength instead, so the navy page,
+   * the violet container and the white inner card are three distinct levels.
+   */
+  .dark\:bg-darkCard\/40:is(.dark *),
+  .dark\:bg-darkCard\/50:is(.dark *),
+  .dark\:bg-darkCard\/60:is(.dark *),
+  .dark\:bg-darkCard\/70:is(.dark *),
+  .dark\:bg-darkCard\/85:is(.dark *),
+  .dark\:bg-darkCard\/95:is(.dark *) {
+    background-color: rgb(var(--dark-card-rgb)) !important;
+  }
+
+  /*
+   * The INNER content card, and its text.
+   *
+   * The system is a three-level hierarchy: a deep navy page holds violet
+   * containers, and the content inside a container rests on a WHITE card whose
+   * text is dark blue-grey (#1E2245). The app only ever had two levels, so the
+   * surfaces that are a nested tile — the shaded value blocks, glyph chips and
+   * small boards that sit INSIDE a panel — are promoted to white here and get
+   * the system's dark text.
+   *
+   * Nothing else is re-coloured: text on the navy page and text on the violet
+   * container stay white, which is what the hierarchy calls for.
+   */
+  [class*="dark:bg-darkBorderSubtle"]:is(.dark *) {
+    background-color: #ffffff !important;
+  }
+  [class*="dark:bg-darkBorderSubtle"]:is(.dark *)
+    :is(h1, h2, h3, h4, h5, h6, p, span, li, strong, b, em, code, td, th, small, label, time, dt, dd, div, svg),
+  [class*="dark:bg-darkBorderSubtle"]:is(.dark *):is(svg) {
+    color: rgb(var(--ink-rgb));
   }
 
   /*
