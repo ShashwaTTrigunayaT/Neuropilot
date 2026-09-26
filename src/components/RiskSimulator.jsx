@@ -119,7 +119,7 @@ const STAGE_STRIP = [
 
 function formatFactorValue(f) {
   const v = f.value;
-  if (v === null || v === undefined) return 'not measured';
+  if (v === null || v === undefined) return 'not on file';
   switch (f.feature) {
     case 'sex':
       return v === 1 ? 'Male' : 'Female';
@@ -287,7 +287,7 @@ function StageToggle({ on, onClick }) {
       }`}
     >
       {on ? <CheckCircle2 className="h-3 w-3" /> : <PlusCircle className="h-3 w-3" />}
-      {on ? 'Measured' : 'Not ordered'}
+      {on ? 'On file' : 'Not ordered'}
     </button>
   );
 }
@@ -393,7 +393,7 @@ function StageCard({ n, title, icon: Icon, on, always, children }) {
             always || on ? 'text-accent' : 'text-muted dark:text-darkMuted'
           }`}
         >
-          {always ? 'always measured' : on ? 'measured' : 'not ordered'}
+          {always ? 'always on file' : on ? 'on file' : 'not ordered'}
         </span>
       </div>
       <div className={`px-5 py-5 ${on ? '' : 'opacity-45'}`}>{children}</div>
@@ -929,7 +929,7 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
             </p>
           </div>
           <p style={MONO} className="text-[11px] tabular-nums text-muted dark:text-darkMuted">
-            {measured} / 4 measured
+            {measured} / 4 on file
           </p>
         </div>
 
@@ -1225,7 +1225,7 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
             <p className="mt-4 text-[11px] leading-relaxed text-muted dark:text-darkMuted">
               The model reads the ratio{' '}
               <span style={MONO} className="font-semibold text-ink dark:text-darkText">
-                {stages.mri ? (features.hippocampal_volume / features.icv).toFixed(5) : 'not measured'}
+                {stages.mri ? (features.hippocampal_volume / features.icv).toFixed(5) : 'not on file'}
               </span>{' '}
               — normalising by head size removes a confound that raw volumes carry.
             </p>
