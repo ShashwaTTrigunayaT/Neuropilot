@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, Check, Copy } from 'lucide-react';
+import { ArrowRight, Check, ChevronDown, Copy } from 'lucide-react';
 import { STAGES_FULL, STAGES_SHORT, fmtScore } from '../lib.js';
 import TierTag from './TierTag.jsx';
 
@@ -158,7 +158,7 @@ export function RibbonStat({ icon: Icon, label, value, tone = 'muted', hint, dot
     <div className="group relative flex h-full flex-col gap-2.5 px-5 py-4 transition-colors hover:bg-tint/40 dark:hover:bg-darkCardHover/50">
       <div className="flex items-center gap-2.5">
         <span
-          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset ring-black/[0.04] dark:ring-white/[0.06] ${tones[tone]}`}
+          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset ring-black/[0.04] md:h-7 md:w-7 dark:ring-white/[0.06] ${tones[tone]}`}
         >
           {dot ? (
             <span className="relative flex h-2 w-2">
@@ -169,12 +169,18 @@ export function RibbonStat({ icon: Icon, label, value, tone = 'muted', hint, dot
             Icon && <Icon className="h-3.5 w-3.5" />
           )}
         </span>
-        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted dark:text-darkMuted">{label}</p>
+        <p className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-muted md:text-[10px] dark:text-darkMuted">{label}</p>
       </div>
 
+      {/*
+       * The figure is the point of the cell, so it stays the largest thing here
+       * — but 24px is sized for a wide desktop cell. In a two-up phone cell it
+       * overflows its own tile and forces the label and the hint to wrap under
+       * it, which is what made these ribbons read as oversized on a phone.
+       */}
       <p
         style={MONO}
-        className="text-[24px] font-bold leading-none tracking-tight text-ink tabular-nums dark:text-darkText"
+        className="text-[17px] font-bold leading-none tracking-tight text-ink tabular-nums md:text-[24px] dark:text-darkText"
       >
         {value}
       </p>
@@ -188,8 +194,63 @@ export function RibbonStat({ icon: Icon, label, value, tone = 'muted', hint, dot
         </div>
       )}
 
-      {hint && <p className="text-[10.5px] leading-snug text-muted dark:text-darkMuted">{hint}</p>}
+      {hint && <p className="text-[10px] leading-snug text-muted md:text-[10.5px] dark:text-darkMuted">{hint}</p>}
     </div>
+  );
+}
+
+/**
+ * A section that folds.
+ *
+ * A page can be navigated by scrolling, but a section that is a screen of
+ * reference material sitting between you and the next control has to be
+ * COLLAPSED to be skipped, not scrolled past. This is that primitive: the
+ * heading stays, its body opens on tap, and nothing is removed — the detail is
+ * one tap away instead of one screen away.
+ *
+ * It opens by default on a wider screen, where the room is there, and starts
+ * closed on a phone, where it is not. `defaultOpen` overrides that for a
+ * section whose body is the page's working content rather than an explanation.
+ *
+ * `right` is rendered BESIDE the toggle, never inside it: sections here put
+ * their own controls (batch sizes, POST labels) in that slot, and a button
+ * nested inside a button fires both handlers.
+ */
+export function Collapsible({ title, right, children, className = '', defaultOpen }) {
+  const [open, setOpen] = useState(() => {
+    if (defaultOpen != null) return defaultOpen;
+    if (typeof window === 'undefined' || !window.matchMedia) return true;
+    return window.matchMedia('(min-width: 768px)').matches;
+  });
+
+  return (
+    <section className={className}>
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+          className="flex min-w-0 items-center gap-2 text-left"
+        >
+          <ChevronDown
+            aria-hidden="true"
+            className={`h-3.5 w-3.5 shrink-0 text-muted transition-transform duration-200 dark:text-darkMuted ${
+              open ? 'rotate-180' : ''
+            }`}
+          />
+          <span
+            aria-hidden="true"
+            className="h-2.5 w-[3px] shrink-0 rounded-full bg-accent shadow-[0_0_8px_var(--accent-glow-soft)]"
+          />
+          <span className="truncate text-[13px] font-semibold tracking-tight text-ink dark:text-darkText">
+            {title}
+          </span>
+        </button>
+        {right}
+      </div>
+
+      {open && <div className="mt-3">{children}</div>}
+    </section>
   );
 }
 

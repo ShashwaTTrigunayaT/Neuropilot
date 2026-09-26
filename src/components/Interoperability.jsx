@@ -503,7 +503,14 @@ export default function Interoperability({
        * ("what is wired up right now?"). Stacked as two cards they read as two
        * products saying overlapping things — this card has already been through
        * a round of that, so the counts live once, in the band above. */}
-      <div className={`${CARD_RIBBON} overflow-hidden`}>
+      {/*
+       * Desktop only: the four FHIR capability phases and the detail boards
+       * below are reference material — what each phase IS, which endpoints
+       * exist, what the server reports. On a phone they are four screens of
+       * reading before anything can be done, so they are dropped and the live
+       * status ribbon and the working panels above and below them remain.
+       */}
+      <div className={`${CARD_RIBBON} hidden overflow-hidden md:block`}>
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-line bg-tint/40 px-5 py-2.5 dark:border-darkBorder dark:bg-darkBorderSubtle/40">
           <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-muted dark:text-darkMuted">
             <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-accent" />
@@ -543,7 +550,7 @@ export default function Interoperability({
       </div>
 
       {/* ── Connection detail — one surface split by a hairline ────── */}
-      <div className={`${CARD_RIBBON} grid divide-y divide-line lg:grid-cols-2 lg:divide-x lg:divide-y-0 dark:divide-darkBorder`}>
+      <div className={`${CARD_RIBBON} hidden divide-y divide-line md:grid lg:grid-cols-2 lg:divide-x lg:divide-y-0 dark:divide-darkBorder`}>
         <div className="p-4 sm:p-6">
           <SectionHeader
             icon={Server}
@@ -849,7 +856,7 @@ export default function Interoperability({
       {/* ── Fused: what the exchange surface holds, and what leaves it. One
        * subject read two ways, so it is one card split by a hairline rather
        * than two cards implying two separate things. ── */}
-      <div className={`${CARD_RIBBON} grid divide-y divide-line lg:grid-cols-2 lg:divide-x lg:divide-y-0 dark:divide-darkBorder`}>
+      <div className={`${CARD_RIBBON} hidden divide-y divide-line md:grid lg:grid-cols-2 lg:divide-x lg:divide-y-0 dark:divide-darkBorder`}>
         <div className="p-4 sm:p-6">
           <SectionHeader icon={Activity} title="Exchange surface" />
 

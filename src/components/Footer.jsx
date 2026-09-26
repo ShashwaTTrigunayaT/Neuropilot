@@ -244,7 +244,7 @@ export default function Footer({
                 <span className="text-sm font-black tracking-tight text-ink dark:text-darkText">
                   NeuroPilot
                 </span>
-                <p className="text-[11px] text-muted dark:text-darkMuted mt-0.5">
+                <p className="mt-0.5 hidden text-[11px] text-muted md:block dark:text-darkMuted">
                   Clinical Decision Support & Risk Triage
                 </p>
               </div>
@@ -483,7 +483,13 @@ export default function Footer({
           </div>
 
           {/* Bottom Micro Bar: Copyright & Stack */}
-          <div className="flex flex-wrap items-center justify-between gap-4 border-t border-line/70 dark:border-darkBorder/70 pt-6 text-[11px] text-muted dark:text-darkMuted">
+          {/*
+           * The footer keeps its links and its controls on a phone, and drops
+           * the prose: the tagline above and this copyright bar. A footer that
+           * restates the product and the disclaimer at the bottom of every page
+           * is the longest thing on the shortest screen.
+           */}
+          <div className="hidden flex-wrap items-center justify-between gap-4 border-t border-line/70 pt-6 text-[11px] text-muted md:flex dark:border-darkBorder/70 dark:text-darkMuted">
             <p>
               &copy; 2026 <strong className="text-ink dark:text-darkText">NeuroPilot</strong>. For
               clinical decision-support only. Strictly non-diagnostic.

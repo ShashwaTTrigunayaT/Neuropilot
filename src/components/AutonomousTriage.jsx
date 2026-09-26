@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import {
   Btn,
+  Collapsible,
   MONO,
   MetricTile,
   PANEL,
@@ -635,10 +636,12 @@ export default function AutonomousTriage({
       {/* ---------------------------------------------------------------- */}
       {/* Proposed batch                                                    */}
       {/* ---------------------------------------------------------------- */}
-      <section className="space-y-4">
-        <SectionLabel
-          right={
-            <div className="flex items-center gap-2">
+      <Collapsible
+        className="space-y-4"
+        title="Proposed next batch"
+        defaultOpen
+        right={
+          <div className="flex items-center gap-2">
               <div className="flex items-center gap-0.5 rounded-xl border border-line dark:border-darkBorder bg-white dark:bg-darkCard p-0.5">
                 {BATCH_SIZES.map((size) => (
                   <button
@@ -671,8 +674,6 @@ export default function AutonomousTriage({
             </div>
           }
         >
-          Proposed next batch
-        </SectionLabel>
 
         <p className="text-[12px] leading-relaxed text-muted dark:text-darkMuted">
           The model walks the live priority queue from the top and projects each candidate&apos;s next
@@ -784,15 +785,16 @@ export default function AutonomousTriage({
         )}
 
         <Ledger result={ledger} />
-      </section>
+      </Collapsible>
 
       {/* ---------------------------------------------------------------- */}
       {/* Supervised instant mode (the ungated mode, kept available)        */}
       {/* ---------------------------------------------------------------- */}
-      <section className="space-y-4">
-        <SectionLabel
-          right={
-            <div className="flex flex-wrap items-center gap-2.5">
+      <Collapsible
+        className="space-y-4"
+        title="Supervised instant mode"
+        right={
+          <div className="flex flex-wrap items-center gap-2.5">
               <code style={MONO} className="text-[10px] text-muted dark:text-darkMuted">
                 POST /workup/next
               </code>
@@ -804,8 +806,6 @@ export default function AutonomousTriage({
             </div>
           }
         >
-          Supervised instant mode
-        </SectionLabel>
 
         {/*
          * Two columns: the explanation and its single control on the left, the
@@ -866,7 +866,7 @@ export default function AutonomousTriage({
             <StepLog steps={autoLog || []} running={autopilot} busy={autoBusy} />
           </div>
         </div>
-      </section>
+      </Collapsible>
     </div>
   );
 }
