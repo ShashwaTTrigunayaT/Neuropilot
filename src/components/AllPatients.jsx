@@ -157,7 +157,7 @@ export default function AllPatients({ patients, onSelect, onSimulate, onCompare 
                   type="button"
                   onClick={() => setTierFilter(active ? 'all' : t)}
                   title={active ? 'Clear this filter' : `Show ${TIER_LABEL[t]} priority only`}
-                  className={`relative w-[106px] overflow-hidden rounded-2xl border px-3.5 pb-2.5 pt-3 text-left transition ${
+                  className={`relative w-[90px] overflow-hidden rounded-2xl border px-2.5 pb-2 pt-2.5 text-left transition sm:w-[106px] sm:px-3.5 sm:pb-2.5 sm:pt-3 ${
                     active
                       ? 'border-accent/50 bg-white shadow-soft ring-1 ring-accent/30 dark:border-accent/50 dark:bg-darkCard'
                       : 'border-line/80 bg-white/60 hover:border-accent/40 hover:bg-white dark:border-darkBorder dark:bg-darkCard/50 dark:hover:bg-darkCard'
@@ -313,7 +313,7 @@ export default function AllPatients({ patients, onSelect, onSimulate, onCompare 
           type="button"
           onClick={() => setStageFilter(0)}
           title={stageFilter === 0 ? 'Showing every stage' : 'Show every stage again'}
-          className={`relative flex items-center gap-2.5 overflow-hidden rounded-2xl border px-3 py-2 text-left transition ${
+          className={`relative flex items-center gap-2 overflow-hidden rounded-2xl border px-2.5 py-1.5 text-left transition sm:gap-2.5 sm:px-3 sm:py-2 ${
             stageFilter === 0
               ? 'border-accent/50 bg-white shadow-soft ring-1 ring-accent/30 dark:border-accent/50 dark:bg-darkCard'
               : 'border-line/80 bg-white/60 hover:border-accent/40 hover:bg-white dark:border-darkBorder dark:bg-darkCard/50 dark:hover:bg-darkCard'
@@ -359,7 +359,7 @@ export default function AllPatients({ patients, onSelect, onSimulate, onCompare 
               type="button"
               onClick={() => setStageFilter(active ? 0 : stage)}
               title={active ? 'Clear this stage filter' : `Show stage ${stage} only — ${label}`}
-              className={`relative flex items-center gap-2.5 overflow-hidden rounded-2xl border px-3 py-2 text-left transition ${
+              className={`relative flex items-center gap-2 overflow-hidden rounded-2xl border px-2.5 py-1.5 text-left transition sm:gap-2.5 sm:px-3 sm:py-2 ${
                 active
                   ? 'border-accent/50 bg-white shadow-soft ring-1 ring-accent/30 dark:border-accent/50 dark:bg-darkCard'
                   : 'border-line/80 bg-white/60 hover:border-accent/40 hover:bg-white dark:border-darkBorder dark:bg-darkCard/50 dark:hover:bg-darkCard'
@@ -367,7 +367,7 @@ export default function AllPatients({ patients, onSelect, onSimulate, onCompare 
             >
               <span className="absolute inset-x-0 top-0 h-[3px]" style={{ background: hex }} />
               <span
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border"
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border sm:h-7 sm:w-7"
                 style={{ background: `${hex}18`, borderColor: `${hex}44` }}
               >
                 <StageIcon stage={stage} hex={hex} />
