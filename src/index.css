@@ -385,6 +385,34 @@ body {
   .dark .shadow-soft {
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
   }
+
+  /*
+   * Cards stop being cards.
+   *
+   * On a phone a page of bordered, rounded, shadowed boxes reads as a dashboard
+   * of widgets; the same content on one surface reads as a document. Every
+   * non-interactive bordered surface therefore loses its chrome below `md` —
+   * buttons, links and form fields keep theirs, and anything marked
+   * `data-np-keep` (the toast) is exempt so it stays legible while it floats.
+   */
+  .rounded-2xl.border:not(button):not(a):not(input):not(select):not(textarea):not([data-np-keep]),
+  .rounded-xl.border:not(button):not(a):not(input):not(select):not(textarea):not([data-np-keep]) {
+    border-color: transparent;
+    background-color: transparent;
+    box-shadow: none;
+  }
+
+  /*
+   * Explanatory prose is desktop-only — except inside the preview.
+   *
+   * The one signature shared by the app's explanation paragraphs (and not by
+   * its labels, values or controls) is the muted, generously-led paragraph.
+   * Hiding that class hides the "why" while the numbers, names and actions —
+   * which are set in ink or mono — all stay.
+   */
+  .leading-relaxed.text-muted:not([data-np-keep]) {
+    display: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

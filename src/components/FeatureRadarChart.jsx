@@ -253,8 +253,12 @@ export default function FeatureRadarChart({ data = [] }) {
           </svg>
         </div>
 
-        {/* ---- the ranking ---- */}
-        <div className="flex min-w-0 flex-1 flex-col">
+        {/*
+         * The ranking list. Desktop only: on a phone the radar is the whole
+         * attribution, and the list of thirty spokes beside it was just a second
+         * rendering of the same numbers. Below `lg` the web stands alone.
+         */}
+        <div className="hidden min-w-0 flex-1 flex-col lg:flex">
           <div className="flex items-baseline justify-between gap-4">
             <p className="text-[10.5px] font-bold uppercase tracking-[0.16em] text-muted dark:text-darkMuted">
               Relative feature attribution

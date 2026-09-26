@@ -1224,7 +1224,10 @@ export function Toast({ toast, onClose }) {
   if (!toast) return null;
   const isError = toast.type === 'error';
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl border border-line dark:border-darkBorder bg-white dark:bg-darkCard px-5 py-3.5 shadow-lift animate-fade-up">
+    <div
+      data-np-keep=""
+      className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl border border-line dark:border-darkBorder bg-white dark:bg-darkCard px-5 py-3.5 shadow-lift animate-fade-up"
+    >
       <span
         className={`flex h-6 w-6 items-center justify-center rounded-full text-white text-xs font-bold ${
           isError ? 'bg-tierHigh' : 'bg-tierLow'
