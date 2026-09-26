@@ -75,6 +75,18 @@ export const STAGE_FILLS = ['#0D8282', '#3B82F6', '#8B5CF6', '#EC4899'];
 export const STAGE_DOTS = ['bg-[#0D8282]', 'bg-[#3B82F6]', 'bg-[#8B5CF6]', 'bg-[#EC4899]'];
 export const STAGE_LABELS = ['Cognitive assessment', 'Blood biomarkers', 'MRI volumetrics', 'PET imaging'];
 
+/*
+ * The Risk Simulator's stage-strip frame, reused for stat ribbons.
+ *
+ * One cell per item, hairlines drawn by the 1px grid gap over the container's
+ * own colour, and the whole thing held by a single hairline border. It is the
+ * clearest piece of layout in the app — a reading, in order, with each cell
+ * framed rather than each cell rounded — so the Interoperability and
+ * Autonomous Neuro ribbons borrow it rather than inventing another shape.
+ */
+export const STAGE_STRIP_GRID =
+  'grid gap-px overflow-hidden rounded-2xl border border-line/70 bg-line/60 dark:border-darkBorder/70 dark:bg-darkBorder/60 sm:grid-cols-2 lg:grid-cols-4';
+
 export const MONO = { fontFamily: "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" };
 
 export const controlBase =
@@ -138,13 +150,24 @@ export function Btn({ tone = 'ghost', icon: Icon, children, className = '', ...r
  * the smallest thing in the row. The bar is optional because only counts that
  * are a share of a whole have something honest to show.
  */
-export function RibbonStat({ icon: Icon, label, value, tone = 'muted', hint, dot, bar }) {
-  const tones = {
-    ok: 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10',
-    warn: 'text-amber-600 dark:text-amber-400 bg-amber-500/10',
-    bad: 'text-tierHigh bg-tierHighSoft',
-    muted: 'text-muted dark:text-darkMuted bg-tint dark:bg-darkBorderSubtle',
-    accent: 'text-accent bg-accent/10',
+export function RibbonStat({ icon: Icon, label, value, tone = 'muted', hint, dot, bar, variant = 'ribbon' }) {
+  // The tone's TEXT colour applies at every width; its chip FILL only above
+  // `md`. On a phone a filled, rounded icon badge is the one thing here that
+  // still reads as a little card, so the phone drops it and keeps the bare
+  // glyph in the tone colour.
+  const toneText = {
+    ok: 'text-emerald-600 dark:text-emerald-400',
+    warn: 'text-amber-600 dark:text-amber-400',
+    bad: 'text-tierHigh',
+    muted: 'text-muted dark:text-darkMuted',
+    accent: 'text-accent',
+  };
+  const toneFill = {
+    ok: 'md:bg-emerald-500/10',
+    warn: 'md:bg-amber-500/10',
+    bad: 'md:bg-tierHighSoft',
+    muted: 'md:bg-tint md:dark:bg-darkBorderSubtle',
+    accent: 'md:bg-accent/10',
   };
   const accents = {
     ok: '#1EB980',
@@ -154,25 +177,67 @@ export function RibbonStat({ icon: Icon, label, value, tone = 'muted', hint, dot
     accent: 'var(--accent)',
   };
 
+  /*
+   * The Risk Simulator's stage-strip cell, used as a stat cell.
+   *
+   * That strip is the app's clearest layout: a tone dot and the name on the
+   * first line, the reading under it, the state pinned to the bottom, and the
+   * frame drawn once by the shared grid's hairlines. The Interoperability and
+   * Autonomous Neuro ribbons reuse it so they read like the pathway they
+   * summarise, instead of like a row of little tiles of their own invention.
+   */
+  if (variant === 'stage') {
+    return (
+      <div className="flex h-full flex-col bg-white/85 p-4 text-left dark:bg-darkCard/85">
+        <div className="flex items-center gap-2">
+          <span
+            aria-hidden="true"
+            className="h-2 w-2 shrink-0 rounded-full"
+            style={{ background: accents[tone], opacity: dot ? 1 : 0.8 }}
+          />
+          <p className="text-[12.5px] font-bold tracking-[-0.01em] text-ink dark:text-darkText">{label}</p>
+        </div>
+
+        <p
+          style={MONO}
+          className="mt-2 text-[16px] font-bold leading-none tabular-nums text-ink dark:text-darkText"
+        >
+          {value}
+        </p>
+
+        {bar != null && (
+          <div className="mt-2.5 h-1 w-full overflow-hidden rounded-full bg-line/60 dark:bg-darkBorder">
+            <div
+              className="h-full rounded-full transition-all duration-700"
+              style={{ width: `${Math.max(2, Math.min(100, bar))}%`, background: accents[tone] }}
+            />
+          </div>
+        )}
+
+        {hint && (
+          <p className="mt-auto pt-3 text-[10px] leading-snug text-muted dark:text-darkMuted">{hint}</p>
+        )}
+      </div>
+    );
+  }
+
   return (
     /*
-     * A compact CARD on a phone, and a plain ribbon cell above `md`.
+     * A seamless ribbon cell at EVERY width.
      *
-     * Desktop reads these as one joined ribbon — five cells, no seams, the
-     * shared frame doing the dividing. That structure does not survive the
-     * phone rules, which strip card chrome from everything non-interactive, so
-     * in two columns the cells became a run-on block of label/value pairs with
-     * nothing to say where one ended and the next began. They therefore get
-     * their own surface back (`data-np-keep` is the exemption from that rule)
-     * and shrink to a small tile — label over figure, hint dropped.
+     * Desktop reads these as one joined ribbon — stacked cells, no seams, the
+     * shared frame doing the dividing. A phone keeps the stacked shape (label
+     * over figure, the parent's `divide-y` drawing the hairlines) but drops the
+     * tinted, rounded icon BADGE: the colored fill is what made each cell read
+     * as a little card, and its hues fight the monochrome phone theme. The
+     * glyph stays, bare and in its tone colour, so the state still reads.
      */
     <div
-      data-np-keep=""
-      className="group relative flex h-full flex-col gap-1.5 rounded-xl border border-line/70 bg-white/70 px-2.5 py-2 transition-colors md:gap-2.5 md:rounded-none md:border-0 md:bg-transparent md:px-5 md:py-4 dark:border-darkBorder/70 dark:bg-darkCard/70 dark:hover:bg-darkCardHover/50 md:dark:bg-transparent hover:bg-tint/40"
+      className="group relative flex h-full flex-col gap-1.5 px-3 py-2.5 transition-colors md:gap-2.5 md:px-5 md:py-4 hover:bg-tint/40"
     >
       <div className="flex items-center gap-2.5">
         <span
-          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset ring-black/[0.04] md:h-7 md:w-7 dark:ring-white/[0.06] ${tones[tone]}`}
+          className={`flex h-4 w-4 shrink-0 items-center justify-center md:h-7 md:w-7 md:rounded-lg md:ring-1 md:ring-inset md:ring-black/[0.04] dark:md:ring-white/[0.06] ${toneText[tone]} ${toneFill[tone]}`}
         >
           {dot ? (
             <span className="relative flex h-2 w-2">
@@ -183,14 +248,15 @@ export function RibbonStat({ icon: Icon, label, value, tone = 'muted', hint, dot
             Icon && <Icon className="h-3.5 w-3.5" />
           )}
         </span>
-        <p className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-muted md:text-[10px] dark:text-darkMuted">{label}</p>
+        <p className="truncate text-[10px] font-bold uppercase tracking-[0.14em] text-muted dark:text-darkMuted">
+          {label}
+        </p>
       </div>
 
       {/*
-       * The figure is the point of the cell, so it stays the largest thing here
-       * — but 24px is sized for a wide desktop cell. In a two-up phone cell it
-       * overflows its own tile and forces the label and the hint to wrap under
-       * it, which is what made these ribbons read as oversized on a phone.
+       * The figure is the point of the cell, so it stays the largest thing
+       * here — 24px is sized for a wide desktop cell, and 17px keeps it the
+       * biggest type in a phone cell without overflowing its column.
        */}
       <p
         style={MONO}
@@ -208,8 +274,8 @@ export function RibbonStat({ icon: Icon, label, value, tone = 'muted', hint, dot
         </div>
       )}
 
-      {/* The hint is context for a wide cell; in a phone tile it is a third
-          line that makes the tile twice as tall as the number inside it. */}
+      {/* The hint is context for a wide cell; on a phone it is a third line that
+          makes the row twice as tall as the number inside it. */}
       {hint && <p className="hidden text-[10px] leading-snug text-muted md:block md:text-[10.5px] dark:text-darkMuted">{hint}</p>}
     </div>
   );
@@ -344,6 +410,51 @@ export function FoldHeader({ icon: Icon, title, right }) {
       </button>
       {right}
     </div>
+  );
+}
+
+/**
+ * A bare chevron that folds the enclosing panel — on a phone only.
+ *
+ * `FoldHeader` replaces a panel's `SectionHeader`, which is fine when the panel
+ * has one. This is for the panels whose header is bespoke (a tinted band with
+ * its own layout): the toggle drops in beside that header and folds the nearest
+ * ancestor marked `data-np-fold-host`, so the desktop header is left exactly as
+ * it was. Renders nothing above `md`.
+ */
+export function FoldToggle({ label }) {
+  const isPhone = useIsPhone();
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const host = ref.current?.closest('[data-np-fold-host]');
+    if (!host) return undefined;
+    if (!isPhone) {
+      host.removeAttribute('data-np-fold');
+      return undefined;
+    }
+    host.setAttribute('data-np-fold', open ? 'open' : 'closed');
+    return () => host.removeAttribute('data-np-fold');
+  }, [open, isPhone]);
+
+  if (!isPhone) return null;
+
+  return (
+    <button
+      type="button"
+      aria-expanded={open}
+      aria-label={label}
+      onClick={() => setOpen((v) => !v)}
+      className="flex shrink-0 items-center"
+    >
+      <ChevronDown
+        aria-hidden="true"
+        className={`h-3.5 w-3.5 shrink-0 text-muted transition-transform duration-200 dark:text-darkMuted ${
+          open ? 'rotate-180' : ''
+        }`}
+      />
+    </button>
   );
 }
 
@@ -1086,20 +1197,61 @@ export function PatientTable({
 
               {/*
                * On a phone the list is a queue of who to act on, so it carries
-               * only who and how urgent: the subject and its score. The
-               * demographics, the four-segment stage rail and the next-step
-               * sentence were three further lines per subject, which meant the
-               * queue itself fell off the screen behind its own annotations.
-               * The rest of the record is one tap away on the patient's page.
+               * only what that needs: the subject, its score, and which stages
+               * of the pathway it has reached. The demographics and the
+               * next-step sentence were further lines per subject that pushed
+               * the queue off the screen behind its own annotations; the rest of
+               * the record is one tap away on the patient's page.
                */}
               <button type="button" onClick={() => onSelect(p.id)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
-                <span style={MONO} className="shrink-0 text-[10px] font-bold tabular-nums text-dust dark:text-darkMuted">
+                <span style={MONO} className="shrink-0 self-start text-[10px] font-bold tabular-nums text-dust dark:text-darkMuted">
                   {String(pageOffset + i + 1).padStart(2, '0')}
                 </span>
-                <span style={MONO} className="min-w-0 flex-1 truncate text-[13.5px] font-bold text-ink dark:text-darkText">
-                  {p.id}
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span style={MONO} className="block truncate text-[13.5px] font-bold text-ink dark:text-darkText">
+                    {p.id}
+                  </span>
+                  {/*
+                   * Which stages this subject has REACHED: the filled prefix of
+                   * the four-step pathway, then the stage number. This is the one
+                   * annotation the queue carries, because "who to act on" is
+                   * not answerable without it. Names and reasoning stay on the
+                   * patient's own record.
+                   */}
+                  <span
+                    className="mt-1 flex items-center gap-2"
+                    title={`${STAGES_SHORT[p.stage - 1] ?? p.stage_name ?? ''} · Stage ${p.stage}/4`}
+                  >
+                    <span className="flex items-center gap-[3px]">
+                      {[1, 2, 3, 4].map((step) => {
+                        const done = step < p.stage;
+                        const current = step === p.stage;
+                        const hex = STAGE_FILLS[step - 1];
+                        return (
+                          <span
+                            key={step}
+                            className="h-1 w-3.5 rounded-full"
+                            style={{
+                              background: done
+                                ? TIER_HEX.low
+                                : current
+                                ? `linear-gradient(90deg, ${hex}cc, ${hex})`
+                                : undefined,
+                            }}
+                          >
+                            {!done && !current && (
+                              <span className="block h-full w-full rounded-full bg-[#E4E0D8] dark:bg-darkBorder" />
+                            )}
+                          </span>
+                        );
+                      })}
+                    </span>
+                    <span style={MONO} className="truncate text-[10px] font-medium text-muted dark:text-darkMuted">
+                      Stage {p.stage}/4
+                    </span>
+                  </span>
                 </span>
-                <span style={{ ...MONO, color: tierHex }} className="shrink-0 text-[15px] font-black tabular-nums">
+                <span style={{ ...MONO, color: tierHex }} className="shrink-0 self-start text-[15px] font-black tabular-nums">
                   {fmtScore(p.final_score ?? p.score)}
                 </span>
               </button>

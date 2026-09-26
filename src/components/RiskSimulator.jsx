@@ -24,6 +24,7 @@ import {
   RiskGauge,
   SectionLabel,
   STAGE_FILLS,
+  STAGE_STRIP_GRID,
   TIER_HEX,
 } from './widgets.jsx';
 
@@ -932,7 +933,14 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
           </p>
         </div>
 
-        <div className="mt-3 grid gap-px overflow-hidden rounded-2xl border border-line/70 bg-line/60 dark:border-darkBorder/70 dark:bg-darkBorder/60 sm:grid-cols-2 lg:grid-cols-4">
+        {/*
+         * The same framed grid the stat ribbons use. `data-np-keep` is what
+         * holds the frame together on a phone: the mobile theme strips card
+         * chrome from non-interactive surfaces, which took this strip's
+         * background with it — the 1px grid gap then showed the page instead of
+         * a hairline, and the four cells read as four separate boxes.
+         */}
+        <div className={`mt-3 ${STAGE_STRIP_GRID}`} data-np-keep="">
           {STAGE_STRIP.map((s) => {
             const on = s.always || stages[s.key];
             const hex = STAGE_FILLS[s.n - 1];
@@ -984,7 +992,18 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
           {/* Scenarios */}
           <div>
             <SectionLabel size="sm">Starting scenarios</SectionLabel>
-            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            {/*
+             * One row of three at EVERY width.
+             *
+             * `grid-cols-3` rather than `sm:grid-cols-3` on purpose: the phone
+             * theme rewrites any `sm:grid-cols-*` group to two columns, which
+             * broke the three scenarios into two-plus-one and left the third
+             * orphaned on its own line. Three equal choices belong on one line,
+             * so they are three columns on a phone too. The descriptions are
+             * already dropped on phones by the prose rule, and the Load cue is
+             * shown rather than hover-gated, since a phone never hovers.
+             */}
+            <div className="mt-3 grid grid-cols-3 gap-2 sm:gap-3">
               {PRESETS.map((p, idx) => {
                 const IconComp = idx === 0 ? AlertTriangle : idx === 1 ? Activity : CheckCircle2;
                 const hex = [TIER_HEX.high, TIER_HEX.medium, TIER_HEX.low][idx];
@@ -992,21 +1011,21 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
                   <button
                     key={p.name}
                     onClick={() => applyPreset(p)}
-                    className="group relative overflow-hidden rounded-2xl border border-line bg-white p-3.5 text-left shadow-soft transition hover:-translate-y-0.5 hover:border-accent/40 dark:border-darkBorder dark:bg-darkCard"
+                    className="group relative flex flex-col overflow-hidden rounded-2xl border border-line bg-white p-2.5 text-left shadow-soft transition hover:-translate-y-0.5 hover:border-accent/40 sm:p-3.5 dark:border-darkBorder dark:bg-darkCard"
                   >
                     <span
                       aria-hidden="true"
                       className="absolute inset-x-0 top-0 h-[3px]"
                       style={{ background: hex }}
                     />
-                    <div className="flex items-center gap-1.5 text-[12px] font-bold text-ink dark:text-darkText">
-                      <IconComp className="h-3.5 w-3.5 shrink-0" style={{ color: hex }} />
-                      <span>{p.name}</span>
+                    <div className="flex items-start gap-1.5 text-[11px] font-bold leading-tight text-ink sm:text-[12px] dark:text-darkText">
+                      <IconComp className="mt-0.5 h-3.5 w-3.5 shrink-0" style={{ color: hex }} />
+                      <span className="min-w-0">{p.name}</span>
                     </div>
                     <p className="mt-1.5 text-[11px] leading-relaxed text-muted dark:text-darkMuted">
                       {p.desc}
                     </p>
-                    <span className="mt-2.5 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.12em] text-accent opacity-0 transition group-hover:opacity-100">
+                    <span className="mt-auto inline-flex items-center gap-1 pt-2 text-[9.5px] font-bold uppercase tracking-[0.1em] text-accent md:pt-2.5 md:text-[10px] md:opacity-0 md:transition md:group-hover:opacity-100">
                       Load
                       <ChevronRight className="h-3 w-3" />
                     </span>

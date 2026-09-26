@@ -123,7 +123,7 @@ export default function CohortComposition({
     <section>
       <SectionLabel
         right={
-          <span className="text-[10.5px] text-muted dark:text-darkMuted">
+          <span className="hidden text-[10.5px] text-muted md:block dark:text-darkMuted">
             click a band, a column or the legend to filter the list below
           </span>
         }
@@ -142,7 +142,7 @@ export default function CohortComposition({
             </span>
           </p>
         ) : (
-          <p className={GROUP_LABEL}>
+          <p className={`hidden md:block ${GROUP_LABEL}`}>
             Priority mix by stage
             <span className="ml-2 font-medium normal-case tracking-normal text-dust dark:text-darkMuted">
               column height = share of the largest stage
