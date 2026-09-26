@@ -277,6 +277,7 @@ function StageToggle({ on, onClick }) {
     <button
       type="button"
       onClick={onClick}
+      aria-label={on ? 'Stage results are in the score' : 'Stage is not ordered'}
       title={
         on
           ? 'Results included in scoring — click to simulate "test not ordered"'
@@ -287,7 +288,6 @@ function StageToggle({ on, onClick }) {
       }`}
     >
       {on ? <CheckCircle2 className="h-3 w-3" /> : <PlusCircle className="h-3 w-3" />}
-      {on ? 'On file' : 'Not ordered'}
     </button>
   );
 }
@@ -383,18 +383,12 @@ function StageCard({ n, title, icon: Icon, on, always, children }) {
           {title}
         </h2>
         {/*
-         * Status only — the switch lives in the pathway above.
+         * No status word here.
          *
-         * Two controls for one state is how a page ends up disagreeing with
-         * itself, and the reader has no way to know which one the model obeyed.
+         * The switch lives in the pathway above and the card already dims when
+         * its stage is not in the score, so a line of type restating that was
+         * the fourth way of saying one thing.
          */}
-        <span
-          className={`ml-auto text-[9.5px] font-bold uppercase tracking-[0.12em] ${
-            always || on ? 'text-accent' : 'text-muted dark:text-darkMuted'
-          }`}
-        >
-          {always ? 'always on file' : on ? 'on file' : 'not ordered'}
-        </span>
       </div>
       <div className={`px-5 py-5 ${on ? '' : 'opacity-45'}`}>{children}</div>
     </section>
@@ -838,7 +832,7 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
               >
                 {measured}
               </strong>{' '}
-              of 4 stages on file
+              of 4 stages
               {initialPatient?.id ? (
                 <>
                   {' '}
@@ -929,7 +923,7 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
             </p>
           </div>
           <p style={MONO} className="text-[11px] tabular-nums text-muted dark:text-darkMuted">
-            {measured} / 4 on file
+            {measured} / 4
           </p>
         </div>
 
@@ -969,12 +963,7 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
                 </p>
 
                 <div className="mt-auto pt-3">
-                  {s.always ? (
-                    <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-accent">
-                      <CheckCircle2 className="h-3 w-3" />
-                      Always on file
-                    </span>
-                  ) : (
+                  {!s.always && (
                     <StageToggle on={stages[s.key]} onClick={() => toggleStage(s.key)} />
                   )}
                 </div>
