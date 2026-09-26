@@ -315,7 +315,7 @@ export default function AutoScrollShowcase({ panels = [] }) {
   // Reduced motion: one panel per screen, no autoplay, swipe or drag instead.
   if (reduced) {
     return (
-      <div className="flex h-full min-h-0 w-full flex-col">
+      <div data-np-preview="" className="flex h-full min-h-0 w-full flex-col">
         <div
           ref={scrollRef}
           onDoubleClick={() => scrollRef.current?.scrollTo({ left: 0, behavior: 'smooth' })}
@@ -330,7 +330,7 @@ export default function AutoScrollShowcase({ panels = [] }) {
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col">
+    <div data-np-preview="" className="flex h-full min-h-0 w-full flex-col">
       {/* Full-bleed stage: one panel across the viewport, fading at both edges */}
       <div
         ref={clipRef}

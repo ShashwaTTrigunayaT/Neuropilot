@@ -464,6 +464,20 @@ export default function App() {
   // belongs on the dashboard rail, and a patient record always does.
   const landing = view === 'overview' && !selectedId && status === 'ready';
 
+  /*
+   * A new page starts at the top.
+   *
+   * Scroll position belongs to the page it was made on. Without this, following
+   * a link from halfway down the worklist — or any nav button — opened the next
+   * page at that same offset, so its masthead and first section sat above the
+   * fold and the page looked like it had landed partway through. Resetting on
+   * every change of view or subject covers exactly the things that swap the
+   * page: the nav, opening a record, closing it, and the comparison view.
+   */
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [view, selectedId]);
+
   return (
     <div className="flex min-h-screen flex-col bg-paper dark:bg-darkBg text-ink dark:text-darkText transition-colors duration-300">
       <Header

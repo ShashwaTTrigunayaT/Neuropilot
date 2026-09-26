@@ -320,14 +320,27 @@ body {
   }
 
   /*
-   * The neutral accent is light, so white on it is unreadable; on phones any
-   * accent-filled control carries ink text instead. Covers the solid
-   * `bg-accent` buttons and the `from-accent` gradient ones alike.
+   * Black theme: the accent draws EDGES, never fills.
+   *
+   * A light-filled control is the one thing a black theme must not have, so
+   * whatever the accent would have filled instead takes the page's own dark
+   * surface and carries the accent as its text — and, where the element has a
+   * border to begin with, draws that border in the accent. A primary action
+   * stays legible and still reads as the primary action, without a light block
+   * sitting on a black page.
    */
   .bg-accent,
   .from-accent,
   .to-accent {
-    color: #13151a;
+    background-color: #14181e !important;
+    background-image: none !important;
+    color: rgb(var(--accent-rgb)) !important;
+  }
+  /* specificity over the generic button rule, which clears borders */
+  button.bg-accent:not([data-np-keep]),
+  button.from-accent:not([data-np-keep]),
+  a.bg-accent {
+    border-color: rgb(var(--accent-rgb) / 0.55) !important;
   }
 
   body {
@@ -446,6 +459,65 @@ body {
   button:not([data-np-keep]) svg {
     width: 0.75rem !important;
     height: 0.75rem !important;
+  }
+
+  /*
+   * The page comes down in height on a phone.
+   *
+   * A phone has one column where a laptop has two, so the desktop vertical
+   * rhythm — 32px between sections, 40px of band padding — spends a screen's
+   * worth of scroll on nothing. Each large vertical step is roughly halved
+   * here, which shortens every page without changing a single word of it.
+   *
+   * The preview is exempt (`data-np-preview`): it is a full-screen slide whose
+   * spacing is behaviour, not decoration — it measures its own panel width and
+   * step, and tightening its padding would break the loop.
+   */
+  .space-y-8:not([data-np-preview] *) > :not([hidden]) ~ :not([hidden]),
+  .space-y-7:not([data-np-preview] *) > :not([hidden]) ~ :not([hidden]),
+  .space-y-6:not([data-np-preview] *) > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 1rem !important;
+  }
+  .space-y-5:not([data-np-preview] *) > :not([hidden]) ~ :not([hidden]),
+  .space-y-4:not([data-np-preview] *) > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.75rem !important;
+  }
+  .mt-16:not([data-np-preview] *),
+  .mt-14:not([data-np-preview] *),
+  .mt-12:not([data-np-preview] *),
+  .mt-10:not([data-np-preview] *),
+  .mt-8:not([data-np-preview] *) {
+    margin-top: 1.25rem !important;
+  }
+  .mt-7:not([data-np-preview] *),
+  .mt-6:not([data-np-preview] *),
+  .mt-5:not([data-np-preview] *) {
+    margin-top: 0.875rem !important;
+  }
+  .mb-10:not([data-np-preview] *),
+  .mb-8:not([data-np-preview] *),
+  .mb-6:not([data-np-preview] *) {
+    margin-bottom: 1rem !important;
+  }
+  .py-20:not([data-np-preview] *),
+  .py-16:not([data-np-preview] *),
+  .py-14:not([data-np-preview] *),
+  .py-12:not([data-np-preview] *),
+  .py-10:not([data-np-preview] *) {
+    padding-top: 1.75rem !important;
+    padding-bottom: 1.75rem !important;
+  }
+  .pt-6:not([data-np-preview] *),
+  .pt-5:not([data-np-preview] *) {
+    padding-top: 1rem !important;
+  }
+  .pb-6:not([data-np-preview] *),
+  .pb-5:not([data-np-preview] *) {
+    padding-bottom: 1rem !important;
+  }
+  .gap-6:not([data-np-preview] *),
+  .gap-5:not([data-np-preview] *) {
+    gap: 1rem !important;
   }
 }
 

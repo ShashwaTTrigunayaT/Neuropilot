@@ -136,7 +136,14 @@ export default function FeatureRadarChart({ data = [] }) {
           </span>
           <div>
             <p className="text-[13.5px] font-bold leading-none text-ink dark:text-darkText">{RADAR_TITLE}</p>
-            <p className="mt-1.5 text-[11px] leading-none text-muted dark:text-darkMuted">
+            {/*
+             * Model mechanics are desktop detail: on a phone the radar shows
+             * the shape and the rank numbers, and the sentence about which
+             * model was served, how many parameters it took and what scale the
+             * radius is on is three facts about the model rather than one about
+             * the patient.
+             */}
+            <p className="mt-1.5 hidden text-[11px] leading-none text-muted dark:text-darkMuted md:block">
               Served model · all {total} parameters · radius on a √ scale · exact mean |SHAP| per spoke
             </p>
           </div>
