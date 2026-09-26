@@ -81,10 +81,10 @@ const FEATURE_INFO = {
 };
 
 const STAGE_COLORS = {
-  Cognitive: '#0D8282',
-  Blood: '#3B82F6',
-  MRI: '#8B5CF6',
-  PET: '#EC4899',
+  Cognitive: '#6E76D6',
+  Blood: '#9B63DE',
+  MRI: '#D34FB0',
+  PET: '#FF2E63',
   Demographic: '#6E7175',
 };
 
@@ -580,7 +580,7 @@ export default function Footer({
             <div className="space-y-2.5">
               <div className="rounded-xl border border-line dark:border-darkBorder p-3">
                 <div className="flex items-center gap-2 font-bold text-ink dark:text-darkText">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#0D8282] text-[10px] text-white">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#6E76D6] text-[10px] text-white">
                     1
                   </span>
                   Stage 1: Cognitive Screening (MMSE)
@@ -593,7 +593,7 @@ export default function Footer({
 
               <div className="rounded-xl border border-line dark:border-darkBorder p-3">
                 <div className="flex items-center gap-2 font-bold text-ink dark:text-darkText">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#3B82F6] text-[10px] text-white">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#9B63DE] text-[10px] text-white">
                     2
                   </span>
                   Stage 2: Blood Biomarker Panel
@@ -606,7 +606,7 @@ export default function Footer({
 
               <div className="rounded-xl border border-line dark:border-darkBorder p-3">
                 <div className="flex items-center gap-2 font-bold text-ink dark:text-darkText">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#8B5CF6] text-[10px] text-white">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#D34FB0] text-[10px] text-white">
                     3
                   </span>
                   Stage 3: Structural MRI Volumetrics
@@ -619,7 +619,7 @@ export default function Footer({
 
               <div className="rounded-xl border border-line dark:border-darkBorder p-3">
                 <div className="flex items-center gap-2 font-bold text-ink dark:text-darkText">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#EC4899] text-[10px] text-white">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#FF2E63] text-[10px] text-white">
                     4
                   </span>
                   Stage 4: Molecular PET Imaging

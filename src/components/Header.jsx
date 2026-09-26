@@ -33,7 +33,7 @@ function BrandRule() {
     <span
       aria-hidden="true"
       className="pointer-events-none absolute inset-x-0 top-0 h-[2px]"
-      style={{ background: 'linear-gradient(90deg, #0D8282 0%, #0FA0A0 38%, #2563EB 100%)' }}
+      style={{ background: 'linear-gradient(90deg, #4A51A3 0%, #8B5CF6 38%, #FF2E63 100%)' }}
     />
   );
 }

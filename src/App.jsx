@@ -10,7 +10,6 @@ import Overview from './components/Overview.jsx';
 import PatientDetail from './components/PatientDetail.jsx';
 import ProgressionView from './components/ProgressionView.jsx';
 import RiskSimulator from './components/RiskSimulator.jsx';
-import ThemePreview from './components/ThemePreview.jsx';
 import { MONO, Toast } from './components/widgets.jsx';
 import { API_BASE, api } from './api.js';
 
@@ -670,9 +669,6 @@ export default function App() {
 
       <Toast toast={toast} onClose={() => setToast(null)} />
 
-      {/* TEMPORARY — theme previews. Remove with ThemePreview.jsx and the
-          `data-np-theme` blocks in index.css once a palette is chosen. */}
-      <ThemePreview />
 
       <Footer
         currentView={view}

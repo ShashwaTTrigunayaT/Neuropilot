@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
-import { MONO } from './widgets.jsx';
+import { MONO, useIsPhone } from './widgets.jsx';
+import MobileWelcome from './MobileWelcome.jsx';
 
 /*
  * Full-width, self-advancing showcase.
@@ -34,7 +35,8 @@ const GUTTER = '1rem'; // the inset each full-width panel keeps from the viewpor
 const STEP_MS = 5000; // dwell per panel — long enough to read a deep panel
 const EASE_RATE = 3.2; // easing toward the target: bigger = snappier
 
-export default function AutoScrollShowcase({ panels = [] }) {
+export default function AutoScrollShowcase({ panels = [], onLaunch }) {
+  const isPhone = useIsPhone();
   const trackRef = useRef(null);
   const clipRef = useRef(null);
   const scrollRef = useRef(null);
@@ -309,6 +311,14 @@ export default function AutoScrollShowcase({ panels = [] }) {
       </article>
     );
   };
+
+  /*
+   * On a phone the carousel is replaced outright: a slide needs a viewport wide
+   * enough to hold a claim, an explanation and a column of points, and at ~375px
+   * that is a column of text with nothing to look at. The phone gets the
+   * welcome panel instead — one mark, one line, one button.
+   */
+  if (isPhone) return <MobileWelcome onLaunch={onLaunch} />;
 
   if (!usable) return null;
 

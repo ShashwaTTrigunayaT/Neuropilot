@@ -730,7 +730,7 @@ export default function Overview({
     },
     {
       id: 'outlook',
-      accent: '#8B5CF6',
+      accent: '#D34FB0',
       tone: 'accent',
       badge: 'trajectory',
       eyebrow: 'Progression outlook',
@@ -768,7 +768,7 @@ export default function Overview({
     },
     {
       id: 'interop',
-      accent: '#3B82F6',
+      accent: '#9B63DE',
       tone: 'muted',
       badge: 'FHIR R4',
       eyebrow: 'Interoperability',
@@ -858,16 +858,26 @@ export default function Overview({
       {/* ================================================================ */}
       {/* THE PREVIEW — full screen, sliding on its own, nothing above it   */}
       {/* ================================================================ */}
+      {/*
+       * The band is the viewport below the application bar. The height comes from
+       * `--app-header-h`, which the header measures and publishes, so the band
+       * starts flush under the navbar rather than at an assumed 3.5rem.
+       */}
       <section
+        data-np-preview-hero=""
         className="relative flex w-full flex-col overflow-hidden"
-        style={{ height: 'calc(100dvh - 3.5rem)' }}
+        style={{ height: 'calc(100dvh - var(--app-header-h, 3.5rem))' }}
       >
         <div
           className="pointer-events-none absolute inset-x-0 top-0 h-[520px]"
           style={{ background: 'radial-gradient(64% 100% at 50% 0%, var(--accent-wash), transparent 70%)' }}
         />
-        <div className="relative flex min-h-0 flex-1 flex-col justify-center py-3">
-          <AutoScrollShowcase panels={previewPanels} />
+        <div
+          data-np-preview=""
+          data-np-preview-band=""
+          className="relative flex min-h-0 flex-1 flex-col justify-center py-3"
+        >
+          <AutoScrollShowcase panels={previewPanels} onLaunch={onShowAll} />
         </div>
       </section>
 

@@ -355,9 +355,9 @@ export default function Interoperability({
   // proportions are of the listed counts only — which is all the bar claims.
   const surfaceMix = [
     { label: 'Patients (resources)', value: surface.patients ?? 0, hex: ACCENT },
-    { label: 'RiskAssessments', value: surface.risk_assessments ?? 0, hex: '#3B82F6' },
-    { label: 'Observations', value: surface.observations ?? 0, hex: '#8B5CF6' },
-    { label: 'Orders open', value: surface.open_orders ?? 0, hex: '#EC4899' },
+    { label: 'RiskAssessments', value: surface.risk_assessments ?? 0, hex: '#9B63DE' },
+    { label: 'Observations', value: surface.observations ?? 0, hex: '#D34FB0' },
+    { label: 'Orders open', value: surface.open_orders ?? 0, hex: '#FF2E63' },
     { label: 'Orders completed', value: surface.completed_orders ?? 0, hex: '#D9822B' },
   ];
   const surfaceTotal = surfaceMix.reduce((sum, row) => sum + row.value, 0) || 1;

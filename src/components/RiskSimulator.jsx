@@ -66,10 +66,10 @@ const COHORT_MEDIAN = {
 };
 
 const STAGE_COLORS = {
-  Cognitive: '#0D8282',
-  Blood: '#3B82F6',
-  MRI: '#8B5CF6',
-  PET: '#EC4899',
+  Cognitive: '#6E76D6',
+  Blood: '#9B63DE',
+  MRI: '#D34FB0',
+  PET: '#FF2E63',
   Demographic: '#6E7175',
 };
 
@@ -471,7 +471,7 @@ function ScoreSparkline({ history, height = 56, hint = true }) {
         cx={coords[coords.length - 1][0]}
         cy={coords[coords.length - 1][1]}
         r="3.2"
-        fill={TIER_HEX[last.tier] || '#0D8282'}
+        fill={TIER_HEX[last.tier] || '#6E76D6'}
         stroke="#fff"
         strokeWidth="1.5"
         vectorEffect="non-scaling-stroke"
@@ -550,7 +550,7 @@ function ScoreDock({ result, tier, delta, history, onJump }) {
         <span
           aria-hidden="true"
           className="h-2.5 w-2.5 shrink-0 rounded-full"
-          style={{ background: TIER_HEX[tier] || '#0D8282' }}
+          style={{ background: TIER_HEX[tier] || '#6E76D6' }}
         />
         <div className="leading-none">
           <p style={MONO} className="text-[17px] font-black tabular-nums text-ink dark:text-darkText">
@@ -558,7 +558,7 @@ function ScoreDock({ result, tier, delta, history, onJump }) {
           </p>
           <p
             className="mt-1 text-[9.5px] font-bold uppercase tracking-[0.14em]"
-            style={{ color: TIER_HEX[tier] || '#0D8282' }}
+            style={{ color: TIER_HEX[tier] || '#6E76D6' }}
           >
             {tier} risk
           </p>

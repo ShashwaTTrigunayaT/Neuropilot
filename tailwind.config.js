@@ -54,7 +54,8 @@ export default {
         lift: '0 1px 3px rgba(19,21,26,0.05), 0 20px 44px -26px rgba(19,21,26,0.22)',
         float: '0 2px 8px -2px rgba(19,21,26,0.05), 0 12px 30px -10px rgba(19,21,26,0.1)',
         'dark-float': '0 4px 20px -4px rgba(0,0,0,0.65), 0 0 1px rgba(255,255,255,0.08)',
-        'glow-teal': '0 0 24px -4px rgba(13, 130, 130, 0.35)',
+        // derives from the accent, so the brand halo follows the theme
+        'glow-teal': '0 0 24px -4px rgb(var(--accent-rgb) / 0.35)',
         'glow-high': '0 0 24px -4px rgba(224, 72, 54, 0.35)',
         'glow-medium': '0 0 24px -4px rgba(217, 130, 43, 0.35)',
         'glow-low': '0 0 24px -4px rgba(30, 185, 128, 0.35)',

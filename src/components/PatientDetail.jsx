@@ -1290,7 +1290,7 @@ export default function PatientDetail({
   const action = pipeline?.recommended_next ?? null;
   const advanceable = Boolean(action) && !/^(Schedule|Return)/.test(action.button);
 
-  const tierHex = TIER_HEX[patient.risk_tier] || '#0D8282';
+  const tierHex = TIER_HEX[patient.risk_tier] || '#6E76D6';
   const tierWord = TIER_LABEL[patient.risk_tier] ?? patient.risk_tier ?? 'Unbanded';
   const measuredPanels = ['blood', 'imaging', 'pet'].filter((slot) => patient[slot]?.status === 'completed').length;
   // Anchors are scrolled by hand rather than by `#id` hash links so the offset
