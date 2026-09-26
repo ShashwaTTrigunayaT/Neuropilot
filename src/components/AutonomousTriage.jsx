@@ -531,7 +531,7 @@ export default function AutonomousTriage({
           <h1 className="mt-1 text-lg font-black tracking-tight text-ink dark:text-darkText">
             Approval-gated cohort workup
           </h1>
-          <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-muted dark:text-darkMuted">
+          <p className="mt-1 hidden max-w-2xl text-[11px] leading-relaxed text-muted sm:block dark:text-darkMuted">
             The model ranks the cohort and proposes the next batch of tests with its reasoning.
             Proposals are computed on{' '}
             <span className="font-semibold text-ink dark:text-darkText">copies of the record</span>, so

@@ -323,7 +323,7 @@ export default function AbdmPanel({ patients = [], initialPatientId, onToast }) 
               <li key={`${event.at}-${i}`} className="flex items-start gap-2">
                 <span
                   style={MONO}
-                  className="mt-0.5 shrink-0 rounded-md border border-line dark:border-darkBorder bg-tint dark:bg-darkBorderSubtle px-1.5 py-0.5 text-[9.5px] text-muted dark:text-darkMuted"
+                  className="mt-0.5 shrink-0 text-[9.5px] tabular-nums text-dust dark:text-darkMuted"
                 >
                   {event.at.slice(11, 19)}
                 </span>

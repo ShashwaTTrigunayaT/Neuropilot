@@ -118,7 +118,7 @@ function ScoreSection({ patient }) {
                 <p
                   key={b.key}
                   style={{ width: `${b.width}%` }}
-                  className={`text-[10px] ${tier === b.key ? 'font-bold text-ink dark:text-darkText' : 'text-muted dark:text-darkMuted'}`}
+                  className={`text-[9.5px] leading-tight sm:text-[10px] ${tier === b.key ? 'font-bold text-ink dark:text-darkText' : 'text-muted dark:text-darkMuted'}`}
                 >
                   {b.label}{' '}
                   <span style={MONO} className="text-dust dark:text-darkMuted">{b.range}</span>
@@ -239,7 +239,7 @@ function ReasoningSection({ patient }) {
     const isBinary = f.feature === 'amyloid_positive' || f.feature === 'tau_positive';
     const isApoe = f.feature === 'apoe_e4';
     return (
-      <div key={`${f.feature}-${i}`} className="space-y-1" style={{ opacity: dim ? 0.7 : 1 }}>
+      <div key={`${f.feature}-${i}`} className="space-y-1.5" style={{ opacity: dim ? 0.7 : 1 }}>
         <div className="flex items-baseline justify-between gap-4">
           <span className="truncate text-xs font-medium text-ink dark:text-darkText" title={f.feature}>
             {f.text}
@@ -253,19 +253,16 @@ function ReasoningSection({ patient }) {
               </span>
             )}
             {dim && (
-              <span className="ml-1.5 rounded-md bg-[#EAE7DF] dark:bg-darkBorder px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-muted dark:text-darkMuted">
+              <span className="ml-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-muted dark:text-darkMuted">
                 {estimated ? 'predicted stage' : 'model default'}
               </span>
             )}
           </span>
-          <span
-            className="shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-bold"
-            style={{ ...MONO, color: hex, backgroundColor: `${hex}18` }}
-          >
+          <span className="shrink-0 text-[11px] font-bold tabular-nums" style={{ ...MONO, color: hex }}>
             {up ? '+' : '−'}{Math.abs(f.effect).toFixed(2)}
           </span>
         </div>
-        <div className="h-1.5 overflow-hidden rounded-full bg-[#EAE7DF] dark:bg-darkBorder">
+        <div className="h-2 overflow-hidden rounded-full bg-[#EAE7DF] dark:bg-darkBorder">
           <div className="h-full rounded-full transition-all duration-500" style={{ width: `${width}%`, backgroundColor: hex }} />
         </div>
       </div>
@@ -309,7 +306,7 @@ function ReasoningSection({ patient }) {
             {(patient.factors || []).length} factors{strongest ? ` · ${strongest.text}` : ''}
           </p>
         </div>
-        <div className="mt-2.5 flex h-3 w-full overflow-hidden rounded-full bg-[#EAE7DF] dark:bg-darkBorder">
+        <div className="mt-2.5 flex h-3.5 w-full overflow-hidden rounded-full bg-[#EAE7DF] dark:bg-darkBorder">
           <span
             className="h-full transition-all"
             style={{ width: `${posShare}%`, backgroundColor: TIER_HEX.high }}
@@ -365,7 +362,7 @@ function ReasoningSection({ patient }) {
                     {rows.length} {rows.length === 1 ? 'factor' : 'factors'}
                   </span>
                   {!hasResults && slot && (
-                    <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${hasEstimate ? 'bg-accent/10 text-accent' : 'text-dust dark:text-darkMuted'}`}>
+                    <span className={`text-[9.5px] font-bold uppercase tracking-[0.12em] ${hasEstimate ? 'text-accent' : 'text-dust dark:text-darkMuted'}`}>
                       {hasEstimate ? 'predicted · not measured' : isOrdered ? 'add real result' : 'not measured'}
                     </span>
                   )}
@@ -379,7 +376,7 @@ function ReasoningSection({ patient }) {
                     : 'Order this test to see its influence on the risk score.'}
                 </p>
               ) : (
-                <div className="mt-3 space-y-2.5">{rows.map((f, i) => factorRow(f, i, stage > 1 && !hasResults, hasEstimate))}</div>
+                <div className="mt-3 space-y-3">{rows.map((f, i) => factorRow(f, i, stage > 1 && !hasResults, hasEstimate))}</div>
               )}
             </div>
           );
@@ -612,7 +609,7 @@ function ActionSection({ action, advanceable, onAdvance, busy, error }) {
                 if (e.key === 'Escape') setOverrideOpen(false);
               }}
               placeholder="Rationale, e.g., Rapid subjective memory decline or positive family history…"
-              className="h-9 min-w-[260px] flex-1 rounded-xl border border-line bg-white px-3.5 text-xs text-ink outline-none transition placeholder:text-muted/80 focus:border-accent focus:ring-2 focus:ring-accent/20 dark:border-darkBorder dark:bg-darkCard dark:text-darkText"
+              className="h-9 min-w-0 flex-1 rounded-xl border border-line bg-white px-3.5 text-xs text-ink outline-none transition placeholder:text-muted/80 focus:border-accent focus:ring-2 focus:ring-accent/20 dark:border-darkBorder dark:bg-darkCard dark:text-darkText"
             />
             <Btn tone="primary" icon={Check} onClick={confirmOverride} disabled={busy}>
               {busy ? 'Saving…' : 'Confirm & Advance'}
@@ -1340,7 +1337,7 @@ export default function PatientDetail({
             read as plain; this gives the surface depth without adding a box. */}
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute -left-8 -top-5 h-36 w-[560px] bg-[radial-gradient(58%_120%_at_22%_0%,rgba(13,130,130,0.075),transparent_72%)] dark:bg-[radial-gradient(58%_120%_at_22%_0%,rgba(20,180,180,0.11),transparent_72%)]"
+          className="pointer-events-none absolute -left-8 -top-5 h-36 w-[min(560px,100vw)] bg-[radial-gradient(58%_120%_at_22%_0%,rgba(13,130,130,0.075),transparent_72%)] dark:bg-[radial-gradient(58%_120%_at_22%_0%,rgba(20,180,180,0.11),transparent_72%)]"
         />
 
         {/* A record is reached from the queue, so the way back sits above the
@@ -1414,7 +1411,7 @@ export default function PatientDetail({
 
               {/* The lead sentence is the record's one-line abstract, and every
                   number in it is live off the served payload. */}
-              <p className="mt-1.5 max-w-[76ch] text-[13.5px] leading-relaxed text-muted dark:text-darkMuted">
+              <p className="mt-1.5 hidden max-w-[76ch] text-[13.5px] leading-relaxed text-muted sm:block dark:text-darkMuted">
                 <strong style={MONO} className="text-[15px] font-black tabular-nums text-ink dark:text-darkText">
                   {patient.score != null ? fmtScore(patient.score) : '—'}
                 </strong>{' '}
@@ -1441,10 +1438,7 @@ export default function PatientDetail({
                 <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10.5px] leading-relaxed text-muted dark:text-darkMuted">
                   <span aria-hidden="true" className="h-[3px] w-[3px] rounded-full bg-accent" />
                   <span>Pulled from the EHR record</span>
-                  <span
-                    style={MONO}
-                    className="rounded-md border border-line bg-tint/60 px-1.5 py-0.5 text-[10px] font-semibold text-ink dark:border-darkBorder dark:bg-darkBorderSubtle dark:text-darkText"
-                  >
+                  <span style={MONO} className="text-[10px] font-semibold text-ink dark:text-darkText">
                     {patient.external_ids.ehr_patient_id}
                   </span>
                   {patient.external_ids.ehr_iss && (
@@ -1472,7 +1466,7 @@ export default function PatientDetail({
        * at 390 to 171px, so a bar pinned at a fixed offset would slide up under
        * it and disappear. Below `xl` this is an ordinary toolbar in the flow.
        */}
-      <div className="no-print z-20 -mx-6 mt-5 border-b border-line/70 bg-paper/95 px-6 py-2 backdrop-blur-xl xl:sticky xl:top-[75px] dark:border-darkBorder/70 dark:bg-darkBg/95">
+      <div className="no-print z-20 -mx-4 mt-5 border-b border-line/70 bg-paper/95 px-4 py-2 backdrop-blur-xl sm:-mx-6 sm:px-6 xl:sticky xl:top-[75px] dark:border-darkBorder/70 dark:bg-darkBg/95">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5">
           {/* Pathway progress, compressed to four segments: the toolbar doubles
               as the status line, so the stage is readable from anywhere. */}

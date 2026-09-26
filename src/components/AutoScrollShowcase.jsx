@@ -190,7 +190,7 @@ export default function AutoScrollShowcase({ panels = [] }) {
               {String(i + 1).padStart(2, '0')} / {String(count).padStart(2, '0')}
             </span>
             {p.badge && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-white/25 bg-white/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-white">
+              <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/85">
                 {p.badge}
               </span>
             )}

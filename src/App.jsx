@@ -470,7 +470,7 @@ export default function App() {
        */}
       {autopilot && view !== 'autonomous' && (
         <div className="border-b border-accent/30 bg-accent/[0.06] dark:bg-accent/10">
-          <div className="mx-auto flex w-full max-w-6xl items-center gap-2.5 px-6 py-2">
+          <div className="mx-auto flex w-full max-w-6xl items-center gap-2.5 px-4 py-2 sm:px-6">
             <span className="relative flex h-2.5 w-2.5 shrink-0">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-60" />
               <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-accent" />
@@ -499,7 +499,7 @@ export default function App() {
        * viewport and lay out their own padding, so it must not be nested inside
        * the dashboard rail. Every other view keeps the constrained column.
        */}
-      <main className={landing ? 'w-full flex-1' : 'mx-auto w-full max-w-6xl flex-1 px-6 py-8'}>
+      <main className={landing ? 'w-full flex-1' : 'mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8'}>
         {status === 'loading' && !selectedId && <CohortSkeleton />}
         {status === 'loading' && selectedId && <DetailSkeleton />}
 

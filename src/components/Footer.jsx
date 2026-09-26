@@ -133,8 +133,8 @@ function ContributionsPanel({ modelInfo }) {
                     {String(i + 1).padStart(2, '0')}
                   </span>
                   <span
-                    className="shrink-0 rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide"
-                    style={{ color: hex, backgroundColor: `${hex}18` }}
+                    className="shrink-0 text-[9.5px] font-bold uppercase tracking-[0.12em]"
+                    style={{ color: hex }}
                   >
                     {info.stage}
                   </span>
@@ -235,7 +235,7 @@ export default function Footer({
     <>
       <footer className=" border-t border-line dark:border-darkBorder bg-tint/40 dark:bg-darkCard/40 backdrop-blur-sm no-print">
         {/* Main Footer Container */}
-        <div className="mx-auto w-full max-w-6xl px-6 py-12">
+        <div className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 sm:py-12">
           {/* Top Bar: Brand, Status Beacon & Quick Actions */}
           <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line/70 dark:border-darkBorder/70 pb-8">
             <div className="flex items-center gap-3">

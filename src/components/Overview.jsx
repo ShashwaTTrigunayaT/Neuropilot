@@ -166,6 +166,25 @@ function HandoffLinks({ containerRef, seen }) {
 
     const measure = () => {
       const base = container.getBoundingClientRect();
+
+      /*
+       * Only draw the wiring where it is a diagram.
+       *
+       * The four buttons and the four cards line up 1:1 only at `lg` and up — a
+       * single button row above a four-column grid. Below that the buttons wrap
+       * into two or three rows and the cards stack to one column, so a wire from
+       * an upper button row runs straight across the rows beneath it and over the
+       * cards: arrows mashed over the cards. There the mapping is carried by the
+       * "Wired to" line inside each card instead, and the connectors are simply
+       * not drawn.
+       */
+      const isDiagram = typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches;
+      if (!isDiagram) {
+        setLinks([]);
+        setBox({ w: base.width, h: base.height });
+        return;
+      }
+
       const byKey = new Map();
       container.querySelectorAll('[data-handoff]').forEach((el) => {
         const key = el.getAttribute('data-handoff');
@@ -302,7 +321,7 @@ function Band({ id, tint = false, className = '', inner = '', children }) {
         tint ? 'bg-tint/50 dark:bg-darkCard/40' : ''
       } ${className}`}
     >
-      <div className={`mx-auto w-full max-w-6xl px-6 py-14 lg:py-16 ${inner}`}>{children}</div>
+      <div className={`mx-auto w-full max-w-6xl px-4 py-14 sm:px-6 lg:py-16 ${inner}`}>{children}</div>
     </section>
   );
 }
@@ -915,11 +934,11 @@ export default function Overview({
                   return (
                     <span
                       key={key}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-line/70 bg-white px-2.5 py-1 text-[10.5px] font-semibold text-ink shadow-soft dark:border-darkBorder dark:bg-darkCard dark:text-darkText"
+                      className="inline-flex items-center gap-1.5 text-[10.5px] font-semibold text-ink dark:text-darkText"
                     >
                       <span className="h-2 w-2 rounded-full" style={{ background: STAGE_FILLS[stage - 1] }} />
                       {STAGE_TITLE[stage]}
-                      <span style={MONO} className="font-bold">
+                      <span style={MONO} className="font-bold text-muted dark:text-darkMuted">
                         {s.share_pct}%
                       </span>
                     </span>
@@ -948,7 +967,7 @@ export default function Overview({
             style={{ background: 'radial-gradient(50% 100% at 50% 0%, rgba(13,130,130,0.07), transparent 72%)' }}
           />
           <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/45 to-transparent dark:via-accent/30" />
-          <div className="relative mx-auto w-full max-w-6xl px-6 py-16 text-center lg:py-20">
+          <div className="relative mx-auto w-full max-w-6xl px-4 py-16 text-center sm:px-6 lg:py-20">
             <div className="flex items-center justify-center gap-2.5">
               <span className="relative flex h-1.5 w-1.5">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-70" />
@@ -1020,7 +1039,7 @@ export default function Overview({
                * travel down, and they need room to be read as lines rather than as
                * arrows glued to the buttons.
                */}
-              <div className="relative z-10 mx-auto mt-14 grid w-full max-w-4xl gap-px overflow-hidden rounded-2xl border border-line/70 bg-line/60 text-left dark:border-darkBorder/70 dark:bg-darkBorder/60 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="relative z-10 mx-auto mt-8 grid w-full max-w-4xl gap-px overflow-hidden rounded-2xl border border-line/70 bg-line/60 text-left sm:grid-cols-2 lg:mt-14 lg:grid-cols-4 dark:border-darkBorder/70 dark:bg-darkBorder/60">
                 {HANDOFF_STEPS.map(([key, title, body]) => {
                   const cta = handoff[key];
                   return (
@@ -1077,9 +1096,9 @@ export default function Overview({
                   <a
                     key={id}
                     href={`#${id}`}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-line/80 bg-white/70 px-3 py-1.5 text-[11px] font-semibold text-ink transition hover:border-accent/50 hover:text-accent dark:border-darkBorder dark:bg-darkCard/60 dark:text-darkText"
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-muted transition hover:text-accent dark:text-darkMuted"
                   >
-                    <ArrowDown className="h-3 w-3 text-accent" />
+                    <ArrowDown className="h-3 w-3 text-accent/70" />
                     {label}
                   </a>
                 ))}

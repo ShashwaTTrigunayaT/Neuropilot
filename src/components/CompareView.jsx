@@ -45,7 +45,7 @@ export default function CompareView({ compare, loading, error, onExit, onOpenPat
             <h1 className="text-[28px] font-black leading-none tracking-tight text-ink dark:text-darkText sm:text-[32px]">
               Priority Comparison
             </h1>
-            <p className="mt-1.5 text-[13px] text-muted dark:text-darkMuted">
+            <p className="mt-1.5 hidden text-[13px] text-muted sm:block dark:text-darkMuted">
               Explicit tiebreak ranking — same displayed score is not the same decision
             </p>
           </div>
@@ -77,7 +77,7 @@ export default function CompareView({ compare, loading, error, onExit, onOpenPat
       {!loading && !error && items.length > 0 && (
         <>
           {/* Verdict banner */}
-          <div className="rounded-2xl border border-accent/30 bg-gradient-to-br from-accent/[0.08] to-transparent px-6 py-5">
+          <div className="rounded-2xl border border-accent/30 bg-gradient-to-br from-accent/[0.08] to-transparent px-4 py-5 sm:px-6">
             <SectionLabel size="xs">Verdict</SectionLabel>
             <p className="mt-2 text-sm leading-relaxed text-ink dark:text-darkText">
               <strong>{items[0].id}</strong> goes first
@@ -142,10 +142,12 @@ export default function CompareView({ compare, loading, error, onExit, onOpenPat
                     return (
                       <span
                         key={slot}
-                        className={`rounded-md px-2 py-0.5 text-[10px] font-semibold ${outcome ? '' : 'border border-dashed border-line dark:border-darkBorder text-muted dark:text-darkMuted'}`}
-                        style={outcome ? { background: `${hex}18`, color: hex } : undefined}
+                        className="text-[10px] font-semibold"
+                        style={outcome ? { color: hex } : undefined}
                       >
-                        {SLOT_LABELS[slot]}{outcome ? ` · ${outcome}` : ' · not ordered'}
+                        <span className={outcome ? '' : 'text-muted dark:text-darkMuted'}>
+                          {SLOT_LABELS[slot]}{outcome ? ` · ${outcome}` : ' · not ordered'}
+                        </span>
                       </span>
                     );
                   })}

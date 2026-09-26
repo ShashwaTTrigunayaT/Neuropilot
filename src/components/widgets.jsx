@@ -284,19 +284,33 @@ export function Card({ children, className = '', hover = false }) {
  * across several lines.
  */
 
+/**
+ * A status label.
+ *
+ * Deliberately NOT a padded rounded chip: a filled pill in a tinted box is the
+ * shape every dashboard wears, and a wall of them reads as decoration rather
+ * than state. This is the page's own idiom instead — a small dot carrying the
+ * tone, ringed with a soft halo, ahead of a tracked uppercase label. No border,
+ * no fill, no radius; the colour and the dot carry the meaning and the text is
+ * set like a caption, the way the view mastheads already do it.
+ */
 export function Pill({ tone = 'muted', children }) {
   const tones = {
-    ok: 'border-emerald-500/35 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-    warn: 'border-amber-500/35 bg-amber-500/10 text-amber-600 dark:text-amber-400',
-    bad: 'border-red-500/35 bg-red-500/10 text-red-600 dark:text-red-400',
-    muted: 'border-line dark:border-darkBorder bg-tint dark:bg-darkBorderSubtle text-muted dark:text-darkMuted',
-    accent: 'border-accent/35 bg-accent/10 text-accent',
+    ok: { text: 'text-emerald-600 dark:text-emerald-400', hex: '#1EB980' },
+    warn: { text: 'text-amber-600 dark:text-amber-400', hex: '#D9822B' },
+    bad: { text: 'text-red-600 dark:text-red-400', hex: '#E04836' },
+    muted: { text: 'text-muted dark:text-darkMuted', hex: '#A6A09A' },
+    accent: { text: 'text-accent', hex: ACCENT },
   };
+  const t = tones[tone] || tones.muted;
   return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] ${tones[tone]}`}
-    >
-      {children}
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-[9.5px] font-bold uppercase tracking-[0.14em]">
+      <span
+        aria-hidden="true"
+        className="h-[5px] w-[5px] shrink-0 rounded-full"
+        style={{ backgroundColor: t.hex, boxShadow: `0 0 0 2.5px ${t.hex}1F` }}
+      />
+      <span className={t.text}>{children}</span>
     </span>
   );
 }
@@ -874,7 +888,112 @@ export function PatientTable({
      * `lg` the table can be wider than the screen, so there the horizontal scroll is
      * kept and the pin is given up — which is the right trade on a narrow viewport.
      */
-    <div ref={tableRef} className="w-full border-b border-line/70 lg:overflow-x-clip dark:border-darkBorder/70">
+    <div ref={tableRef} className="w-full border-b border-line/70 dark:border-darkBorder/70">
+      {/*
+       * Below `md` the seven-column grid is not a table, it is a horizontal
+       * crawl: identity, risk, stage and the recommended action cannot all fit
+       * a phone, so every subject costs a sideways scroll. The same fields come
+       * back here as ONE stacked record — identity and score on the first line,
+       * the demographics and the pathway under it, then the next step — which
+       * reads without dragging the page sideways.
+       */}
+      <ul className="divide-y divide-line/70 md:hidden dark:divide-darkBorder/70">
+        {rows.map((p, i) => {
+          const tierHex = TIER_HEX[p.risk_tier] || '#6E7175';
+          const isSelected = selected.has(p.id);
+          return (
+            <li key={p.id} className="relative flex items-start gap-2 py-3.5 pl-3.5 pr-3">
+              <span
+                aria-hidden="true"
+                className="absolute inset-y-0 left-0 w-[3px]"
+                style={{ backgroundColor: tierHex }}
+              />
+              {selectable && (
+                <button
+                  type="button"
+                  aria-label={`Select ${p.id} for comparison`}
+                  aria-pressed={isSelected}
+                  onClick={() => onToggleSelect(p.id)}
+                  className={`mt-0.5 flex h-[20px] w-[20px] shrink-0 items-center justify-center rounded-[6px] border transition ${
+                    isSelected
+                      ? 'border-accent bg-accent text-white'
+                      : 'border-line bg-white dark:border-darkBorder dark:bg-darkCard'
+                  }`}
+                >
+                  {isSelected && (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20 6 9 17l-5-5" />
+                    </svg>
+                  )}
+                </button>
+              )}
+
+              <button type="button" onClick={() => onSelect(p.id)} className="min-w-0 flex-1 text-left">
+                <span className="flex items-center justify-between gap-3">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span style={MONO} className="text-[10px] font-bold tabular-nums text-dust dark:text-darkMuted">
+                      {String(pageOffset + i + 1).padStart(2, '0')}
+                    </span>
+                    <span style={MONO} className="truncate text-[13.5px] font-bold text-ink dark:text-darkText">
+                      {p.id}
+                    </span>
+                  </span>
+                  <span className="flex shrink-0 items-baseline gap-1.5">
+                    <span style={{ ...MONO, color: tierHex }} className="text-[15px] font-black tabular-nums">
+                      {fmtScore(p.final_score ?? p.score)}
+                    </span>
+                    <TierTag tier={p.risk_tier} />
+                  </span>
+                </span>
+
+                <span style={MONO} className="mt-1 block text-[10.5px] text-muted dark:text-darkMuted">
+                  {p.age ?? '—'}y · {p.sex ?? '—'} · Edu {p.education_years ?? '—'}y
+                </span>
+
+                <span className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="flex items-center gap-1">
+                    {[1, 2, 3, 4].map((step) => {
+                      const done = step < p.stage;
+                      const current = step === p.stage;
+                      const hex = STAGE_FILLS[step - 1];
+                      return (
+                        <span
+                          key={step}
+                          className="h-1.5 w-5 rounded-full"
+                          style={{ background: done ? TIER_HEX.low : current ? hex : '#E4E0D8' }}
+                        />
+                      );
+                    })}
+                  </span>
+                  <span style={MONO} className="text-[10.5px] text-muted dark:text-darkMuted">
+                    {STAGES_SHORT[p.stage - 1] ?? p.stage_name} · Stage {p.stage}/4
+                  </span>
+                </span>
+
+                {p.recommended_next && (
+                  <span className="mt-1.5 flex items-start gap-1.5 text-[11px] leading-snug text-ink dark:text-darkText">
+                    <ArrowRight className="mt-[2px] h-3 w-3 shrink-0 text-accent" />
+                    <span className="min-w-0">{p.recommended_next}</span>
+                  </span>
+                )}
+              </button>
+
+              {onSimulate && (
+                <button
+                  type="button"
+                  onClick={() => onSimulate(p)}
+                  className="mt-0.5 shrink-0 self-start rounded-lg border border-line px-2 py-1 text-[10.5px] font-semibold text-accent transition hover:bg-accent/10 dark:border-darkBorder"
+                >
+                  Simulate
+                </button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+
+      {/* md and up: the full grid, which finally has the width to be one. */}
+      <div className="hidden overflow-x-auto md:block lg:overflow-x-clip">
       {/*
        * The rows sit on their OWN surface — solid white against the page's paper
        * tone (#FAF8F4), solid card colour against the dark page. Without it the
@@ -1062,7 +1181,7 @@ export function PatientTable({
               <td className={`${CELL} ${compact ? '' : 'max-w-[280px]'}`}>
                 {p.recommended_next ? (
                   <span
-                    className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-line/80 bg-white px-2.5 py-1 text-[11px] font-medium text-ink shadow-[0_1px_2px_rgba(0,0,0,0.03)] dark:border-darkBorder dark:bg-darkCard dark:text-darkText"
+                    className="inline-flex max-w-full items-center gap-1.5 text-[11px] font-medium text-ink dark:text-darkText"
                     title={p.recommended_next}
                   >
                     <ArrowRight className="h-3 w-3 shrink-0 text-accent" />
@@ -1091,6 +1210,7 @@ export function PatientTable({
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

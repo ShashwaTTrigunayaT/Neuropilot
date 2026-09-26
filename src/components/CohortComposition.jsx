@@ -34,7 +34,10 @@ import { STAGES_SHORT } from '../lib.js';
  */
 
 const PLOT_H = 168; // the plot height — one number governs the whole chart
-const COL_W = 76; // column width — the page shows one chart, so it can carry the width
+/* Column width. Narrower than the plot slot on purpose: the four columns then sit
+ * apart with a clear gap between them instead of touching edge-to-edge, which is
+ * what made the stack read as squeezed on a phone. */
+const COL_W = 56;
 const HEAD = 0.82; // the tallest column stops short of the top, leaving room for its label
 const AXIS_TICKS = [100, 75, 50, 25, 0]; // % of the largest stage
 
@@ -330,13 +333,16 @@ export default function CohortComposition({
                   }`}
                   style={{ opacity: dim ? 0.5 : 1 }}
                 >
+                  {/* The icon is dropped below `sm`: on a phone the four label
+                      slots are ~70px wide and the glyph would spend half of that,
+                      truncating the stage name it is meant to explain. */}
                   <span
-                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg"
+                    className="hidden h-6 w-6 shrink-0 items-center justify-center rounded-lg sm:flex"
                     style={{ background: `${col.hex}1f` }}
                   >
                     <StageIcon stage={col.stage} hex={col.hex} />
                   </span>
-                  <span className="truncate text-[13px] font-semibold">{col.short}</span>
+                  <span className="truncate text-[12px] font-semibold sm:text-[13px]">{col.short}</span>
                 </button>
               );
             })}

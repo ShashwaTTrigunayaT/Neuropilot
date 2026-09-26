@@ -281,10 +281,8 @@ function StageToggle({ on, onClick }) {
           ? 'Results included in scoring — click to simulate "test not ordered"'
           : 'Simulates a test that has not been ordered — model falls back to its learned default'
       }
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide transition ${
-        on
-          ? 'border-accent/40 bg-accent/10 text-accent'
-          : 'border-line bg-white/60 text-muted dark:border-darkBorder dark:bg-darkCard/60 dark:text-darkMuted'
+      className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.1em] transition ${
+        on ? 'text-accent' : 'text-muted dark:text-darkMuted'
       }`}
     >
       {on ? <CheckCircle2 className="h-3 w-3" /> : <PlusCircle className="h-3 w-3" />}
@@ -390,10 +388,8 @@ function StageCard({ n, title, icon: Icon, on, always, children }) {
          * itself, and the reader has no way to know which one the model obeyed.
          */}
         <span
-          className={`ml-auto rounded-full border px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ${
-            always || on
-              ? 'border-accent/40 bg-accent/10 text-accent'
-              : 'border-line bg-tint/70 text-muted dark:border-darkBorder dark:bg-darkBorder/50 dark:text-darkMuted'
+          className={`ml-auto text-[9.5px] font-bold uppercase tracking-[0.12em] ${
+            always || on ? 'text-accent' : 'text-muted dark:text-darkMuted'
           }`}
         >
           {always ? 'always measured' : on ? 'measured' : 'not ordered'}
@@ -578,10 +574,8 @@ function ScoreDock({ result, tier, delta, history, onJump }) {
             {delta !== null && delta !== 0 && (
               <span
                 style={MONO}
-                className={`rounded-full border px-2 py-0.5 text-[10.5px] font-bold tabular-nums ${
-                  delta > 0
-                    ? 'border-tierHigh/40 bg-tierHighSoft text-tierHigh'
-                    : 'border-tierLow/40 bg-tierLowSoft text-tierLow'
+                className={`text-[10.5px] font-bold tabular-nums ${
+                  delta > 0 ? 'text-tierHigh' : 'text-tierLow'
                 }`}
               >
                 {delta > 0 ? `▲ +${delta}` : `▼ ${delta}`}
@@ -836,7 +830,7 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
             <h1 className="mt-2 text-[36px] font-black leading-[0.97] tracking-[-0.035em] text-ink dark:text-darkText sm:text-[40px]">
               Clinical Risk Simulator
             </h1>
-            <p className="mt-2 text-[13.5px] leading-relaxed text-muted dark:text-darkMuted">
+            <p className="mt-2 hidden text-[13.5px] leading-relaxed text-muted sm:block dark:text-darkMuted">
               <strong
                 style={MONO}
                 className="text-[15px] font-black tabular-nums text-ink dark:text-darkText"
@@ -968,7 +962,7 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
 
                 <div className="mt-auto pt-3">
                   {s.always ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-accent/40 bg-accent/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-accent">
+                    <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-accent">
                       <CheckCircle2 className="h-3 w-3" />
                       Always on file
                     </span>
@@ -1301,10 +1295,8 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
                       <span
                         style={MONO}
                         title="Change since the previous scored vector"
-                        className={`rounded-full border px-2 py-0.5 text-[10.5px] font-bold tabular-nums ${
-                          delta > 0
-                            ? 'border-tierHigh/40 bg-tierHighSoft text-tierHigh'
-                            : 'border-tierLow/40 bg-tierLowSoft text-tierLow'
+                        className={`text-[10.5px] font-bold tabular-nums ${
+                          delta > 0 ? 'text-tierHigh' : 'text-tierLow'
                         }`}
                       >
                         {delta > 0 ? `▲ +${delta}` : `▼ ${delta}`} pts

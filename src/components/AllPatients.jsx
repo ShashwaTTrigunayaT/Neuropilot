@@ -97,7 +97,7 @@ export default function AllPatients({ patients, onSelect, onSimulate, onCompare 
             as plain; this gives the surface depth without adding a single box. */}
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute -left-8 -top-5 h-36 w-[560px] bg-[radial-gradient(58%_120%_at_22%_0%,rgba(13,130,130,0.075),transparent_72%)] dark:bg-[radial-gradient(58%_120%_at_22%_0%,rgba(20,180,180,0.11),transparent_72%)]"
+          className="pointer-events-none absolute -left-8 -top-5 h-36 w-[min(560px,100vw)] bg-[radial-gradient(58%_120%_at_22%_0%,rgba(13,130,130,0.075),transparent_72%)] dark:bg-[radial-gradient(58%_120%_at_22%_0%,rgba(20,180,180,0.11),transparent_72%)]"
         />
 
         <div className="relative flex flex-wrap items-end justify-between gap-x-8 gap-y-5">
@@ -137,7 +137,7 @@ export default function AllPatients({ patients, onSelect, onSimulate, onCompare 
               <h1 className="mt-2 text-[36px] font-black leading-[0.97] tracking-[-0.035em] text-ink dark:text-darkText sm:text-[40px]">
                 Patient Worklist
               </h1>
-              <p className="mt-2 text-[13.5px] leading-relaxed text-muted dark:text-darkMuted">
+              <p className="mt-2 hidden text-[13.5px] leading-relaxed text-muted sm:block dark:text-darkMuted">
                 <strong style={MONO} className="text-[15px] font-black tabular-nums text-ink dark:text-darkText">
                   {patients.length.toLocaleString()}
                 </strong>{' '}
@@ -198,9 +198,12 @@ export default function AllPatients({ patients, onSelect, onSimulate, onCompare 
               onChange={(e) => setSortKey(e.target.value)}
               className={`${controlBase} cursor-pointer appearance-none pr-8 font-medium`}
             >
-              <option value="risk-desc">Sort: Priority (High → Low)</option>
-              <option value="risk-asc">Sort: Priority (Low → High)</option>
-              <option value="stage">Sort: Pipeline Stage</option>
+              {/* No arrow glyphs in the labels: the control already draws a
+                  chevron on its right edge, and "High → Low" beside it read as
+                  two arrows mashed together. */}
+              <option value="risk-desc">Sort: priority, high first</option>
+              <option value="risk-asc">Sort: priority, low first</option>
+              <option value="stage">Sort: pipeline stage</option>
             </select>
             <Chevron />
           </div>
@@ -247,9 +250,9 @@ export default function AllPatients({ patients, onSelect, onSimulate, onCompare 
           </p>
           <div className="flex flex-wrap items-center gap-1.5">
             {compareIds.map((id) => (
-              <span key={id} style={MONO} className="inline-flex items-center gap-1 rounded-full bg-white dark:bg-darkCard px-2 py-0.5 text-[10.5px] font-bold text-accent border border-accent/30">
+              <span key={id} style={MONO} className="inline-flex items-center gap-1 text-[10.5px] font-bold text-accent">
                 {id}
-                <button onClick={() => toggleCompare(id)} aria-label={`Deselect ${id}`} className="hover:text-tierHigh">✕</button>
+                <button onClick={() => toggleCompare(id)} aria-label={`Deselect ${id}`} className="text-accent/50 hover:text-tierHigh">✕</button>
               </span>
             ))}
           </div>
@@ -310,7 +313,7 @@ export default function AllPatients({ patients, onSelect, onSimulate, onCompare 
           type="button"
           onClick={() => setStageFilter(0)}
           title={stageFilter === 0 ? 'Showing every stage' : 'Show every stage again'}
-          className={`relative flex items-center gap-2.5 self-stretch overflow-hidden rounded-2xl border px-3 text-left transition ${
+          className={`relative flex items-center gap-2.5 overflow-hidden rounded-2xl border px-3 py-2 text-left transition ${
             stageFilter === 0
               ? 'border-accent/50 bg-white shadow-soft ring-1 ring-accent/30 dark:border-accent/50 dark:bg-darkCard'
               : 'border-line/80 bg-white/60 hover:border-accent/40 hover:bg-white dark:border-darkBorder dark:bg-darkCard/50 dark:hover:bg-darkCard'
@@ -415,7 +418,7 @@ export default function AllPatients({ patients, onSelect, onSimulate, onCompare 
              * reads as one instrument and the count cannot drift away from the
              * buttons it belongs to.
              */}
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line bg-[#FBF9F5]/80 px-6 py-3.5 backdrop-blur dark:border-darkBorder dark:bg-darkBg/60">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line bg-[#FBF9F5]/80 px-4 py-3.5 backdrop-blur sm:px-6 dark:border-darkBorder dark:bg-darkBg/60">
               <p style={MONO} className="text-[11.5px] text-muted dark:text-darkMuted">
                 Rows <strong className="font-bold text-ink dark:text-darkText">{from}–{to}</strong> of{' '}
                 <strong className="font-bold text-ink dark:text-darkText">{total.toLocaleString()}</strong>
@@ -428,7 +431,7 @@ export default function AllPatients({ patients, onSelect, onSimulate, onCompare 
                   disabled={safePage <= 1}
                   className="border-r border-line/70 px-3.5 py-1.5 text-[11px] font-semibold text-ink transition hover:bg-accent/5 hover:text-accent disabled:cursor-not-allowed disabled:opacity-30 dark:border-darkBorder/70 dark:text-darkText"
                 >
-                  ← Previous
+                  ←<span className="ml-1 hidden sm:inline">Previous</span>
                 </button>
                 <span style={MONO} className="px-3.5 py-1.5 text-[11px] font-bold tabular-nums text-ink dark:text-darkText">
                   {String(safePage).padStart(2, '0')} / {String(totalPages).padStart(2, '0')}
@@ -438,7 +441,7 @@ export default function AllPatients({ patients, onSelect, onSimulate, onCompare 
                   disabled={safePage >= totalPages}
                   className="border-l border-line/70 px-3.5 py-1.5 text-[11px] font-semibold text-ink transition hover:bg-accent/5 hover:text-accent disabled:cursor-not-allowed disabled:opacity-30 dark:border-darkBorder/70 dark:text-darkText"
                 >
-                  Next →
+                  <span className="mr-1 hidden sm:inline">Next</span>→
                 </button>
               </div>
             </div>

@@ -97,7 +97,11 @@ export function NeuroPilotLogo({
           NeuroPilot
         </p>
         {showSubtitle && (
-          <p className="text-[10.5px] font-medium text-muted dark:text-darkMuted">{subtitle}</p>
+          // Hidden on phones: the descriptor costs a header row's width budget,
+          // and the wordmark already carries the brand at that size.
+          <p className="hidden text-[10.5px] font-medium text-muted dark:text-darkMuted sm:block">
+            {subtitle}
+          </p>
         )}
       </div>
     </Comp>

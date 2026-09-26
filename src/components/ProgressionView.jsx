@@ -63,7 +63,7 @@ function Card({ icon: Icon, title, tone = '#0D8282', meta, delay = 0, children, 
         className="absolute inset-x-0 top-0 h-[3px]"
         style={{ background: `linear-gradient(90deg, ${tone}, ${tone}00)` }}
       />
-      <div className="flex items-center justify-between gap-4 border-b border-line/60 bg-gradient-to-b from-tint/60 to-transparent px-6 py-3 dark:border-darkBorder/60 dark:from-darkBorder/30">
+      <div className="flex items-center justify-between gap-4 border-b border-line/60 bg-gradient-to-b from-tint/60 to-transparent px-4 py-3 sm:px-6 dark:border-darkBorder/60 dark:from-darkBorder/30">
         <div className="flex items-center gap-2.5">
           <span
             className="flex h-7 w-7 items-center justify-center rounded-xl"
@@ -198,7 +198,7 @@ export default function ProgressionView({ patient, progression, onOpenDetail, on
                 <TierTag tier={projected.risk_tier} size="lg" />
               </div>
 
-              <p className="mt-2 max-w-3xl text-[12.5px] leading-relaxed text-muted dark:text-darkMuted">
+              <p className="mt-2 hidden max-w-3xl text-[12.5px] leading-relaxed text-muted sm:block dark:text-darkMuted">
                 <span style={MONO} className="font-bold text-ink dark:text-darkText">
                   {fmtPercent(current.score)}
                 </span>{' '}

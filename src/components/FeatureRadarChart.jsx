@@ -125,7 +125,7 @@ export default function FeatureRadarChart({ data = [] }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-float dark:border-darkBorder dark:bg-darkCard">
       {/* ---------------------------------------------------------- header */}
-      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-line/70 bg-gradient-to-b from-tint/60 to-transparent px-6 py-4 dark:border-darkBorder/70 dark:from-darkBg/50">
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-line/70 bg-gradient-to-b from-tint/60 to-transparent px-4 py-4 sm:px-6 dark:border-darkBorder/70 dark:from-darkBg/50">
         <div className="flex items-center gap-3">
           <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-accent/10 text-accent ring-1 ring-inset ring-accent/20">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -157,7 +157,7 @@ export default function FeatureRadarChart({ data = [] }) {
       </div>
 
       {/* ------------------------------------------------------------ body */}
-      <div className="flex select-none flex-col items-center gap-8 px-6 py-6 lg:flex-row lg:items-stretch lg:gap-10">
+      <div className="flex select-none flex-col items-center gap-8 px-4 py-6 sm:px-6 lg:flex-row lg:items-stretch lg:gap-10">
         {/* ---- the web ---- */}
         <div className="relative flex w-full max-w-[440px] shrink-0 items-center justify-center">
           {/* the light the web sits in */}

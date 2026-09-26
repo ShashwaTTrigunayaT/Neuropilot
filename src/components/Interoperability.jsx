@@ -415,12 +415,15 @@ export default function Interoperability({
 
               <h1
                 style={MONO}
-                className="mt-2 text-[30px] font-black leading-[1.02] tracking-[-0.03em] text-ink dark:text-darkText sm:text-[36px]"
+                className="mt-2 text-[23px] font-black leading-[1.05] tracking-[-0.03em] text-ink dark:text-darkText sm:text-[36px]"
               >
                 HL7 FHIR R4
               </h1>
 
-              <p className="mt-2 max-w-3xl text-[12.5px] leading-relaxed text-muted dark:text-darkMuted">
+              {/* Hidden on phones: on a narrow screen this sentence sits directly
+                  under the heading and pushes the integration surface, which is
+                  the point of the page, below the fold. */}
+              <p className="mt-2 hidden max-w-3xl text-[12.5px] leading-relaxed text-muted sm:block dark:text-darkMuted">
                 A system of engagement layered on the hospital&apos;s system of record. Model output travels as{' '}
                 <span className="font-semibold text-ink dark:text-darkText">RiskAssessment</span> — decision
                 support by definition — and never as a <span style={MONO}>Condition</span>.
@@ -430,7 +433,7 @@ export default function Interoperability({
           </div>
 
           {/* Plain text links: these are references, not actions worth a box each. */}
-          <div className="flex shrink-0 items-center gap-4 pt-1">
+          <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 pt-1">
             <a
               href={`${API_BASE}/fhir/metadata`}
               target="_blank"
@@ -600,13 +603,9 @@ export default function Interoperability({
             <Row
               label="Scopes"
               value={
-                <span className="flex flex-wrap justify-end gap-1">
+                <span className="flex flex-wrap justify-end gap-x-2.5 gap-y-0.5">
                   {(smart?.scopes || []).map((scope) => (
-                    <span
-                      key={scope}
-                      style={MONO}
-                      className="rounded-md border border-line dark:border-darkBorder bg-tint/60 dark:bg-darkBorderSubtle px-1.5 py-0.5 text-[10px] text-ink dark:text-darkText"
-                    >
+                    <span key={scope} style={MONO} className="text-[10px] text-muted dark:text-darkMuted">
                       {scope}
                     </span>
                   ))}
@@ -994,14 +993,10 @@ export default function Interoperability({
               <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-muted dark:text-darkMuted">
                 Bundle shapes ({exported.total} resources)
               </p>
-              <div className="mt-2 flex flex-wrap gap-1.5">
+              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
                 {Object.entries(exported.counts).map(([type, n]) => (
-                  <span
-                    key={type}
-                    style={MONO}
-                    className="rounded-lg border border-line dark:border-darkBorder bg-white dark:bg-darkCard px-2 py-0.5 text-[10px] text-ink dark:text-darkText"
-                  >
-                    {type} × {n}
+                  <span key={type} style={MONO} className="text-[10.5px] text-ink dark:text-darkText">
+                    {type} <span className="text-muted dark:text-darkMuted">×&hairsp;{n}</span>
                   </span>
                 ))}
               </div>
@@ -1106,10 +1101,7 @@ export default function Interoperability({
               <p className="flex flex-wrap items-center gap-2 text-[11.5px] font-bold text-ink dark:text-darkText">
                 <DownloadCloud className="h-4 w-4 text-accent" />
                 Import from the EHR session
-                <span
-                  style={MONO}
-                  className="rounded-md border border-accent/30 bg-white/70 px-1.5 py-0.5 text-[10px] font-medium text-accent dark:bg-transparent"
-                >
+                <span style={MONO} className="text-[10px] font-medium text-accent/80">
                   POST /fhir/smart/import-patient
                 </span>
               </p>
@@ -1257,10 +1249,7 @@ export default function Interoperability({
           <summary className="flex cursor-pointer flex-wrap items-center gap-2 text-[10.5px] font-semibold text-muted dark:text-darkMuted">
             <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
             Manual bundle tester
-            <span
-              style={MONO}
-              className="rounded-md border border-line dark:border-darkBorder bg-tint/70 dark:bg-darkBorderSubtle px-1.5 py-0.5 text-[10px] font-medium text-ink dark:text-darkText"
-            >
+            <span style={MONO} className="text-[10px] font-medium text-muted dark:text-darkMuted">
               POST /fhir/Bundle
             </span>
             <span className="font-normal">— paste what a hospital integration would push</span>
