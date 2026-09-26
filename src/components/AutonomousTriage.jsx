@@ -635,9 +635,16 @@ export default function AutonomousTriage({
         </div>
       )}
 
-      {/* ── Pipeline position: a quiet one-liner, not a headline ─────── */}
+      {/*
+       * ── Pipeline position: a quiet one-liner, not a headline ───────
+       *
+       * Desktop only. Every figure in it is on the dashboard, immediately
+       * under the preview — the same stage counts and the same shares — and a
+       * phone does not need the cohort's shape restated at the top of a page
+       * whose job is to propose the next batch.
+       */}
       {cohort && (
-        <p className="flex flex-wrap items-baseline gap-x-4 gap-y-1 px-1 text-[10.5px] text-dust dark:text-darkMuted">
+        <p className="hidden flex-wrap items-baseline gap-x-4 gap-y-1 px-1 text-[10.5px] text-dust md:flex dark:text-darkMuted">
           <span className="text-[10px] font-semibold uppercase tracking-[0.12em]">
             Pipeline position
           </span>
@@ -751,8 +758,11 @@ export default function AutonomousTriage({
                   · {plan.summary.reclassifications} tier change
                   {plan.summary.reclassifications === 1 ? '' : 's'}
                 </span>
+                {/* Desktop only: the plan id is a debugging handle, not a fact
+                    about the patient, and the read-only guarantee it annotates
+                    is already on the page as the approval gate itself. */}
                 <span
-                  className="ml-auto flex items-center gap-1.5 text-[10.5px] text-dust dark:text-darkMuted"
+                  className="ml-auto hidden items-center gap-1.5 text-[10.5px] text-dust md:flex dark:text-darkMuted"
                   title={`Nothing is written by planning. Plan ${plan.plan_id}, generated ${plan.generated_at}.`}
                 >
                   <ShieldCheck className="h-3 w-3 shrink-0" /> read-only plan {plan.plan_id}

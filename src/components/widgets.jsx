@@ -155,7 +155,21 @@ export function RibbonStat({ icon: Icon, label, value, tone = 'muted', hint, dot
   };
 
   return (
-    <div className="group relative flex h-full flex-col gap-2.5 px-5 py-4 transition-colors hover:bg-tint/40 dark:hover:bg-darkCardHover/50">
+    /*
+     * A compact CARD on a phone, and a plain ribbon cell above `md`.
+     *
+     * Desktop reads these as one joined ribbon — five cells, no seams, the
+     * shared frame doing the dividing. That structure does not survive the
+     * phone rules, which strip card chrome from everything non-interactive, so
+     * in two columns the cells became a run-on block of label/value pairs with
+     * nothing to say where one ended and the next began. They therefore get
+     * their own surface back (`data-np-keep` is the exemption from that rule)
+     * and shrink to a small tile — label over figure, hint dropped.
+     */
+    <div
+      data-np-keep=""
+      className="group relative flex h-full flex-col gap-1.5 rounded-xl border border-line/70 bg-white/70 px-2.5 py-2 transition-colors md:gap-2.5 md:rounded-none md:border-0 md:bg-transparent md:px-5 md:py-4 dark:border-darkBorder/70 dark:bg-darkCard/70 dark:hover:bg-darkCardHover/50 md:dark:bg-transparent hover:bg-tint/40"
+    >
       <div className="flex items-center gap-2.5">
         <span
           className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset ring-black/[0.04] md:h-7 md:w-7 dark:ring-white/[0.06] ${tones[tone]}`}
@@ -194,7 +208,9 @@ export function RibbonStat({ icon: Icon, label, value, tone = 'muted', hint, dot
         </div>
       )}
 
-      {hint && <p className="text-[10px] leading-snug text-muted md:text-[10.5px] dark:text-darkMuted">{hint}</p>}
+      {/* The hint is context for a wide cell; in a phone tile it is a third
+          line that makes the tile twice as tall as the number inside it. */}
+      {hint && <p className="hidden text-[10px] leading-snug text-muted md:block md:text-[10.5px] dark:text-darkMuted">{hint}</p>}
     </div>
   );
 }
