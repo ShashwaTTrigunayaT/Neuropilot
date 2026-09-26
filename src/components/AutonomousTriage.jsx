@@ -26,6 +26,7 @@ import {
   RibbonStat,
   STAGE_LABELS,
   SectionLabel,
+  useIsPhone,
 } from './widgets.jsx';
 import { API_BASE, api } from '../api.js';
 
@@ -51,9 +52,15 @@ function TierChip({ tier }) {
 }
 
 function Proposal({ action, approved, onToggle, onOpenPatient, isTop }) {
+  const isPhone = useIsPhone();
+  const [open, setOpen] = useState(false);
   const impact = IMPACT[action.impact] || IMPACT.none;
   const climbed = action.rank_delta > 0;
   const slipped = action.rank_delta < 0;
+  const hasWhy = action.rationale?.length > 0;
+  // The fold is a PHONE affordance: above `md` the reasoning stays open, as it
+  // always was, so a desktop reader never has to click to read the product.
+  const expanded = isPhone ? open : true;
 
   return (
     <article className={`${PANEL} overflow-hidden transition-all ${approved ? 'ring-2 ring-accent/40' : 'opacity-70'}`}>
@@ -111,23 +118,46 @@ function Proposal({ action, approved, onToggle, onOpenPatient, isTop }) {
             )}
           </div>
         </div>
+
+        {/*
+         * On a phone the reasoning folds, exactly as it does on a step in the
+         * live log. One batch is up to a dozen proposals, and each one carrying
+         * its three answers open made the list a wall: you could see what had
+         * been proposed but not WHICH subjects, which is the thing being
+         * approved. Closed by default, every proposal is one line; opening one
+         * adds its reasoning without pushing the rest off the screen.
+         *
+         * Desktop keeps every proposal open and shows no toggle at all.
+         */}
+        {isPhone && hasWhy && (
+          <button
+            type="button"
+            aria-expanded={open}
+            onClick={() => setOpen((o) => !o)}
+            className="mt-0.5 ml-auto shrink-0 text-[10.5px] font-semibold text-accent hover:underline"
+          >
+            {open ? 'Hide why' : 'Why?'}
+          </button>
+        )}
       </header>
 
       {/* The reasoning is the product. Not a tooltip, not a modal — the same
         * three questions a clinician would ask before signing the order. */}
-      <ul className="divide-y divide-line/60 border-t border-line/60 dark:divide-darkBorder/60 dark:border-darkBorder/60">
-        {action.rationale.map((r) => (
-          <li
-            key={r.label}
-            className="grid gap-1 px-4 py-2.5 sm:grid-cols-[8.5rem_minmax(0,1fr)] sm:gap-3 sm:px-5"
-          >
-            <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted dark:text-darkMuted">
-              {r.label}
-            </span>
-            <span className="text-[11.5px] leading-relaxed text-ink dark:text-darkText">{r.text}</span>
-          </li>
-        ))}
-      </ul>
+      {expanded && hasWhy && (
+        <ul className="divide-y divide-line/60 border-t border-line/60 dark:divide-darkBorder/60 dark:border-darkBorder/60">
+          {action.rationale.map((r) => (
+            <li
+              key={r.label}
+              className="grid gap-1 px-4 py-2.5 sm:grid-cols-[8.5rem_minmax(0,1fr)] sm:gap-3 sm:px-5"
+            >
+              <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted dark:text-darkMuted">
+                {r.label}
+              </span>
+              <span className="text-[11.5px] leading-relaxed text-ink dark:text-darkText">{r.text}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </article>
   );
 }

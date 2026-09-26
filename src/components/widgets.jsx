@@ -200,56 +200,78 @@ export function RibbonStat({ icon: Icon, label, value, tone = 'muted', hint, dot
 }
 
 /**
- * A section that folds.
+ * Is this the phone layout?
+ *
+ * Folding is a PHONE affordance. On a wide screen there is room for the
+ * sections to stand open, and a control that appeared there for no reason
+ * would be a change to the desktop UI rather than a mobile one — so anything
+ * that folds asks this first and renders the original layout everywhere else.
+ * The breakpoint is the same 768px the phone theme uses.
+ */
+export function useIsPhone() {
+  const [phone, setPhone] = useState(
+    () => typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(max-width: 767px)').matches
+  );
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return undefined;
+    const mq = window.matchMedia('(max-width: 767px)');
+    const apply = () => setPhone(mq.matches);
+    apply();
+    mq.addEventListener?.('change', apply);
+    return () => mq.removeEventListener?.('change', apply);
+  }, []);
+  return phone;
+}
+
+/**
+ * A section that folds — on a phone only.
  *
  * A page can be navigated by scrolling, but a section that is a screen of
  * reference material sitting between you and the next control has to be
- * COLLAPSED to be skipped, not scrolled past. This is that primitive: the
- * heading stays, its body opens on tap, and nothing is removed — the detail is
- * one tap away instead of one screen away.
- *
- * It opens by default on a wider screen, where the room is there, and starts
- * closed on a phone, where it is not. `defaultOpen` overrides that for a
- * section whose body is the page's working content rather than an explanation.
+ * COLLAPSED to be skipped, not scrolled past. Above `md` this renders exactly
+ * the original `SectionLabel` heading with its body open, so the desktop
+ * layout, and the desktop reading order, are unchanged.
  *
  * `right` is rendered BESIDE the toggle, never inside it: sections here put
  * their own controls (batch sizes, POST labels) in that slot, and a button
  * nested inside a button fires both handlers.
  */
-export function Collapsible({ title, right, children, className = '', defaultOpen }) {
-  const [open, setOpen] = useState(() => {
-    if (defaultOpen != null) return defaultOpen;
-    if (typeof window === 'undefined' || !window.matchMedia) return true;
-    return window.matchMedia('(min-width: 768px)').matches;
-  });
+export function Collapsible({ title, right, children, className = '', defaultOpen = false }) {
+  const isPhone = useIsPhone();
+  const [open, setOpen] = useState(defaultOpen);
+  const expanded = isPhone ? open : true;
 
   return (
     <section className={className}>
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <button
-          type="button"
-          aria-expanded={open}
-          onClick={() => setOpen((v) => !v)}
-          className="flex min-w-0 items-center gap-2 text-left"
-        >
-          <ChevronDown
-            aria-hidden="true"
-            className={`h-3.5 w-3.5 shrink-0 text-muted transition-transform duration-200 dark:text-darkMuted ${
-              open ? 'rotate-180' : ''
-            }`}
-          />
-          <span
-            aria-hidden="true"
-            className="h-2.5 w-[3px] shrink-0 rounded-full bg-accent shadow-[0_0_8px_var(--accent-glow-soft)]"
-          />
-          <span className="truncate text-[13px] font-semibold tracking-tight text-ink dark:text-darkText">
-            {title}
-          </span>
-        </button>
-        {right}
-      </div>
+      {isPhone ? (
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <button
+            type="button"
+            aria-expanded={open}
+            onClick={() => setOpen((v) => !v)}
+            className="flex min-w-0 items-center gap-2 text-left"
+          >
+            <ChevronDown
+              aria-hidden="true"
+              className={`h-3.5 w-3.5 shrink-0 text-muted transition-transform duration-200 dark:text-darkMuted ${
+                open ? 'rotate-180' : ''
+              }`}
+            />
+            <span
+              aria-hidden="true"
+              className="h-2.5 w-[3px] shrink-0 rounded-full bg-accent shadow-[0_0_8px_var(--accent-glow-soft)]"
+            />
+            <span className="truncate text-[13px] font-semibold tracking-tight text-ink dark:text-darkText">
+              {title}
+            </span>
+          </button>
+          {right}
+        </div>
+      ) : (
+        <SectionLabel right={right}>{title}</SectionLabel>
+      )}
 
-      {open && <div className="mt-3">{children}</div>}
+      {expanded && <div className="mt-3">{children}</div>}
     </section>
   );
 }
