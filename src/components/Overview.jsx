@@ -968,7 +968,7 @@ export default function Overview({
           />
           <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/45 to-transparent dark:via-accent/30" />
           <div className="relative mx-auto w-full max-w-6xl px-4 py-16 text-center sm:px-6 lg:py-20">
-            <div className="flex items-center justify-center gap-2.5">
+            <div className="hidden items-center justify-center gap-2.5 md:flex">
               <span className="relative flex h-1.5 w-1.5">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-70" />
                 <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-accent" />
@@ -976,10 +976,18 @@ export default function Overview({
               <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-accent">Hand-off</p>
               <span aria-hidden="true" className="h-px w-14 bg-gradient-to-r from-accent/45 to-transparent" />
             </div>
-            <h2 className="mx-auto mt-4 max-w-3xl text-[24px] font-black leading-[1.05] tracking-[-0.035em] text-ink dark:text-darkText sm:text-[42px]">
+            {/*
+             * The closing hand-off is a launcher on a phone.
+             *
+             * Below `md` this band keeps its four actions and drops every word
+             * around them: the eyebrow, the heading, the sentence under it, the
+             * four cards that explain the buttons, and the jump strip. What is
+             * left is the thing the section exists to do — take you somewhere.
+             */}
+            <h2 className="mx-auto mt-4 hidden max-w-3xl text-[24px] font-black leading-[1.05] tracking-[-0.035em] text-ink md:block dark:text-darkText sm:text-[42px]">
               Work the queue, not the charts.
             </h2>
-            <p className="mx-auto mt-4 max-w-xl text-[13px] leading-relaxed text-muted dark:text-darkMuted">
+            <p className="mx-auto mt-4 hidden max-w-xl text-[13px] leading-relaxed text-muted md:block dark:text-darkMuted">
               Start at the top of the list — or open the console and let the system tell you what it
               would order next, and why.
             </p>
@@ -1039,7 +1047,7 @@ export default function Overview({
                * travel down, and they need room to be read as lines rather than as
                * arrows glued to the buttons.
                */}
-              <div className="relative z-10 mx-auto mt-8 grid w-full max-w-4xl gap-px overflow-hidden rounded-2xl border border-line/70 bg-line/60 text-left sm:grid-cols-2 lg:mt-14 lg:grid-cols-4 dark:border-darkBorder/70 dark:bg-darkBorder/60">
+              <div className="relative z-10 mx-auto mt-8 hidden w-full max-w-4xl gap-px overflow-hidden rounded-2xl border border-line/70 bg-line/60 text-left md:grid sm:grid-cols-2 lg:mt-14 lg:grid-cols-4 dark:border-darkBorder/70 dark:bg-darkBorder/60">
                 {HANDOFF_STEPS.map(([key, title, body]) => {
                   const cta = handoff[key];
                   return (
@@ -1087,7 +1095,7 @@ export default function Overview({
              * on a spec sheet. The closing section's job is the hand-off, so the
              * strip below is about where to go, not what was trained.
              */}
-            <div className="mt-9 w-full border-t border-line/60 pt-5 dark:border-darkBorder/60">
+            <div className="mt-9 hidden w-full border-t border-line/60 pt-5 md:block dark:border-darkBorder/60">
               <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2">
                 <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted dark:text-darkMuted">
                   On this page
