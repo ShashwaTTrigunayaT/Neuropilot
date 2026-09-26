@@ -208,7 +208,7 @@ export default function AutoScrollShowcase({ panels = [] }) {
            * changed. Pinning both ends keeps the title, the rule and the button
            * on exactly the same line in all of them.
            */}
-          <div className="relative mt-8 flex flex-1 flex-col lg:mt-14">
+          <div className="relative mt-6 flex flex-1 flex-col md:mt-8 lg:mt-14">
             <p className="flex items-center gap-2.5 text-[11px] font-bold uppercase tracking-[0.18em] text-white/90">
               <span className="h-px w-7 shrink-0 bg-white/60" />
               {p.eyebrow}
@@ -216,12 +216,19 @@ export default function AutoScrollShowcase({ panels = [] }) {
             <h3 className="mt-4 text-[25px] font-bold leading-[1.06] tracking-tight text-white lg:text-[36px]">
               {p.title}
             </h3>
-            <p className="mt-5 max-w-[44ch] text-[13px] leading-[1.75] text-white/90 lg:text-[14.5px]">
+            {/*
+             * Below `md` a panel carries the claim and nothing else: the lede is
+             * trimmed to a few lines and the highlight list is dropped. On a
+             * phone the slide was a page of bullets under a paragraph, which is
+             * the opposite of what a preview is for — the list still ships on
+             * larger screens, where the panel has the room of its own accord.
+             */}
+            <p className="mt-4 line-clamp-5 max-w-[44ch] text-[13px] leading-[1.75] text-white/90 md:mt-5 md:line-clamp-none lg:text-[14.5px]">
               {p.lede}
             </p>
 
             {p.highlights?.length > 0 && (
-              <ul className="mt-7 space-y-2.5">
+              <ul className="mt-7 hidden space-y-2.5 md:block">
                 {p.highlights.map((h) => (
                   <li key={h} className="flex items-start gap-2.5">
                     <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-white/70" />
