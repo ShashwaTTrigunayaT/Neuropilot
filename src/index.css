@@ -618,6 +618,19 @@ body {
   [class~="sm:grid"]:not([data-np-preview] *) > * {
     border-top-width: 0 !important;
   }
+
+  /*
+   * Folded panels.
+   *
+   * A panel marked `data-np-fold="closed"` shows its heading and nothing after
+   * it. Hiding the CHILDREN rather than wrapping the body is what keeps the
+   * panel itself untouched: its padding, radius and hairline are exactly what
+   * they were, so opening it reveals the panel unchanged rather than a second
+   * layout that has to be kept in step with the first.
+   */
+  [data-np-fold="closed"] > :not(:first-child) {
+    display: none !important;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

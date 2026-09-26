@@ -9,7 +9,7 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { api } from '../api.js';
-import { Btn, CopyableRow, MONO, Pill, Row, SectionHeader, shortId } from './widgets.jsx';
+import { Btn, CopyableRow, FoldHeader, MONO, Pill, Row, shortId } from './widgets.jsx';
 
 /**
  * ABDM consent flow (India) — the HIU side, live (FHIR plan.md Phases 4-5).
@@ -151,7 +151,7 @@ export default function AbdmPanel({ patients = [], initialPatientId, onToast }) 
   return (
     <div className={`${PANEL} p-4 sm:p-6`}>
       {/* The same header idiom as every other panel on the interoperability view. */}
-      <SectionHeader
+      <FoldHeader
         icon={KeyRound}
         title="ABDM consent flow (India)"
         right={

@@ -30,6 +30,7 @@ import {
   Pill,
   RibbonStat,
   Row,
+  FoldHeader,
   SectionHeader,
   shortId,
 } from './widgets.jsx';
@@ -435,8 +436,10 @@ export default function Interoperability({
             </div>
           </div>
 
-          {/* Plain text links: these are references, not actions worth a box each. */}
-          <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 pt-1">
+          {/* Plain text links: these are references, not actions worth a box each.
+              Desktop only — a row of three external links under a masthead is
+              the first thing a phone shows and the last thing it needs there. */}
+          <div className="hidden shrink-0 flex-wrap items-center gap-x-4 gap-y-2 pt-1 md:flex">
             <a
               href={`${API_BASE}/fhir/metadata`}
               target="_blank"
@@ -652,7 +655,7 @@ export default function Interoperability({
        * that list needs room to be readable. This used to live inside the
        * half-width session column, where it read as a pile of cramped boxes. */}
       <div className={`${CARD} transition-shadow duration-300 hover:shadow-lift`}>
-        <SectionHeader
+        <FoldHeader
           icon={Target}
           title="Standalone launch"
           right={
@@ -1091,7 +1094,7 @@ export default function Interoperability({
 
       {/* ── Inbound bundle tester ──────────────────────────────── */}
       <div className={CARD}>
-        <SectionHeader
+        <FoldHeader
           icon={DownloadCloud}
           title="Inbound ingestion"
           right={<Pill tone="accent">atomic — all or nothing</Pill>}

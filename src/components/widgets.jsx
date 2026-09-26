@@ -292,6 +292,61 @@ export function Collapsible({ title, right, children, className = '', defaultOpe
   );
 }
 
+/**
+ * A panel header that folds its own panel — on a phone only.
+ *
+ * The interoperability page is a stack of full-width panels, each already
+ * headed by a `SectionHeader` and each with its body written inline after it.
+ * Rather than restructure every panel to wrap its body, this marks the PANEL
+ * (`data-np-fold`) and lets one stylesheet rule hide everything after the
+ * heading. The panel's padding, radius and hairline are therefore untouched —
+ * folding changes how much of it is on screen, never what it looks like.
+ *
+ * Above `md` it renders the original `SectionHeader`, so the desktop page keeps
+ * the markup, the order and the reading it always had.
+ */
+export function FoldHeader({ icon: Icon, title, right }) {
+  const isPhone = useIsPhone();
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const panel = ref.current?.parentElement;
+    if (!panel) return undefined;
+    if (!isPhone) {
+      panel.removeAttribute('data-np-fold');
+      return undefined;
+    }
+    panel.setAttribute('data-np-fold', open ? 'open' : 'closed');
+    return () => panel.removeAttribute('data-np-fold');
+  }, [open, isPhone]);
+
+  if (!isPhone) return <SectionHeader icon={Icon} title={title} right={right} />;
+
+  return (
+    <div ref={ref} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="flex min-w-0 items-center gap-2 text-left"
+      >
+        <ChevronDown
+          aria-hidden="true"
+          className={`h-3.5 w-3.5 shrink-0 text-muted transition-transform duration-200 dark:text-darkMuted ${
+            open ? 'rotate-180' : ''
+          }`}
+        />
+        {Icon && <Icon className="h-3.5 w-3.5 shrink-0" style={{ color: ACCENT }} />}
+        <span className="truncate text-[13px] font-semibold tracking-tight text-ink dark:text-darkText">
+          {title}
+        </span>
+      </button>
+      {right}
+    </div>
+  );
+}
+
 /** A small metric tile (label over a monospace value). */
 export function MetricTile({ label, value, hint }) {
   return (
