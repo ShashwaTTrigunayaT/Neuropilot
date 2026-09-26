@@ -7,7 +7,9 @@ export default {
       colors: {
         // Light palette: Warm clinical precision
         ink: '#13151A',
-        paper: '#FAF8F4',
+        // The page surfaces are variables too, so a theme can re-tint the paper
+        // and the console black without touching a component.
+        paper: 'rgb(var(--paper-rgb) / <alpha-value>)',
         muted: '#6E7175',
         dust: '#C7C4BC',
         line: '#E6E2DA',
@@ -15,7 +17,7 @@ export default {
         tint: '#F4F1EC',
 
         // Dark palette: Neuro Console
-        darkBg: '#090B0E',
+        darkBg: 'rgb(var(--dark-bg-rgb) / <alpha-value>)',
         darkCard: '#11151C',
         darkCardHover: '#161B24',
         darkBorder: '#1F2633',

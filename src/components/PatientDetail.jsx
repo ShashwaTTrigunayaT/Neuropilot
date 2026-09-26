@@ -1281,7 +1281,7 @@ export default function PatientDetail({
             <AlertTriangle className="h-5 w-5" />
           </span>
           <p className="mt-4 text-sm font-bold text-ink dark:text-darkText">This record could not be loaded</p>
-          <p className="mt-1.5 text-xs leading-relaxed text-muted dark:text-darkMuted">{error}</p>
+          <p data-np-keep="" className="mt-1.5 text-xs leading-relaxed text-muted dark:text-darkMuted">{error}</p>
         </div>
       </div>
     );

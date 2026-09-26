@@ -16,23 +16,37 @@
   --accent-rgb: 13 130 130;
   --accent-hover-rgb: 11 110 110;
   --accent: rgb(var(--accent-rgb));
+  /* The page surfaces, as variables, so a theme can re-tint the paper and the
+     console black without any component knowing. */
+  --paper-rgb: 250 248 244;
+  --dark-bg-rgb: 9 11 14;
+  /* How much atmosphere a theme carries: the strength of the page's radial
+     wash. A minimal theme sets it near 0 for a flat sheet; a premium one
+     pushes it up so the page has some depth. */
+  --np-atmosphere: 1;
   /* the deep gradient behind a filled accent surface (the showcase summary) */
   --accent-surface-top: #0f8f8f;
   --accent-surface-mid: #0d8282;
   --accent-surface-bottom: #0a6a6a;
-  /* accent halos, washes and rings, so the atmosphere follows the accent too */
-  --accent-glow: rgba(13, 130, 130, 0.6);
-  --accent-glow-soft: rgba(13, 130, 130, 0.5);
-  --accent-glow-strong: rgba(13, 130, 130, 0.8);
-  --accent-glow-max: rgba(13, 130, 130, 1);
-  --accent-glow-95: rgba(13, 130, 130, 0.95);
-  --accent-glow-90: rgba(13, 130, 130, 0.9);
-  --accent-ring: rgba(13, 130, 130, 0.18);
-  --accent-ring-soft: rgba(13, 130, 130, 0.14);
-  --accent-wash: rgba(13, 130, 130, 0.15);
-  --accent-wash-mid: rgba(13, 130, 130, 0.13);
-  --accent-wash-soft: rgba(13, 130, 130, 0.075);
-  --accent-wash-bright: rgba(20, 180, 180, 0.11);
+  /*
+   * Accent halos, washes and rings.
+   *
+   * These are DERIVED from `--accent-rgb` rather than written out, so re-tinting
+   * one variable re-tints the whole atmosphere — which is what lets a theme be a
+   * handful of numbers instead of forty.
+   */
+  --accent-glow: rgb(var(--accent-rgb) / 0.6);
+  --accent-glow-soft: rgb(var(--accent-rgb) / 0.5);
+  --accent-glow-strong: rgb(var(--accent-rgb) / 0.8);
+  --accent-glow-max: rgb(var(--accent-rgb) / 1);
+  --accent-glow-95: rgb(var(--accent-rgb) / 0.95);
+  --accent-glow-90: rgb(var(--accent-rgb) / 0.9);
+  --accent-ring: rgb(var(--accent-rgb) / 0.18);
+  --accent-ring-soft: rgb(var(--accent-rgb) / 0.14);
+  --accent-wash: rgb(var(--accent-rgb) / 0.15);
+  --accent-wash-mid: rgb(var(--accent-rgb) / 0.13);
+  --accent-wash-soft: rgb(var(--accent-rgb) / 0.075);
+  --accent-wash-bright: rgb(var(--accent-rgb) / 0.11);
 }
 
 html {
@@ -50,23 +64,23 @@ html {
 }
 
 body {
-  background-color: #FAF8F4;
+  background-color: rgb(var(--paper-rgb));
   color: #13151A;
   font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
     'Helvetica Neue', Arial, sans-serif;
   letter-spacing: -0.014em;
-  background-image: radial-gradient(920px 480px at 82% -8%, rgba(13, 130, 130, 0.05), transparent 60%),
-                    radial-gradient(700px 400px at 18% 92%, rgba(13, 130, 130, 0.04), transparent 65%);
+  background-image: radial-gradient(920px 480px at 82% -8%, rgb(var(--accent-rgb) / calc(0.05 * var(--np-atmosphere))), transparent 60%),
+                    radial-gradient(700px 400px at 18% 92%, rgb(var(--accent-rgb) / calc(0.04 * var(--np-atmosphere))), transparent 65%);
   background-attachment: fixed;
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* Dark mode console aesthetics */
 .dark body {
-  background-color: #090B0E;
+  background-color: rgb(var(--dark-bg-rgb));
   color: #E6EDF5;
-  background-image: radial-gradient(900px 500px at 75% -5%, rgba(13, 130, 130, 0.12), transparent 60%),
-                    radial-gradient(800px 500px at 15% 95%, rgba(14, 21, 35, 0.6), transparent 70%);
+  background-image: radial-gradient(900px 500px at 75% -5%, rgb(var(--accent-rgb) / calc(0.12 * var(--np-atmosphere))), transparent 60%),
+                    radial-gradient(800px 500px at 15% 95%, rgb(var(--accent-rgb) / calc(0.05 * var(--np-atmosphere))), transparent 70%);
 }
 
 ::selection {
@@ -305,18 +319,11 @@ body {
     --accent-surface-top: #1e222a;
     --accent-surface-mid: #15181e;
     --accent-surface-bottom: #0d0f13;
-    --accent-glow: rgb(231 235 240 / 0.6);
-    --accent-glow-soft: rgb(231 235 240 / 0.5);
-    --accent-glow-strong: rgb(231 235 240 / 0.8);
-    --accent-glow-max: rgb(231 235 240 / 1);
-    --accent-glow-95: rgb(231 235 240 / 0.95);
-    --accent-glow-90: rgb(231 235 240 / 0.9);
-    --accent-ring: rgb(231 235 240 / 0.18);
-    --accent-ring-soft: rgb(231 235 240 / 0.14);
-    --accent-wash: rgb(231 235 240 / 0.15);
-    --accent-wash-mid: rgb(231 235 240 / 0.13);
-    --accent-wash-soft: rgb(231 235 240 / 0.075);
-    --accent-wash-bright: rgb(231 235 240 / 0.11);
+    /* pure white paper and a true-black console on a phone */
+    --paper-rgb: 255 255 255;
+    --dark-bg-rgb: 7 9 12;
+    /* the glow/wash family is derived from --accent-rgb (see :root), so it
+       follows the phone's neutral accent without being restated here */
   }
 
   /*
@@ -344,20 +351,20 @@ body {
   }
 
   body {
-    background-color: #ffffff;
+    background-color: rgb(var(--paper-rgb));
     background-image: none;
   }
   .dark body {
-    background-color: #07090c;
+    background-color: rgb(var(--dark-bg-rgb));
     background-image: none;
   }
 
   /* the app shell paints its own surface, so it has to be cleared too */
   .bg-paper {
-    background-color: #ffffff;
+    background-color: rgb(var(--paper-rgb));
   }
   .dark .bg-darkBg {
-    background-color: #07090c;
+    background-color: rgb(var(--dark-bg-rgb));
   }
 
   .card-wash,
@@ -432,7 +439,15 @@ body {
    * marked `data-np-keep` — currently the sentence that labels the closing
    * hand-off buttons and the API error message.
    */
-  p.leading-relaxed:not([data-np-preview] *):not([data-np-keep]) {
+  /*
+   * Muted paragraphs are commentary whether or not they carry `leading-relaxed`
+   * — "Cognition is always on file. Switch a later stage off…" is the same kind
+   * of sentence as the ones the first selector catches, and leaving it on screen
+   * while hiding its neighbours was arbitrary. Values, log lines and row texts
+   * are set in `span`s, so a muted `p` is a caption, never data.
+   */
+  p.leading-relaxed:not([data-np-preview] *):not([data-np-keep]):not([data-np-keep] *),
+  p.text-muted:not([class*="uppercase"]):not([data-np-preview] *):not([data-np-keep]):not([data-np-keep] *) {
     display: none;
   }
 
@@ -641,4 +656,202 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ================================================================== */
+/*  TEMPORARY — theme previews                                        */
+/*                                                                    */
+/*  Five candidate palettes, switchable from the preview control in   */
+/*  the corner (see `ThemePreview.jsx`). Each block is only the       */
+/*  accent family plus the two page surfaces — every halo, wash and   */
+/*  ring derives from `--accent-rgb`, so one block re-tints the whole */
+/*  app. These selectors are `html[...]`, which outranks the phone    */
+/*  theme's `:root` block, so a chosen palette applies on a phone too.*/
+/*                                                                    */
+/*  Delete this section, that component and the `data-np-theme` hook  */
+/*  once a winner is picked.                                          */
+/* ================================================================== */
+
+/* ── Clinical: the app's own register, teal and its cool cousins ───── */
+
+html[data-np-theme='teal'] {
+  --accent-rgb: 13 130 130;
+  --accent-hover-rgb: 11 110 110;
+  --accent-surface-top: #0f8f8f;
+  --accent-surface-mid: #0d8282;
+  --accent-surface-bottom: #0a6a6a;
+  --paper-rgb: 250 248 244;
+  --dark-bg-rgb: 9 11 14;
+  --np-atmosphere: 1;
+}
+
+html[data-np-theme='cobalt'] {
+  --accent-rgb: 37 99 235;
+  --accent-hover-rgb: 29 78 216;
+  --accent-surface-top: #2f6fe8;
+  --accent-surface-mid: #2563eb;
+  --accent-surface-bottom: #1d4ed8;
+  --paper-rgb: 246 248 252;
+  --dark-bg-rgb: 7 10 18;
+  --np-atmosphere: 1;
+}
+
+html[data-np-theme='graphite'] {
+  --accent-rgb: 231 235 240;
+  --accent-hover-rgb: 198 204 212;
+  --accent-surface-top: #1e222a;
+  --accent-surface-mid: #15181e;
+  --accent-surface-bottom: #0d0f13;
+  --paper-rgb: 244 245 246;
+  --dark-bg-rgb: 7 9 12;
+  --np-atmosphere: 0.6;
+}
+
+/* ── Minimal: near-flat, low-chroma, no atmosphere ─────────────────── */
+
+html[data-np-theme='mono'] {
+  --accent-rgb: 82 90 102;
+  --accent-hover-rgb: 62 70 82;
+  --accent-surface-top: #6b7280;
+  --accent-surface-mid: #525a66;
+  --accent-surface-bottom: #3f4650;
+  --paper-rgb: 255 255 255;
+  --dark-bg-rgb: 5 5 6;
+  --np-atmosphere: 0;
+}
+
+html[data-np-theme='bone'] {
+  --accent-rgb: 138 122 100;
+  --accent-hover-rgb: 118 103 84;
+  --accent-surface-top: #a08b6e;
+  --accent-surface-mid: #8a7a64;
+  --accent-surface-bottom: #6f6250;
+  --paper-rgb: 253 252 249;
+  --dark-bg-rgb: 10 9 8;
+  --np-atmosphere: 0.35;
+}
+
+html[data-np-theme='slate'] {
+  --accent-rgb: 71 85 105;
+  --accent-hover-rgb: 56 68 86;
+  --accent-surface-top: #5a6b7f;
+  --accent-surface-mid: #4a586b;
+  --accent-surface-bottom: #38445a;
+  --paper-rgb: 247 249 251;
+  --dark-bg-rgb: 8 10 13;
+  --np-atmosphere: 0.5;
+}
+
+/* ── Premium: warm metals and jewel tones, deeper atmosphere ───────── */
+
+html[data-np-theme='gold'] {
+  --accent-rgb: 198 160 74;
+  --accent-hover-rgb: 168 133 54;
+  --accent-surface-top: #d4b062;
+  --accent-surface-mid: #c6a04a;
+  --accent-surface-bottom: #a8853b;
+  --paper-rgb: 250 248 242;
+  --dark-bg-rgb: 6 6 7;
+  --np-atmosphere: 1.7;
+}
+
+html[data-np-theme='royal'] {
+  --accent-rgb: 108 92 231;
+  --accent-hover-rgb: 90 74 210;
+  --accent-surface-top: #7c6ce8;
+  --accent-surface-mid: #6c5ce7;
+  --accent-surface-bottom: #5a4bd0;
+  --paper-rgb: 249 248 253;
+  --dark-bg-rgb: 8 7 15;
+  --np-atmosphere: 1.5;
+}
+
+html[data-np-theme='emerald'] {
+  --accent-rgb: 16 148 118;
+  --accent-hover-rgb: 12 124 98;
+  --accent-surface-top: #14977a;
+  --accent-surface-mid: #109476;
+  --accent-surface-bottom: #0d7a62;
+  --paper-rgb: 246 250 248;
+  --dark-bg-rgb: 5 10 9;
+  --np-atmosphere: 1.4;
+}
+
+html[data-np-theme='platinum'] {
+  --accent-rgb: 168 174 184;
+  --accent-hover-rgb: 146 152 163;
+  --accent-surface-top: #b6bcc6;
+  --accent-surface-mid: #a8aeb8;
+  --accent-surface-bottom: #9298a3;
+  --paper-rgb: 250 251 252;
+  --dark-bg-rgb: 10 11 13;
+  --np-atmosphere: 1;
+}
+
+/* ── Bold: saturated, for a projector or a dark room ──────────────── */
+
+html[data-np-theme='violet'] {
+  --accent-rgb: 124 58 237;
+  --accent-hover-rgb: 109 40 217;
+  --accent-surface-top: #8b5cf6;
+  --accent-surface-mid: #7c3aed;
+  --accent-surface-bottom: #6d28d9;
+  --paper-rgb: 250 248 254;
+  --dark-bg-rgb: 10 8 18;
+  --np-atmosphere: 1.3;
+}
+
+html[data-np-theme='magenta'] {
+  --accent-rgb: 219 39 119;
+  --accent-hover-rgb: 190 24 93;
+  --accent-surface-top: #e0427f;
+  --accent-surface-mid: #db2777;
+  --accent-surface-bottom: #be185d;
+  --paper-rgb: 253 247 249;
+  --dark-bg-rgb: 12 7 10;
+  --np-atmosphere: 1.3;
+}
+
+html[data-np-theme='indigo'] {
+  --accent-rgb: 79 70 229;
+  --accent-hover-rgb: 67 56 202;
+  --accent-surface-top: #5f56e8;
+  --accent-surface-mid: #4f46e5;
+  --accent-surface-bottom: #4338ca;
+  --paper-rgb: 248 248 253;
+  --dark-bg-rgb: 8 8 16;
+  --np-atmosphere: 1.3;
+}
+
+html[data-np-theme='forest'] {
+  --accent-rgb: 22 128 61;
+  --accent-hover-rgb: 18 108 51;
+  --accent-surface-top: #1a8a45;
+  --accent-surface-mid: #16803d;
+  --accent-surface-bottom: #126c34;
+  --paper-rgb: 247 251 247;
+  --dark-bg-rgb: 6 10 7;
+  --np-atmosphere: 1.2;
+}
+
+html[data-np-theme='crimson'] {
+  --accent-rgb: 190 18 60;
+  --accent-hover-rgb: 165 15 52;
+  --accent-surface-top: #d4204f;
+  --accent-surface-mid: #be123c;
+  --accent-surface-bottom: #a10f33;
+  --paper-rgb: 253 247 248;
+  --dark-bg-rgb: 12 6 8;
+  --np-atmosphere: 1.3;
+}
+
+html[data-np-theme='amber'] {
+  --accent-rgb: 217 119 6;
+  --accent-hover-rgb: 180 83 9;
+  --accent-surface-top: #e08a2a;
+  --accent-surface-mid: #d97706;
+  --accent-surface-bottom: #b45309;
+  --paper-rgb: 253 250 245;
+  --dark-bg-rgb: 12 9 5;
+  --np-atmosphere: 1.4;
 }

@@ -778,8 +778,16 @@ export default function AutonomousTriage({
               ))}
             </div>
 
-            {/* Approval gate */}
-            <div className="sticky bottom-4 z-20 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line dark:border-darkBorder bg-white/95 dark:bg-darkCard/95 px-4 py-3 shadow-lift backdrop-blur-xl">
+            {/*
+             * Approval gate.
+             *
+             * Sticky only from `md` up. Pinned to the bottom of a phone it sat
+             * ON TOP of the proposals and the ledger below it — a bar that
+             * follows the reader is useful on a wide screen, where there is room
+             * beside the content, but on a phone it simply covers the last rows
+             * and there is nothing left to scroll them clear of it.
+             */}
+            <div className="z-20 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line dark:border-darkBorder bg-white/95 dark:bg-darkCard/95 px-4 py-3 shadow-lift backdrop-blur-xl md:sticky md:bottom-4">
               <div className="flex items-center gap-3">
                 <Pill tone={selected.length ? 'accent' : 'muted'}>
                   {selected.length} of {actions.length} approved
