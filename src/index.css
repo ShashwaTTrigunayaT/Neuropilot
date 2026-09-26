@@ -462,62 +462,119 @@ body {
   }
 
   /*
-   * The page comes down in height on a phone.
+   * Everything comes down in height on a phone.
    *
-   * A phone has one column where a laptop has two, so the desktop vertical
-   * rhythm — 32px between sections, 40px of band padding — spends a screen's
-   * worth of scroll on nothing. Each large vertical step is roughly halved
-   * here, which shortens every page without changing a single word of it.
+   * Two things make a phone page long: the one-column stack, which no
+   * stylesheet can undo, and all the space the desktop spends AROUND content —
+   * page rhythm, component padding, inner gaps, row height, chart height. The
+   * second half is what this trims, and it trims it at every level:
+   *
+   *   · the ROOT FONT SIZE drops a step. Every rem-based measure in the app —
+   *     which is every Tailwind padding, gap, margin, width and height — comes
+   *     down with it, so no component is missed by the list below;
+   *   · the common spacing utilities are then trimmed again by hand, so a card
+   *     is not merely 12% shorter but plainly compact;
+   *   · tall charts are capped, because an SVG that is square in a wide column
+   *     is a square screen on a phone.
    *
    * The preview is exempt (`data-np-preview`): it is a full-screen slide whose
    * spacing is behaviour, not decoration — it measures its own panel width and
    * step, and tightening its padding would break the loop.
    */
+  html {
+    font-size: 14px;
+  }
+
+  /* ---- page rhythm ------------------------------------------------- */
   .space-y-8:not([data-np-preview] *) > :not([hidden]) ~ :not([hidden]),
-  .space-y-7:not([data-np-preview] *) > :not([hidden]) ~ :not([hidden]),
-  .space-y-6:not([data-np-preview] *) > :not([hidden]) ~ :not([hidden]) {
+  .space-y-7:not([data-np-preview] *) > :not([hidden]) ~ :not([hidden]) {
     margin-top: 1rem !important;
   }
-  .space-y-5:not([data-np-preview] *) > :not([hidden]) ~ :not([hidden]),
-  .space-y-4:not([data-np-preview] *) > :not([hidden]) ~ :not([hidden]) {
+  .space-y-6:not([data-np-preview] *) > :not([hidden]) ~ :not([hidden]),
+  .space-y-5:not([data-np-preview] *) > :not([hidden]) ~ :not([hidden]) {
     margin-top: 0.75rem !important;
   }
+  .space-y-4:not([data-np-preview] *) > :not([hidden]) ~ :not([hidden]),
+  .space-y-3\.5:not([data-np-preview] *) > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.6rem !important;
+  }
+  .space-y-3:not([data-np-preview] *) > :not([hidden]) ~ :not([hidden]),
+  .space-y-2\.5:not([data-np-preview] *) > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.45rem !important;
+  }
+
+  /* ---- offsets ------------------------------------------------------ */
   .mt-16:not([data-np-preview] *),
   .mt-14:not([data-np-preview] *),
   .mt-12:not([data-np-preview] *),
   .mt-10:not([data-np-preview] *),
   .mt-8:not([data-np-preview] *) {
-    margin-top: 1.25rem !important;
+    margin-top: 1rem !important;
   }
   .mt-7:not([data-np-preview] *),
-  .mt-6:not([data-np-preview] *),
-  .mt-5:not([data-np-preview] *) {
-    margin-top: 0.875rem !important;
+  .mt-6:not([data-np-preview] *) {
+    margin-top: 0.7rem !important;
+  }
+  .mt-5:not([data-np-preview] *),
+  .mt-4:not([data-np-preview] *) {
+    margin-top: 0.6rem !important;
+  }
+  .mt-3:not([data-np-preview] *),
+  .mt-2\.5:not([data-np-preview] *) {
+    margin-top: 0.45rem !important;
   }
   .mb-10:not([data-np-preview] *),
   .mb-8:not([data-np-preview] *),
-  .mb-6:not([data-np-preview] *) {
-    margin-bottom: 1rem !important;
+  .mb-6:not([data-np-preview] *),
+  .mb-4:not([data-np-preview] *) {
+    margin-bottom: 0.7rem !important;
   }
+
+  /* ---- component padding (shorthand first, then the edges) ---------- */
+  .p-6:not([data-np-preview] *) { padding: 0.85rem !important; }
+  .p-5:not([data-np-preview] *) { padding: 0.75rem !important; }
+  .p-4:not([data-np-preview] *) { padding: 0.7rem !important; }
+  .p-3:not([data-np-preview] *) { padding: 0.55rem !important; }
+
+  .px-6:not([data-np-preview] *) { padding-left: 0.9rem !important; padding-right: 0.9rem !important; }
+  .px-5:not([data-np-preview] *) { padding-left: 0.8rem !important; padding-right: 0.8rem !important; }
+  .px-4:not([data-np-preview] *) { padding-left: 0.75rem !important; padding-right: 0.75rem !important; }
+
+  .py-8:not([data-np-preview] *) { padding-top: 1.1rem !important; padding-bottom: 1.1rem !important; }
+  .py-6:not([data-np-preview] *) { padding-top: 0.9rem !important; padding-bottom: 0.9rem !important; }
+  .py-5:not([data-np-preview] *) { padding-top: 0.75rem !important; padding-bottom: 0.75rem !important; }
+  .py-4:not([data-np-preview] *) { padding-top: 0.65rem !important; padding-bottom: 0.65rem !important; }
+  .py-3\.5:not([data-np-preview] *) { padding-top: 0.6rem !important; padding-bottom: 0.6rem !important; }
+  .py-3:not([data-np-preview] *) { padding-top: 0.55rem !important; padding-bottom: 0.55rem !important; }
+  .py-2\.5:not([data-np-preview] *) { padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
   .py-20:not([data-np-preview] *),
   .py-16:not([data-np-preview] *),
   .py-14:not([data-np-preview] *),
   .py-12:not([data-np-preview] *),
   .py-10:not([data-np-preview] *) {
-    padding-top: 1.75rem !important;
-    padding-bottom: 1.75rem !important;
+    padding-top: 1.5rem !important;
+    padding-bottom: 1.5rem !important;
   }
+
+  .pt-8:not([data-np-preview] *),
   .pt-6:not([data-np-preview] *),
-  .pt-5:not([data-np-preview] *) {
-    padding-top: 1rem !important;
-  }
+  .pt-5:not([data-np-preview] *),
+  .pt-4:not([data-np-preview] *) { padding-top: 0.7rem !important; }
+  .pb-8:not([data-np-preview] *),
   .pb-6:not([data-np-preview] *),
-  .pb-5:not([data-np-preview] *) {
-    padding-bottom: 1rem !important;
-  }
+  .pb-5:not([data-np-preview] *),
+  .pb-4:not([data-np-preview] *) { padding-bottom: 0.7rem !important; }
+
+  /* ---- inner gaps --------------------------------------------------- */
   .gap-6:not([data-np-preview] *),
-  .gap-5:not([data-np-preview] *) {
-    gap: 1rem !important;
+  .gap-5:not([data-np-preview] *) { gap: 0.85rem !important; }
+  .gap-4:not([data-np-preview] *) { gap: 0.7rem !important; }
+  .gap-3:not([data-np-preview] *) { gap: 0.55rem !important; }
+  .gap-2\.5:not([data-np-preview] *) { gap: 0.45rem !important; }
+
+  /* ---- charts ------------------------------------------------------- */
+  svg:not([data-np-preview] *) {
+    max-height: 16rem !important;
   }
 }
 
