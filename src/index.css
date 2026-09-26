@@ -298,29 +298,29 @@ body {
   /* amber replaces the teal: green reads muddy against true black, and amber is
      both higher-contrast and clearly distinct from the risk-tier colours */
   :root {
-    --accent-rgb: 210 216 224;
-    --accent-hover-rgb: 182 190 200;
-    /* silver is bright, so a filled accent surface goes DEEP rather than light,
-       which is what lets white text sit on it */
-    --accent-surface-top: #5d6673;
-    --accent-surface-mid: #474f5b;
-    --accent-surface-bottom: #313842;
-    --accent-glow: rgb(210 216 224 / 0.6);
-    --accent-glow-soft: rgb(210 216 224 / 0.5);
-    --accent-glow-strong: rgb(210 216 224 / 0.8);
-    --accent-glow-max: rgb(210 216 224 / 1);
-    --accent-glow-95: rgb(210 216 224 / 0.95);
-    --accent-glow-90: rgb(210 216 224 / 0.9);
-    --accent-ring: rgb(210 216 224 / 0.18);
-    --accent-ring-soft: rgb(210 216 224 / 0.14);
-    --accent-wash: rgb(210 216 224 / 0.15);
-    --accent-wash-mid: rgb(210 216 224 / 0.13);
-    --accent-wash-soft: rgb(210 216 224 / 0.075);
-    --accent-wash-bright: rgb(210 216 224 / 0.11);
+    --accent-rgb: 231 235 240;
+    --accent-hover-rgb: 198 204 212;
+    /* the phone theme is black and grey only: the accent is a neutral, and a
+       filled accent surface stays DARK so white text reads on it */
+    --accent-surface-top: #1e222a;
+    --accent-surface-mid: #15181e;
+    --accent-surface-bottom: #0d0f13;
+    --accent-glow: rgb(231 235 240 / 0.6);
+    --accent-glow-soft: rgb(231 235 240 / 0.5);
+    --accent-glow-strong: rgb(231 235 240 / 0.8);
+    --accent-glow-max: rgb(231 235 240 / 1);
+    --accent-glow-95: rgb(231 235 240 / 0.95);
+    --accent-glow-90: rgb(231 235 240 / 0.9);
+    --accent-ring: rgb(231 235 240 / 0.18);
+    --accent-ring-soft: rgb(231 235 240 / 0.14);
+    --accent-wash: rgb(231 235 240 / 0.15);
+    --accent-wash-mid: rgb(231 235 240 / 0.13);
+    --accent-wash-soft: rgb(231 235 240 / 0.075);
+    --accent-wash-bright: rgb(231 235 240 / 0.11);
   }
 
   /*
-   * Silver is a light accent: white on it is unreadable, so on phones any
+   * The neutral accent is light, so white on it is unreadable; on phones any
    * accent-filled control carries ink text instead. Covers the solid
    * `bg-accent` buttons and the `from-accent` gradient ones alike.
    */
@@ -425,16 +425,27 @@ body {
    * anything marked `data-np-keep` opts out.
    */
   button:not([data-np-keep]) {
-    padding-top: 0.375rem !important;
-    padding-bottom: 0.375rem !important;
-    padding-left: 0.75rem !important;
-    padding-right: 0.75rem !important;
+    padding-top: 0.3rem !important;
+    padding-bottom: 0.3rem !important;
+    padding-left: 0.7rem !important;
+    padding-right: 0.7rem !important;
     font-size: 11px !important;
+    line-height: 1.15rem !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
   }
-  button:not([data-np-keep]) > svg,
-  button:not([data-np-keep]) > span > svg {
-    width: 0.8125rem !important;
-    height: 0.8125rem !important;
+  /*
+   * Text INSIDE a control follows the control's size. A button's own `font-size`
+   * does nothing when its children each state their own, which is exactly why
+   * the card-shaped buttons (the tier and stage filters, with a 19px figure in
+   * a 9.5px label) stayed full-size while their padding shrank.
+   */
+  button:not([data-np-keep]) :is(p, span) {
+    font-size: inherit !important;
+  }
+  button:not([data-np-keep]) svg {
+    width: 0.75rem !important;
+    height: 0.75rem !important;
   }
 }
 
