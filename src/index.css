@@ -298,30 +298,30 @@ body {
   /* amber replaces the teal: green reads muddy against true black, and amber is
      both higher-contrast and clearly distinct from the risk-tier colours */
   :root {
-    --accent-rgb: 240 180 41;
-    --accent-hover-rgb: 214 158 32;
-    /* amber is bright, so a filled accent surface goes DEEP rather than light,
+    --accent-rgb: 210 216 224;
+    --accent-hover-rgb: 182 190 200;
+    /* silver is bright, so a filled accent surface goes DEEP rather than light,
        which is what lets white text sit on it */
-    --accent-surface-top: #9a6f12;
-    --accent-surface-mid: #7a560d;
-    --accent-surface-bottom: #553c08;
-    --accent-glow: rgb(240 180 41 / 0.6);
-    --accent-glow-soft: rgb(240 180 41 / 0.5);
-    --accent-glow-strong: rgb(240 180 41 / 0.8);
-    --accent-glow-max: rgb(240 180 41 / 1);
-    --accent-glow-95: rgb(240 180 41 / 0.95);
-    --accent-glow-90: rgb(240 180 41 / 0.9);
-    --accent-ring: rgb(240 180 41 / 0.18);
-    --accent-ring-soft: rgb(240 180 41 / 0.14);
-    --accent-wash: rgb(240 180 41 / 0.15);
-    --accent-wash-mid: rgb(240 180 41 / 0.13);
-    --accent-wash-soft: rgb(240 180 41 / 0.075);
-    --accent-wash-bright: rgb(240 180 41 / 0.11);
+    --accent-surface-top: #5d6673;
+    --accent-surface-mid: #474f5b;
+    --accent-surface-bottom: #313842;
+    --accent-glow: rgb(210 216 224 / 0.6);
+    --accent-glow-soft: rgb(210 216 224 / 0.5);
+    --accent-glow-strong: rgb(210 216 224 / 0.8);
+    --accent-glow-max: rgb(210 216 224 / 1);
+    --accent-glow-95: rgb(210 216 224 / 0.95);
+    --accent-glow-90: rgb(210 216 224 / 0.9);
+    --accent-ring: rgb(210 216 224 / 0.18);
+    --accent-ring-soft: rgb(210 216 224 / 0.14);
+    --accent-wash: rgb(210 216 224 / 0.15);
+    --accent-wash-mid: rgb(210 216 224 / 0.13);
+    --accent-wash-soft: rgb(210 216 224 / 0.075);
+    --accent-wash-bright: rgb(210 216 224 / 0.11);
   }
 
   /*
-   * Amber is a light accent: white on it is unreadable (about 1.9:1), so on
-   * phones any accent-filled control carries ink text instead. Covers the solid
+   * Silver is a light accent: white on it is unreadable, so on phones any
+   * accent-filled control carries ink text instead. Covers the solid
    * `bg-accent` buttons and the `from-accent` gradient ones alike.
    */
   .bg-accent,
@@ -412,6 +412,29 @@ body {
    */
   .leading-relaxed.text-muted:not([data-np-keep]) {
     display: none;
+  }
+
+  /*
+   * Buttons come down a size on a phone.
+   *
+   * The desktop labels (11–12px) and paddings (up to `px-5 py-3`) are sized for
+   * a mouse and a wide column; at 375px the same control reads as a slab and
+   * crowds the row it sits in. One notch down — height, label and icon alike —
+   * keeps every tap target comfortably large while letting action rows breathe.
+   * `!important` because each button states its own size in Tailwind utilities;
+   * anything marked `data-np-keep` opts out.
+   */
+  button:not([data-np-keep]) {
+    padding-top: 0.375rem !important;
+    padding-bottom: 0.375rem !important;
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+    font-size: 11px !important;
+  }
+  button:not([data-np-keep]) > svg,
+  button:not([data-np-keep]) > span > svg {
+    width: 0.8125rem !important;
+    height: 0.8125rem !important;
   }
 }
 
