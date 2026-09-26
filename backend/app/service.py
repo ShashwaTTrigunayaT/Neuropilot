@@ -1432,6 +1432,23 @@ def _ingested_documents(record: dict) -> dict:
     return record.setdefault("ingested_documents", {})
 
 
+def fhir_ingested_count() -> int:
+    """Subjects whose record arrived over the FHIR boundary.
+
+    Only the inbound paths (`POST /fhir/Bundle` and the SMART import) call
+    `ingest_record`, and each one stamps the document it writes with
+    `source="fhir"` — so a record holding at least one such document is one that
+    was posted in from an EHR. This is a READ, so it must not create the
+    `ingested_documents` map on records that have none.
+    """
+    total = 0
+    for record in PATIENTS.values():
+        docs = record.get("ingested_documents") or {}
+        if any(isinstance(d, dict) and d.get("source") == "fhir" for d in docs.values()):
+            total += 1
+    return total
+
+
 def ingest_record(
     patient_id: str,
     *,

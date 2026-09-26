@@ -50,6 +50,7 @@ import {
   StageIcon,
 } from './widgets.jsx';
 import { fmtScore } from '../lib.js';
+import { api } from '../api.js';
 
 const STAGE_ORDER = ['1', '2', '3', '4'];
 
@@ -374,6 +375,29 @@ export default function Overview({
   // Share of the cohort, for the ribbon's proportion bars — a count means little
   // without the denominator beside it.
   const share = (n) => (total ? (n / total) * 100 : 0);
+
+  //
+  // How many subjects were posted IN over the FHIR boundary (Phase 2 ingest and
+  // the SMART import), as opposed to the cohort loaded at startup. It is read
+  // from the integration status rather than derived from the patient list — a
+  // subject carries no provenance of its own in that list — and it is fetched
+  // here, on the landing view, so returning to it after an ingest shows the new
+  // total without a full reload. A failure is silent: the card then reads 0
+  // rather than taking the landing page down with it.
+  //
+  const [fhirFrom, setFhirFrom] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    api
+      .fhirStatus()
+      .then((status) => {
+        if (alive) setFhirFrom(status?.surface?.from_fhir ?? 0);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   // Everything below is read from the card of the model the API actually serves,
   // so the preview can never describe a different model than the one scoring.
@@ -907,7 +931,7 @@ export default function Overview({
           </Btn>
         </div>
 
-        <div className={`${JOINED_GRID} mt-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5`}>
+        <div className={`${JOINED_GRID} mt-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6`}>
           <div className="bg-white dark:bg-darkCard">
             <RibbonStat icon={Users} label="Subjects" value={total.toLocaleString()} tone="accent" hint="scored by the refined model" />
           </div>
@@ -922,6 +946,9 @@ export default function Overview({
           </div>
           <div className="bg-white dark:bg-darkCard">
             <RibbonStat icon={Gauge} label="Mean priority" value={fmtScore(meanRisk)} tone="accent" bar={meanRisk * 100} hint="cohort average, 0–1" />
+          </div>
+          <div className="bg-white dark:bg-darkCard">
+            <RibbonStat icon={Upload} label="From FHIR" value={fhirFrom.toLocaleString()} tone="accent" hint="FHIR R4 exchange subjects" />
           </div>
         </div>
       </Band>

@@ -443,6 +443,9 @@ def fhir_status() -> dict:
         "push_orders_on_order": config.FHIR_PUSH_ORDERS,
         "surface": {
             "patients": len(service.PATIENTS),
+            # how many of those subjects arrived THROUGH the FHIR boundary, as
+            # opposed to the cohort that was loaded at startup
+            "from_fhir": service.fhir_ingested_count(),
             "risk_assessments": len(service.PATIENTS),
             "open_orders": open_orders,
             "completed_orders": completed_orders,
