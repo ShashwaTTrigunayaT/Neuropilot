@@ -97,12 +97,12 @@ export default function AllPatients({ patients, onSelect, onSimulate, onCompare 
             as plain; this gives the surface depth without adding a single box. */}
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute -left-8 -top-5 h-36 w-[min(560px,100vw)] bg-[radial-gradient(58%_120%_at_22%_0%,rgba(13,130,130,0.075),transparent_72%)] dark:bg-[radial-gradient(58%_120%_at_22%_0%,rgba(20,180,180,0.11),transparent_72%)]"
+          className="pointer-events-none absolute -left-8 -top-5 h-36 w-[min(560px,100vw)] bg-[radial-gradient(58%_120%_at_22%_0%,var(--accent-wash-soft),transparent_72%)] dark:bg-[radial-gradient(58%_120%_at_22%_0%,var(--accent-wash-bright),transparent_72%)]"
         />
 
         <div className="relative flex flex-wrap items-end justify-between gap-x-8 gap-y-5">
           <div className="flex items-center gap-4">
-            <div className="relative flex h-11 w-11 sm:h-[52px] sm:w-[52px] shrink-0 items-center justify-center rounded-[18px] border border-accent/25 bg-gradient-to-br from-accent/30 via-accent/10 to-transparent text-accent shadow-[0_10px_24px_-12px_rgba(13,130,130,0.8)]">
+            <div className="relative flex h-11 w-11 sm:h-[52px] sm:w-[52px] shrink-0 items-center justify-center rounded-[18px] border border-accent/25 bg-gradient-to-br from-accent/30 via-accent/10 to-transparent text-accent shadow-[0_10px_24px_-12px_var(--accent-glow-strong)]">
               <Users className="h-[22px] w-[22px]" />
               <span
                 aria-hidden="true"
@@ -127,7 +127,7 @@ export default function AllPatients({ patients, onSelect, onSimulate, onCompare 
                 className="absolute left-0 top-0 h-full w-px bg-gradient-to-b from-accent via-accent/35 to-transparent"
               />
               <div className="flex items-center gap-2.5">
-                <span className="h-[3px] w-[3px] rounded-full bg-accent shadow-[0_0_8px_rgba(13,130,130,0.6)]" />
+                <span className="h-[3px] w-[3px] rounded-full bg-accent shadow-[0_0_8px_var(--accent-glow)]" />
                 <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-accent">Cohort queue</p>
                 <span
                   aria-hidden="true"

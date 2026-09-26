@@ -864,7 +864,7 @@ export default function Overview({
       >
         <div
           className="pointer-events-none absolute inset-x-0 top-0 h-[520px]"
-          style={{ background: 'radial-gradient(64% 100% at 50% 0%, rgba(13,130,130,0.15), transparent 70%)' }}
+          style={{ background: 'radial-gradient(64% 100% at 50% 0%, var(--accent-wash), transparent 70%)' }}
         />
         <div className="relative flex min-h-0 flex-1 flex-col justify-center py-3">
           <AutoScrollShowcase panels={previewPanels} />
@@ -960,11 +960,11 @@ export default function Overview({
         <div className="relative w-full overflow-hidden">
           <div
             className="pointer-events-none absolute inset-0"
-            style={{ background: 'radial-gradient(70% 130% at 50% 120%, rgba(13,130,130,0.18), transparent 70%)' }}
+            style={{ background: 'radial-gradient(70% 130% at 50% 120%, var(--accent-ring), transparent 70%)' }}
           />
           <div
             className="pointer-events-none absolute inset-x-0 top-0 h-[240px]"
-            style={{ background: 'radial-gradient(50% 100% at 50% 0%, rgba(13,130,130,0.07), transparent 72%)' }}
+            style={{ background: 'radial-gradient(50% 100% at 50% 0%, var(--accent-wash-soft), transparent 72%)' }}
           />
           <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/45 to-transparent dark:via-accent/30" />
           <div className="relative mx-auto w-full max-w-6xl px-4 py-16 text-center sm:px-6 lg:py-20">

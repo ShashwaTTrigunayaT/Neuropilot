@@ -61,15 +61,20 @@ function Card({ icon: Icon, title, tone = 'var(--accent)', meta, delay = 0, chil
       <span
         aria-hidden="true"
         className="absolute inset-x-0 top-0 h-[3px]"
-        style={{ background: `linear-gradient(90deg, ${tone}, ${tone}00)` }}
+        style={{ background: `linear-gradient(90deg, ${tone}, transparent)` }}
       />
       <div className="flex items-center justify-between gap-4 border-b border-line/60 bg-gradient-to-b from-tint/60 to-transparent px-4 py-3 sm:px-6 dark:border-darkBorder/60 dark:from-darkBorder/30">
         <div className="flex items-center gap-2.5">
           <span
-            className="flex h-7 w-7 items-center justify-center rounded-xl"
-            style={{ backgroundColor: `${tone}18`, color: tone }}
+            className="relative flex h-7 w-7 items-center justify-center rounded-xl"
+            style={{ color: tone }}
           >
-            <Icon className="h-4 w-4" />
+            <span
+              aria-hidden="true"
+              className="absolute inset-0 rounded-xl"
+              style={{ backgroundColor: tone, opacity: 0.12 }}
+            />
+            <Icon className="relative h-4 w-4" />
           </span>
           <p className="text-[12px] font-bold tracking-tight text-ink dark:text-darkText">{title}</p>
         </div>
@@ -183,7 +188,7 @@ export default function ProgressionView({ patient, progression, onOpenDetail, on
                 className="absolute left-0 top-0 h-full w-px bg-gradient-to-b from-accent via-accent/35 to-transparent"
               />
               <div className="flex items-center gap-2.5">
-                <span className="h-[3px] w-[3px] rounded-full bg-accent shadow-[0_0_8px_rgba(13,130,130,0.6)]" />
+                <span className="h-[3px] w-[3px] rounded-full bg-accent shadow-[0_0_8px_var(--accent-glow)]" />
                 <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-accent">Refined risk profile</p>
                 <span aria-hidden="true" className="h-px w-14 bg-gradient-to-r from-accent/45 to-transparent" />
               </div>

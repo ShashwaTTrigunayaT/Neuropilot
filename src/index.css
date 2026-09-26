@@ -16,6 +16,23 @@
   --accent-rgb: 13 130 130;
   --accent-hover-rgb: 11 110 110;
   --accent: rgb(var(--accent-rgb));
+  /* the deep gradient behind a filled accent surface (the showcase summary) */
+  --accent-surface-top: #0f8f8f;
+  --accent-surface-mid: #0d8282;
+  --accent-surface-bottom: #0a6a6a;
+  /* accent halos, washes and rings, so the atmosphere follows the accent too */
+  --accent-glow: rgba(13, 130, 130, 0.6);
+  --accent-glow-soft: rgba(13, 130, 130, 0.5);
+  --accent-glow-strong: rgba(13, 130, 130, 0.8);
+  --accent-glow-max: rgba(13, 130, 130, 1);
+  --accent-glow-95: rgba(13, 130, 130, 0.95);
+  --accent-glow-90: rgba(13, 130, 130, 0.9);
+  --accent-ring: rgba(13, 130, 130, 0.18);
+  --accent-ring-soft: rgba(13, 130, 130, 0.14);
+  --accent-wash: rgba(13, 130, 130, 0.15);
+  --accent-wash-mid: rgba(13, 130, 130, 0.13);
+  --accent-wash-soft: rgba(13, 130, 130, 0.075);
+  --accent-wash-bright: rgba(20, 180, 180, 0.11);
 }
 
 html {
@@ -283,6 +300,34 @@ body {
   :root {
     --accent-rgb: 240 180 41;
     --accent-hover-rgb: 214 158 32;
+    /* amber is bright, so a filled accent surface goes DEEP rather than light,
+       which is what lets white text sit on it */
+    --accent-surface-top: #9a6f12;
+    --accent-surface-mid: #7a560d;
+    --accent-surface-bottom: #553c08;
+    --accent-glow: rgb(240 180 41 / 0.6);
+    --accent-glow-soft: rgb(240 180 41 / 0.5);
+    --accent-glow-strong: rgb(240 180 41 / 0.8);
+    --accent-glow-max: rgb(240 180 41 / 1);
+    --accent-glow-95: rgb(240 180 41 / 0.95);
+    --accent-glow-90: rgb(240 180 41 / 0.9);
+    --accent-ring: rgb(240 180 41 / 0.18);
+    --accent-ring-soft: rgb(240 180 41 / 0.14);
+    --accent-wash: rgb(240 180 41 / 0.15);
+    --accent-wash-mid: rgb(240 180 41 / 0.13);
+    --accent-wash-soft: rgb(240 180 41 / 0.075);
+    --accent-wash-bright: rgb(240 180 41 / 0.11);
+  }
+
+  /*
+   * Amber is a light accent: white on it is unreadable (about 1.9:1), so on
+   * phones any accent-filled control carries ink text instead. Covers the solid
+   * `bg-accent` buttons and the `from-accent` gradient ones alike.
+   */
+  .bg-accent,
+  .from-accent,
+  .to-accent {
+    color: #13151a;
   }
 
   body {

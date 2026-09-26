@@ -24,8 +24,11 @@ import { MONO } from './widgets.jsx';
  * is written straight to the DOM inside one rAF loop; React re-renders only when
  * the active panel changes.
  */
-const BRAND = '#0D8282'; // the site's primary button colour
-const BRAND_SURFACE = 'linear-gradient(158deg, #0F8F8F 0%, #0D8282 52%, #0A6A6A 100%)';
+const BRAND = 'var(--accent)'; // the site's primary button colour
+// Resolved from the same accent variables, so the summary column re-tints with
+// the theme (teal on desktop, deep amber on the black phone theme).
+const BRAND_SURFACE =
+  'linear-gradient(158deg, var(--accent-surface-top) 0%, var(--accent-surface-mid) 52%, var(--accent-surface-bottom) 100%)';
 const GAP_PX = 24; // gap-6
 const GUTTER = '1rem'; // the inset each full-width panel keeps from the viewport
 const STEP_MS = 5000; // dwell per panel — long enough to read a deep panel
@@ -176,7 +179,7 @@ export default function AutoScrollShowcase({ panels = [] }) {
       >
         {/* ------------------------------------------------ narrative */}
         <div
-          className="relative flex shrink-0 flex-col overflow-hidden p-6 lg:h-full lg:w-[37%] lg:shrink lg:p-10"
+          className="relative flex min-h-full shrink-0 flex-col overflow-hidden p-6 lg:w-[37%] lg:shrink lg:p-10"
           style={{ background: BRAND_SURFACE }}
         >
           {/* a soft top-light so the flat tint has depth rather than looking printed */}
@@ -247,7 +250,13 @@ export default function AutoScrollShowcase({ panels = [] }) {
          * the one beneath it. If a slide ever stops fitting, the fix is shorter
          * copy — not a scrollbar on a panel that advances on its own.
          */}
-        <div className="flex w-full flex-1 shrink-0 flex-col p-6 lg:min-h-0 lg:shrink lg:px-10 lg:py-7 lg:pl-12">
+        {/*
+         * The explanation column. Desktop only: on a laptop it is the right
+         * half beside the summary, but on a phone it stacked BELOW the summary
+         * and the panel became a scroll of prose. Below `lg` the summary stands
+         * alone; the detail lives one tap away on the view it links to.
+         */}
+        <div className="hidden w-full flex-1 shrink-0 flex-col p-6 lg:flex lg:min-h-0 lg:shrink lg:px-10 lg:py-7 lg:pl-12">
           {p.points.map((pt, k) => (
             <div
               key={pt.label || k}

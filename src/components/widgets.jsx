@@ -215,7 +215,7 @@ export function SectionLabel({ children, right, size = 'md' }) {
   return (
     <div className="flex items-baseline justify-between gap-4">
       <div className="flex items-center gap-2">
-        <span className="h-2.5 w-[3px] rounded-full bg-accent shadow-[0_0_8px_rgba(13,130,130,0.5)]" />
+        <span className="h-2.5 w-[3px] rounded-full bg-accent shadow-[0_0_8px_var(--accent-glow-soft)]" />
         <p {...labelProps}>{children}</p>
       </div>
       {right}
@@ -300,7 +300,9 @@ export function Pill({ tone = 'muted', children }) {
     warn: { text: 'text-amber-600 dark:text-amber-400', hex: '#D9822B' },
     bad: { text: 'text-red-600 dark:text-red-400', hex: '#E04836' },
     muted: { text: 'text-muted dark:text-darkMuted', hex: '#A6A09A' },
-    accent: { text: 'text-accent', hex: ACCENT },
+    // The accent resolves to a variable now, so its halo is given explicitly
+    // rather than by appending an alpha hex to the colour.
+    accent: { text: 'text-accent', hex: ACCENT, halo: 'rgb(var(--accent-rgb) / 0.12)' },
   };
   const t = tones[tone] || tones.muted;
   return (
@@ -308,7 +310,7 @@ export function Pill({ tone = 'muted', children }) {
       <span
         aria-hidden="true"
         className="h-[5px] w-[5px] shrink-0 rounded-full"
-        style={{ backgroundColor: t.hex, boxShadow: `0 0 0 2.5px ${t.hex}1F` }}
+        style={{ backgroundColor: t.hex, boxShadow: `0 0 0 2.5px ${t.halo || `${t.hex}1F`}` }}
       />
       <span className={t.text}>{children}</span>
     </span>
@@ -718,7 +720,7 @@ export function StageFunnel({ funnel }) {
       <SectionLabel>Patients by diagnostic stage</SectionLabel>
       <div className="mt-5 space-y-4">
         {funnel.map(({ stage, count }, i) => {
-          const hex = STAGE_FILLS[stage - 1] || ACCENT;
+          const hex = STAGE_FILLS[stage - 1] || '#0D8282';
           const pct = Math.round((count / total) * 100);
           return (
             <div key={stage}>

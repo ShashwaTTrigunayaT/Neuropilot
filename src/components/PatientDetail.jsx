@@ -461,7 +461,7 @@ function PipelineSection({ patient }) {
                     done
                       ? { backgroundColor: TIER_HEX.low, color: '#fff' }
                       : active
-                        ? { backgroundColor: 'var(--accent)', color: '#fff', boxShadow: '0 0 0 4px rgba(13,130,130,0.18)' }
+                        ? { backgroundColor: 'var(--accent)', color: '#fff', boxShadow: '0 0 0 4px var(--accent-ring)' }
                         : undefined
                   }
                 >
@@ -561,7 +561,7 @@ function ActionSection({ action, advanceable, onAdvance, busy, error }) {
               disabled={!advanceable || busy}
               className={`group inline-flex items-center gap-2.5 rounded-xl px-5 py-2.5 text-xs font-bold transition duration-200 active:scale-[0.98] ${
                 advanceable && !busy
-                  ? 'bg-gradient-to-b from-accent to-accentHover text-white shadow-[0_10px_24px_-12px_rgba(13,130,130,1)] ring-1 ring-inset ring-white/15 hover:shadow-[0_14px_28px_-10px_rgba(13,130,130,0.95)]'
+                  ? 'bg-gradient-to-b from-accent to-accentHover text-white shadow-[0_10px_24px_-12px_var(--accent-glow-max)] ring-1 ring-inset ring-white/15 hover:shadow-[0_14px_28px_-10px_var(--accent-glow-95)]'
                   : 'cursor-not-allowed border border-dashed border-line bg-tint/60 text-muted dark:border-darkBorder dark:bg-darkBorder/40 dark:text-darkMuted'
               }`}
             >
@@ -1100,7 +1100,7 @@ function AuditSection({ patient }) {
                 className="absolute -left-6 top-[3px] flex h-[15px] w-[15px] items-center justify-center rounded-full border-2 border-line bg-white dark:border-darkBorder dark:bg-darkCard"
                 style={{
                   borderColor: i === 0 ? 'var(--accent)' : undefined,
-                  boxShadow: i === 0 ? '0 0 0 3px rgba(13,130,130,0.14)' : undefined,
+                  boxShadow: i === 0 ? '0 0 0 3px var(--accent-ring-soft)' : undefined,
                 }}
               >
                 <span
@@ -1189,15 +1189,22 @@ function DossierCard({ icon: Icon, title, meta, tone = 'var(--accent)', children
       <span
         aria-hidden="true"
         className="absolute inset-x-0 top-0 h-[3px]"
-        style={{ background: `linear-gradient(90deg, ${tone}, ${tone}00)` }}
+        style={{ background: `linear-gradient(90deg, ${tone}, transparent)` }}
       />
       <div className="flex items-center justify-between gap-4 border-b border-line/60 bg-gradient-to-b from-tint/60 to-transparent px-6 py-3 dark:border-darkBorder/60 dark:from-darkBorder/30">
         <div className="flex items-center gap-2.5">
           <span
-            className="flex h-7 w-7 items-center justify-center rounded-xl"
-            style={{ backgroundColor: `${tone}18`, color: tone }}
+            className="relative flex h-7 w-7 items-center justify-center rounded-xl"
+            style={{ color: tone }}
           >
-            <Icon className="h-4 w-4" />
+            {/* A tinted fill without appending an alpha hex to the colour: `tone`
+                can be a CSS variable now, which cannot take a `18` suffix. */}
+            <span
+              aria-hidden="true"
+              className="absolute inset-0 rounded-xl"
+              style={{ backgroundColor: tone, opacity: 0.12 }}
+            />
+            <Icon className="relative h-4 w-4" />
           </span>
           <p className="text-[12px] font-bold tracking-tight text-ink dark:text-darkText">{title}</p>
         </div>
@@ -1283,7 +1290,7 @@ export default function PatientDetail({
   const action = pipeline?.recommended_next ?? null;
   const advanceable = Boolean(action) && !/^(Schedule|Return)/.test(action.button);
 
-  const tierHex = TIER_HEX[patient.risk_tier] || 'var(--accent)';
+  const tierHex = TIER_HEX[patient.risk_tier] || '#0D8282';
   const tierWord = TIER_LABEL[patient.risk_tier] ?? patient.risk_tier ?? 'Unbanded';
   const measuredPanels = ['blood', 'imaging', 'pet'].filter((slot) => patient[slot]?.status === 'completed').length;
   // Anchors are scrolled by hand rather than by `#id` hash links so the offset
@@ -1337,7 +1344,7 @@ export default function PatientDetail({
             read as plain; this gives the surface depth without adding a box. */}
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute -left-8 -top-5 h-36 w-[min(560px,100vw)] bg-[radial-gradient(58%_120%_at_22%_0%,rgba(13,130,130,0.075),transparent_72%)] dark:bg-[radial-gradient(58%_120%_at_22%_0%,rgba(20,180,180,0.11),transparent_72%)]"
+          className="pointer-events-none absolute -left-8 -top-5 h-36 w-[min(560px,100vw)] bg-[radial-gradient(58%_120%_at_22%_0%,var(--accent-wash-soft),transparent_72%)] dark:bg-[radial-gradient(58%_120%_at_22%_0%,var(--accent-wash-bright),transparent_72%)]"
         />
 
         {/* A record is reached from the queue, so the way back sits above the
@@ -1394,7 +1401,7 @@ export default function PatientDetail({
                 className="absolute left-0 top-0 h-full w-px bg-gradient-to-b from-accent via-accent/35 to-transparent"
               />
               <div className="flex items-center gap-2.5">
-                <span className="h-[3px] w-[3px] rounded-full bg-accent shadow-[0_0_8px_rgba(13,130,130,0.6)]" />
+                <span className="h-[3px] w-[3px] rounded-full bg-accent shadow-[0_0_8px_var(--accent-glow)]" />
                 <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-accent">Subject record</p>
                 <span aria-hidden="true" className="h-px w-14 bg-gradient-to-r from-accent/45 to-transparent" />
               </div>
@@ -1564,7 +1571,7 @@ export default function PatientDetail({
               onClick={() => window.print()}
               aria-label="Export consultation report"
               title="Export consultation report (print / PDF)"
-              className="inline-flex h-9 items-center gap-2 rounded-xl bg-gradient-to-b from-accent to-accentHover px-3 text-[11.5px] font-bold text-white shadow-[0_8px_18px_-10px_rgba(13,130,130,0.95)] ring-1 ring-inset ring-white/15 transition duration-200 hover:shadow-[0_10px_22px_-8px_rgba(13,130,130,0.9)] active:scale-[0.98]"
+              className="inline-flex h-9 items-center gap-2 rounded-xl bg-gradient-to-b from-accent to-accentHover px-3 text-[11.5px] font-bold text-white shadow-[0_8px_18px_-10px_var(--accent-glow-95)] ring-1 ring-inset ring-white/15 transition duration-200 hover:shadow-[0_10px_22px_-8px_var(--accent-glow-90)] active:scale-[0.98]"
             >
               <Printer className="h-4 w-4" />
               <span className="hidden lg:inline">Export record</span>

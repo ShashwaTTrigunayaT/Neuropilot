@@ -163,7 +163,7 @@ export default function FeatureRadarChart({ data = [] }) {
           {/* the light the web sits in */}
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute inset-6 rounded-full bg-[radial-gradient(closest-side,rgba(13,130,130,0.13),transparent_76%)] blur-xl dark:bg-[radial-gradient(closest-side,rgba(20,180,180,0.18),transparent_76%)]"
+            className="pointer-events-none absolute inset-6 rounded-full bg-[radial-gradient(closest-side,var(--accent-wash-mid),transparent_76%)] blur-xl dark:bg-[radial-gradient(closest-side,var(--accent-ring),transparent_76%)]"
           />
 
           <svg viewBox={`0 0 ${size} ${size}`} className="relative w-full overflow-visible">

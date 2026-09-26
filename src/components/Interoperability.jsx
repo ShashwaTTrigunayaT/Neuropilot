@@ -409,7 +409,7 @@ export default function Interoperability({
                 className="absolute left-0 top-0 h-full w-px bg-gradient-to-b from-accent via-accent/35 to-transparent"
               />
               <div className="flex items-center gap-2.5">
-                <span className="h-[3px] w-[3px] rounded-full bg-accent shadow-[0_0_8px_rgba(13,130,130,0.6)]" />
+                <span className="h-[3px] w-[3px] rounded-full bg-accent shadow-[0_0_8px_var(--accent-glow)]" />
                 <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-accent">
                   Interoperability
                 </p>

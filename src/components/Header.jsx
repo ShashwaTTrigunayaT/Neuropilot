@@ -265,8 +265,8 @@ export default function Header({
               autopilot
                 ? 'bg-tierHigh text-white shadow-glow-high'
                 : autonomousView
-                  ? 'bg-gradient-to-r from-accent to-[#0FA0A0] text-white shadow-glow-teal ring-1 ring-accent/30'
-                  : 'bg-gradient-to-r from-[#0E8C8C] to-[#12A3A3] text-white shadow-glow-teal hover:from-accent hover:to-[#0FA0A0] hover:shadow-lift'
+                  ? 'bg-gradient-to-r from-accent to-accentHover text-white shadow-glow-teal ring-1 ring-accent/30'
+                  : 'bg-gradient-to-r from-accent to-accentHover text-white shadow-glow-teal hover:shadow-lift'
             }`}
           >
             {autopilot ? (
