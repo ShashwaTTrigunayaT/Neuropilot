@@ -977,17 +977,21 @@ export default function Overview({
               <span aria-hidden="true" className="h-px w-14 bg-gradient-to-r from-accent/45 to-transparent" />
             </div>
             {/*
-             * The closing hand-off is a launcher on a phone.
+             * The closing hand-off stays short on a phone — not silent.
              *
-             * Below `md` this band keeps its four actions and drops every word
-             * around them: the eyebrow, the heading, the sentence under it, the
-             * four cards that explain the buttons, and the jump strip. What is
-             * left is the thing the section exists to do — take you somewhere.
+             * Below `md` this band keeps its four actions and the claim that
+             * introduces them: the heading and the one sentence under it. What
+             * it drops is the eyebrow, the four cards that explain the buttons,
+             * and the jump strip.
+             *
+             * The sentence carries `data-np-keep` because the app-wide phone
+             * rule hides explanatory prose, and here the prose is not a footnote
+             * to the buttons — it is what tells you which one to press.
              */}
-            <h2 className="mx-auto mt-4 hidden max-w-3xl text-[24px] font-black leading-[1.05] tracking-[-0.035em] text-ink md:block dark:text-darkText sm:text-[42px]">
+            <h2 className="mx-auto mt-4 max-w-3xl text-[24px] font-black leading-[1.05] tracking-[-0.035em] text-ink dark:text-darkText sm:text-[42px]">
               Work the queue, not the charts.
             </h2>
-            <p className="mx-auto mt-4 hidden max-w-xl text-[13px] leading-relaxed text-muted md:block dark:text-darkMuted">
+            <p data-np-keep="" className="mx-auto mt-4 max-w-xl text-[13px] leading-relaxed text-muted dark:text-darkMuted">
               Start at the top of the list — or open the console and let the system tell you what it
               would order next, and why.
             </p>

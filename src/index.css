@@ -576,6 +576,39 @@ body {
   svg:not([data-np-preview] *) {
     max-height: 16rem !important;
   }
+
+  /*
+   * Phone layouts go two-up.
+   *
+   * This is the real reason a phone page is long. Almost every grid in the app
+   * was written for a wide column and states its column count at `sm` or above
+   * — `sm:grid-cols-4`, `lg:grid-cols-2` — so below that first breakpoint it
+   * falls to ONE column. Five status cells, four presets, three metrics, one
+   * panel per row: the content is not long, it is just never side by side.
+   *
+   * Any grid that names a column count at `sm` or wider but not at the base
+   * width therefore gets TWO columns — the widest that still leaves a cell
+   * readable at 360px, and enough to halve the length of the page. Grids that
+   * split into unequal panes (the 12-column page bodies, the rail layouts)
+   * name no `sm:` count, so they are deliberately untouched, and so is the
+   * preview, whose panel geometry the auto-advance loop depends on.
+   *
+   * The `sm:grid` ribbons are the same grids written the other way round — a
+   * divided list that BECOMES a grid at `sm` — so they are switched to a grid
+   * here too, and their dividers dropped: on a phone the flat surface is the
+   * point, and a stray top border on the second cell of every row reads as a
+   * mistake.
+   */
+  [class*="sm:grid-cols-"]:not([data-np-preview] *),
+  [class~="sm:grid"]:not([data-np-preview] *) {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  [class~="sm:grid"]:not([data-np-preview] *) {
+    display: grid !important;
+  }
+  [class~="sm:grid"]:not([data-np-preview] *) > * {
+    border-top-width: 0 !important;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
