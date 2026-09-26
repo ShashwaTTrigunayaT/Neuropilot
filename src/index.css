@@ -416,14 +416,23 @@ body {
   }
 
   /*
-   * Explanatory prose is desktop-only — except inside the preview.
+   * Explanations are desktop-only.
    *
-   * The one signature shared by the app's explanation paragraphs (and not by
-   * its labels, values or controls) is the muted, generously-led paragraph.
-   * Hiding that class hides the "why" while the numbers, names and actions —
-   * which are set in ink or mono — all stay.
+   * Every explanation in the app is a PARAGRAPH with generous leading — it is
+   * the one signature they all share, whether it is set in muted grey or in ink,
+   * and whether it sits under a heading or inside a card. Those are what make a
+   * phone page read as a wall of prose between the few things that actually do
+   * something, so on a phone they all go.
+   *
+   * What stays is the working part: names, numbers, labels, states, charts and
+   * controls. That is why the selector is `p` — the app's values, log lines and
+   * row texts are set in `span`s, and those are data, not commentary.
+   *
+   * Two exemptions: the preview, where the prose IS the content, and anything
+   * marked `data-np-keep` — currently the sentence that labels the closing
+   * hand-off buttons and the API error message.
    */
-  .leading-relaxed.text-muted:not([data-np-keep]) {
+  p.leading-relaxed:not([data-np-preview] *):not([data-np-keep]) {
     display: none;
   }
 

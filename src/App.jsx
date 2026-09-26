@@ -549,7 +549,7 @@ export default function App() {
             <h2 className="mt-5 text-base font-bold text-ink dark:text-darkText">
               Cannot Reach Decision API
             </h2>
-            <p className="mt-2 text-xs leading-relaxed text-muted dark:text-darkMuted">{loadError}</p>
+            <p data-np-keep="" className="mt-2 text-xs leading-relaxed text-muted dark:text-darkMuted">{loadError}</p>
             <button
               onClick={loadAll}
               className="mt-6 inline-flex items-center gap-2 rounded-xl bg-accent px-5 py-2.5 text-xs font-semibold text-white shadow-soft transition hover:bg-accentHover"
