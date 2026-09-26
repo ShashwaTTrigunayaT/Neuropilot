@@ -117,23 +117,36 @@ export default function MobileWelcome({ onLaunch }) {
    * `100dvh` is meant to be exactly that, but it is not dependable across mobile
    * browsers — on the device reporting this, it resolves to less than the real
    * viewport, which is why the panel kept finishing short and leaving part of the
-   * screen uncovered at the bottom. `visualViewport.height` is the number the
-   * browser is actually rendering, so it is measured here and published as
-   * `--np-preview-h`; `100dvh` remains only as the fallback for the first paint.
+   * screen uncovered at the bottom.
+   *
+   * `visualViewport.height` alone was not enough either: on that device it too
+   * reports a little less than the area actually being painted, so the panel
+   * still stopped short and the next section showed underneath it. So the height
+   * here is the LARGER of the two numbers the browser offers — `innerHeight` (the
+   * layout viewport) and `visualViewport.height` (the visual one). Whichever of
+   * them is the honest one, the panel covers it; if they disagree, the taller one
+   * wins and the extra simply falls below the fold, which is invisible. It is
+   * also re-measured as the browser bar collapses and on a visual-viewport
+   * scroll, so the number never goes stale.
    */
   useEffect(() => {
     const apply = () => {
-      const h = Math.round(window.visualViewport?.height || window.innerHeight || 0);
+      const h = Math.max(
+        Math.round(window.innerHeight || 0),
+        Math.round(window.visualViewport?.height || 0),
+      );
       if (h > 0) document.documentElement.style.setProperty('--np-preview-h', `${h}px`);
     };
     apply();
     window.addEventListener('resize', apply);
     window.addEventListener('orientationchange', apply);
     window.visualViewport?.addEventListener('resize', apply);
+    window.visualViewport?.addEventListener('scroll', apply);
     return () => {
       window.removeEventListener('resize', apply);
       window.removeEventListener('orientationchange', apply);
       window.visualViewport?.removeEventListener('resize', apply);
+      window.visualViewport?.removeEventListener('scroll', apply);
       document.documentElement.style.removeProperty('--np-preview-h');
     };
   }, []);
@@ -141,7 +154,7 @@ export default function MobileWelcome({ onLaunch }) {
   return (
     <div
       data-np-preview=""
-      className="flex h-full min-h-0 w-full items-center justify-center"
+      className="flex h-full min-h-screen w-full items-center justify-center mt-28"
       style={{ background: PAGE }}
     >
       {/*
@@ -160,7 +173,7 @@ export default function MobileWelcome({ onLaunch }) {
            * the design's own 36px — which keeps the mark clear of the bar and
            * keeps the panel's lower half identical to the drawn layout.
            */
-          padding: 'calc(var(--app-header-h, 3.5rem) + 20px) 30px 30px',
+          padding: 'calc(var(--app-header-h, 3.5rem) + 20px) 30px 70px',
         }}
       >
         <div style={{ marginBottom: 22 }}>
@@ -171,7 +184,7 @@ export default function MobileWelcome({ onLaunch }) {
           style={{
             fontFamily: "'Space Grotesk', ui-sans-serif, system-ui, sans-serif",
             color: ON_PANEL,
-            fontSize: 34,
+            fontSize: 50,
             fontWeight: 700,
             lineHeight: 1.1,
             margin: '0 0 6px',

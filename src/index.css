@@ -771,20 +771,11 @@ body {
     padding: 0 !important;
   }
   /*
-   * The hero fills the viewport EXACTLY — no arithmetic, no gap, no overshoot.
-   *
-   * Two obvious approaches both fail on a phone. Sizing the band to
-   * `100dvh - <header>` leaves a strip of the next section showing at the bottom,
-   * because that subtraction is only right if the header's measured height is
-   * exactly the space it takes — and a bar that wraps cannot promise that. Sizing
-   * it to `100dvh` and starting it below the bar is a header's height too tall, so
-   * the page scrolls by that much.
-   *
-   * So the band is a full `100dvh` that starts at the TOP of the viewport, pulled
-   * up under the bar by exactly the bar's height. The bar is sticky and opaque, so
-   * it covers that top strip: the panel therefore reads as starting under the
-   * navbar and ending at the bottom edge, and it contributes `100dvh - header` to
-   * the page — the exact figure — so nothing overshoots and nothing is left over.
+   * The hero is pinned to the height the browser reports (`--np-preview-h`,
+   * measured in MobileWelcome) and pulled UP under the sticky bar by the bar's
+   * own height, so the panel starts at the top of the viewport and the bar
+   * overlays its first strip. It contributes exactly that height to the page, so
+   * the section below begins at the fold rather than after a gap.
    */
   [data-np-preview-hero] {
     height: var(--np-preview-h, 100dvh) !important;
@@ -822,6 +813,20 @@ body {
   }
   [class~="sm:grid"]:not([data-np-preview] *) > * {
     border-top-width: 0 !important;
+  }
+
+  /*
+   * A lone card in the last row takes the whole width.
+   *
+   * Two-up turns a group into pairs, and an odd number of items is common — five
+   * cohort cells, three other things — so the last one was left stranded in half
+   * of the final row with an empty half beside it: the row reads as a missing
+   * card rather than as the end of a list. An odd-positioned last child is exactly
+   * that case, so it spans both columns instead.
+   */
+  [class*="sm:grid-cols-"]:not([data-np-preview] *) > :nth-child(odd):last-child,
+  [class~="sm:grid"]:not([data-np-preview] *) > :nth-child(odd):last-child {
+    grid-column: 1 / -1 !important;
   }
 
   /*
