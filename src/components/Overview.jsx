@@ -730,7 +730,7 @@ export default function Overview({
     },
     {
       id: 'outlook',
-      accent: '#D34FB0',
+      accent: '#8B5CF6',
       tone: 'accent',
       badge: 'trajectory',
       eyebrow: 'Progression outlook',
@@ -768,7 +768,7 @@ export default function Overview({
     },
     {
       id: 'interop',
-      accent: '#9B63DE',
+      accent: '#3B82F6',
       tone: 'muted',
       badge: 'FHIR R4',
       eyebrow: 'Interoperability',

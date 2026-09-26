@@ -13,10 +13,16 @@
 
 import { useEffect } from 'react';
 
-/* The page behind the panel — the app's own page colour, not the mockup's navy. */
-const PAGE = '#4A51A3';
-const VIOLET = '#4A51A3';
-const PERI = '#C3D1ED';
+/*
+ * The panel and the page, on the light palette the phone now renders: a near-white
+ * page, a white panel on it, ink for the heading and a muted grey for the
+ * supporting line. The mark, the artwork and the button stay the pink accent, so
+ * the accent is the only strong colour on the screen.
+ */
+const PAGE = '#F6F5FA';
+const PANEL = '#FFFFFF';
+const INK = '#262530';
+const MUTED = '#77747F';
 const PINK = '#FF2E63';
 const PINK_HOVER = '#E02654';
 
@@ -142,7 +148,7 @@ export default function MobileWelcome({ onLaunch }) {
       <div
         className="relative flex h-full w-full flex-col overflow-hidden"
         style={{
-          background: VIOLET,
+          background: PANEL,
           borderRadius: 0,
           /*
            * The panel starts at the very top of the viewport and the navbar
@@ -160,7 +166,7 @@ export default function MobileWelcome({ onLaunch }) {
         <h1
           style={{
             fontFamily: "'Space Grotesk', ui-sans-serif, system-ui, sans-serif",
-            color: '#FFFFFF',
+            color: INK,
             fontSize: 34,
             fontWeight: 700,
             lineHeight: 1.1,
@@ -169,7 +175,7 @@ export default function MobileWelcome({ onLaunch }) {
         >
           NeuroPilot
         </h1>
-        <p style={{ color: PERI, fontSize: 15, fontWeight: 500, margin: '0 0 22px' }}>
+        <p style={{ color: MUTED, fontSize: 15, fontWeight: 500, margin: '0 0 22px' }}>
           AI-driven Alzheimer&rsquo;s triage
         </p>
 

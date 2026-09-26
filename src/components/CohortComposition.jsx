@@ -60,7 +60,7 @@ const BAND_FILL = (hex) => `linear-gradient(180deg, ${lighten(hex, 0.22)} 0%, ${
  * carries the same ranking — the deepest band is the one to act on — and lets the
  * columns read as one object.
  */
-const PURPLE = '#5B2C9E'; // deep — High
+const PURPLE = '#6D28D9'; // deep — High
 const TIERS = [
   { key: 'high', label: 'High', hex: PURPLE },
   { key: 'medium', label: 'Medium', hex: '#C026D3' }, // fuchsia
@@ -89,7 +89,7 @@ export default function CohortComposition({
       return {
         stage: s,
         short: STAGES_SHORT[s - 1] ?? `Stage ${s}`,
-        hex: STAGE_FILLS[s - 1] || '#6E76D6',
+        hex: STAGE_FILLS[s - 1] || '#0D8282',
         count,
         share: pct(count),
         tiers: TIERS.map((x) => {

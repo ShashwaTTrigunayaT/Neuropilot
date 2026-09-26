@@ -51,7 +51,7 @@ export function useEnterProgress({ duration = 950, delay = 70 } = {}) {
   return t;
 }
 
-export const INK = '#1E2245';
+export const INK = '#13151A';
 export const INK_MUTED = '#6E7175';
 export const LINE = '#E6E2DA';
 export const SURFACE = '#FFFFFF';
@@ -71,17 +71,8 @@ export const TIER_SOFT_HEX = {
 };
 export const TIER_LABEL = { high: 'High', medium: 'Medium', low: 'Low' };
 
-/*
- * The four stage markers, on the design system's own ramp.
- *
- * These were teal, sky blue, violet and magenta — hues from the app's original
- * teal theme, and the only colours left anywhere on a phone that were not the
- * navy page, the violet container or the pink accent. They now run from the
- * system's darker purple to its pink, so a stage never introduces a hue the
- * design does not own.
- */
-export const STAGE_FILLS = ['#6E76D6', '#9B63DE', '#D34FB0', '#FF2E63'];
-export const STAGE_DOTS = ['bg-[#6E76D6]', 'bg-[#9B63DE]', 'bg-[#D34FB0]', 'bg-[#FF2E63]'];
+export const STAGE_FILLS = ['#0D8282', '#3B82F6', '#8B5CF6', '#EC4899'];
+export const STAGE_DOTS = ['bg-[#0D8282]', 'bg-[#3B82F6]', 'bg-[#8B5CF6]', 'bg-[#EC4899]'];
 export const STAGE_LABELS = ['Cognitive assessment', 'Blood biomarkers', 'MRI volumetrics', 'PET imaging'];
 
 /*
@@ -952,7 +943,7 @@ export function StageFunnel({ funnel }) {
       <SectionLabel>Patients by diagnostic stage</SectionLabel>
       <div className="mt-5 space-y-4">
         {funnel.map(({ stage, count }, i) => {
-          const hex = STAGE_FILLS[stage - 1] || '#6E76D6';
+          const hex = STAGE_FILLS[stage - 1] || '#0D8282';
           const pct = Math.round((count / total) * 100);
           return (
             <div key={stage}>

@@ -335,7 +335,7 @@ export default function TrajectoryChart({
 
         {/* the break itself: a zigzag on the axis at "today" */}
         <g transform={`translate(${x(today.t)}, ${mainBottom})`}>
-          <rect x="-8" y="-4" width="16" height="8" fill="#fff" className="dark:fill-darkCard" />
+          <rect x="-8" y="-4" width="16" height="8" fill="#fff" className="dark:fill-[#11151C]" />
           <path d="M-5,-3 L-1,3 M1,-3 L5,3" stroke="currentColor" className="text-muted dark:text-darkMuted" strokeWidth="1.4" strokeLinecap="round" fill="none" />
         </g>
 
@@ -472,7 +472,7 @@ export default function TrajectoryChart({
               opacity="0.55"
             />
             <g transform={`translate(${cardX}, ${cardY})`}>
-              <rect width={cardW} height={cardH} rx="10" fill="#fff" className="dark:fill-darkCard" stroke="currentColor" strokeOpacity="0.14" strokeWidth="1" />
+              <rect width={cardW} height={cardH} rx="10" fill="#fff" className="dark:fill-[#11151C]" stroke="currentColor" strokeOpacity="0.14" strokeWidth="1" />
               {cardLines.map((line, i) => (
                 <text
                   key={i}

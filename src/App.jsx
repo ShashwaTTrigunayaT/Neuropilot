@@ -68,7 +68,12 @@ export default function App() {
     return () => mq.removeEventListener('change', onChange);
   }, []);
 
-  const darkActive = isPhone || theme === 'dark';
+  /*
+   * A phone follows the same mode toggle as desktop rather than being forced into
+   * the dark console — it renders the light side of the palette by default, so the
+   * page is a near-white and the accent is the only strong colour on the screen.
+   */
+  const darkActive = theme === 'dark';
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkActive);

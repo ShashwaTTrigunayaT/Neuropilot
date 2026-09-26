@@ -24,7 +24,6 @@ import {
   RiskGauge,
   SectionLabel,
   STAGE_FILLS,
-  STAGE_STRIP_GRID,
   TIER_HEX,
 } from './widgets.jsx';
 
@@ -66,56 +65,12 @@ const COHORT_MEDIAN = {
 };
 
 const STAGE_COLORS = {
-  Cognitive: '#6E76D6',
-  Blood: '#9B63DE',
-  MRI: '#D34FB0',
-  PET: '#FF2E63',
+  Cognitive: '#0D8282',
+  Blood: '#3B82F6',
+  MRI: '#8B5CF6',
+  PET: '#EC4899',
   Demographic: '#6E7175',
 };
-
-/*
- * The four stages, as the workbench's own pathway.
- *
- * The page used to make the reader scroll four panels to find out which tests
- * are on file — the single most important fact about a simulated subject, and
- * the one the toggles change. This states it at the top, in the order and the
- * colours the rest of the app uses, and names the value the model is actually
- * reading from each stage rather than just "on".
- *
- * It is also where staging is CONTROLLED. The toggles used to be repeated on
- * every section header, which meant two controls for one piece of state and a
- * reader who had to know which one was authoritative; here the pathway owns it,
- * and each section below states its own status without offering a second switch.
- */
-const STAGE_STRIP = [
-  {
-    n: 1,
-    key: 'cognitive',
-    name: 'Cognition',
-    always: true,
-    read: (f) => `MMSE ${f.mmse}/30 · ADAS-Cog ${Number(f.adas_cog_13).toFixed(1)}`,
-  },
-  {
-    n: 2,
-    key: 'blood',
-    name: 'Blood panel',
-    read: (f) => `p-tau217 ${Number(f.ptau217).toFixed(3)} · Aβ42/40 ${Number(f.abeta4240).toFixed(3)}`,
-  },
-  {
-    n: 3,
-    key: 'mri',
-    name: 'MRI volumetrics',
-    read: (f) =>
-      `Hippocampus ${Number(f.hippocampal_volume).toFixed(2)} cm³ · ratio ${(f.hippocampal_volume / f.icv).toFixed(5)}`,
-  },
-  {
-    n: 4,
-    key: 'pet',
-    name: 'PET imaging',
-    read: (f) =>
-      `Centiloids ${Number(f.centiloids).toFixed(1)} · Tau ${Number(f.tau_meta_temporal).toFixed(3)} SUVR`,
-  },
-];
 
 function formatFactorValue(f) {
   const v = f.value;
@@ -264,33 +219,6 @@ function featuresFromPatient(p) {
 /* ------------------------------------------------------------------ */
 /*  Controls                                                           */
 /* ------------------------------------------------------------------ */
-
-/**
- * The staging switch, used once per stage in the pathway above.
- *
- * Off is a first-class state here, not an empty input: an un-ordered test is
- * sent to the model as missing, so the button says what that means for the
- * score rather than just "off".
- */
-function StageToggle({ on, onClick }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={on ? 'Stage results are in the score' : 'Stage is not ordered'}
-      title={
-        on
-          ? 'Results included in scoring — click to simulate "test not ordered"'
-          : 'Simulates a test that has not been ordered — model falls back to its learned default'
-      }
-      className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.1em] transition ${
-        on ? 'text-accent' : 'text-muted dark:text-darkMuted'
-      }`}
-    >
-      {on ? <CheckCircle2 className="h-3 w-3" /> : <PlusCircle className="h-3 w-3" />}
-    </button>
-  );
-}
 
 /**
  * One measurement, with its clinical cutoff marked ON the track.
@@ -471,7 +399,7 @@ function ScoreSparkline({ history, height = 56, hint = true }) {
         cx={coords[coords.length - 1][0]}
         cy={coords[coords.length - 1][1]}
         r="3.2"
-        fill={TIER_HEX[last.tier] || '#6E76D6'}
+        fill={TIER_HEX[last.tier] || '#0D8282'}
         stroke="#fff"
         strokeWidth="1.5"
         vectorEffect="non-scaling-stroke"
@@ -550,7 +478,7 @@ function ScoreDock({ result, tier, delta, history, onJump }) {
         <span
           aria-hidden="true"
           className="h-2.5 w-2.5 shrink-0 rounded-full"
-          style={{ background: TIER_HEX[tier] || '#6E76D6' }}
+          style={{ background: TIER_HEX[tier] || '#0D8282' }}
         />
         <div className="leading-none">
           <p style={MONO} className="text-[17px] font-black tabular-nums text-ink dark:text-darkText">
@@ -558,7 +486,7 @@ function ScoreDock({ result, tier, delta, history, onJump }) {
           </p>
           <p
             className="mt-1 text-[9.5px] font-bold uppercase tracking-[0.14em]"
-            style={{ color: TIER_HEX[tier] || '#6E76D6' }}
+            style={{ color: TIER_HEX[tier] || '#0D8282' }}
           >
             {tier} risk
           </p>
@@ -685,10 +613,6 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
 
   const updateField = (key, val) => {
     setSimState((prev) => ({ ...prev, features: { ...prev.features, [key]: val } }));
-  };
-
-  const toggleStage = (slot) => {
-    setSimState((prev) => ({ ...prev, stages: { ...prev.stages, [slot]: !prev.stages[slot] } }));
   };
 
   const applyPreset = (preset) => {
@@ -910,85 +834,6 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
         </div>
       </header>
 
-      {/* ================================================================ */}
-      {/* The pathway — state and control, in stage order                   */}
-      {/* ================================================================ */}
-      <div>
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <SectionLabel size="sm">Escalation pathway</SectionLabel>
-            <p className="mt-1.5 text-[11.5px] text-muted dark:text-darkMuted">
-              Cognition is always on file. Switch a later stage off to simulate a test that has not
-              been ordered — the model then scores that subject with the value missing.
-            </p>
-          </div>
-          <p style={MONO} className="text-[11px] tabular-nums text-muted dark:text-darkMuted">
-            {measured} / 4
-          </p>
-        </div>
-
-        {/*
-         * The same framed grid the stat ribbons use. `data-np-keep` is what
-         * holds the frame together on a phone: the mobile theme strips card
-         * chrome from non-interactive surfaces, which took this strip's
-         * background with it — the 1px grid gap then showed the page instead of
-         * a hairline, and the four cells read as four separate boxes.
-         */}
-        <div className={`mt-3 ${STAGE_STRIP_GRID}`} data-np-keep="">
-          {STAGE_STRIP.map((s) => {
-            const on = s.always || stages[s.key];
-            const hex = STAGE_FILLS[s.n - 1];
-            return (
-              <div
-                key={s.key}
-                className="flex flex-col bg-white/85 p-4 text-left dark:bg-darkCard/85"
-              >
-                <div className="flex items-center gap-2">
-                  <span
-                    aria-hidden="true"
-                    className="h-2 w-2 shrink-0 rounded-full"
-                    style={{ background: hex, opacity: on ? 1 : 0.35 }}
-                  />
-                  <p style={MONO} className="text-[9.5px] font-bold tabular-nums tracking-[0.12em] text-muted dark:text-darkMuted">
-                    0{s.n}
-                  </p>
-                  <p className="text-[12.5px] font-bold text-ink dark:text-darkText">{s.name}</p>
-                  {/*
-                   * The control sits on the title line.
-                   *
-                   * A bare glyph alone at the foot of the cell read as
-                   * unfinished and left a band of empty space under every
-                   * stage; up here it belongs to the stage it switches.
-                   */}
-                  <span className="ml-auto flex shrink-0 items-center">
-                    {s.always ? (
-                      <CheckCircle2 className="h-3.5 w-3.5 text-accent" aria-hidden="true" />
-                    ) : (
-                      <StageToggle on={stages[s.key]} onClick={() => toggleStage(s.key)} />
-                    )}
-                  </span>
-                </div>
-
-                {/*
-                 * The readings are the content of the cell, so they are set like
-                 * data — full size, full contrast — rather than like a caption
-                 * under the stage name. This is the part a reader came for.
-                 */}
-                <p
-                  style={MONO}
-                  className={`mt-2.5 text-[12.5px] leading-relaxed tabular-nums ${
-                    on ? 'text-ink dark:text-darkText' : 'text-muted dark:text-darkMuted'
-                  }`}
-                >
-                  {on ? s.read(features) : 'scored as a missing value'}
-                </p>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ================================================================ */}
       {/* Workbench (left) + live result rail (right)                       */}
       {/* ================================================================ */}
       <div className="grid gap-6 lg:grid-cols-12">

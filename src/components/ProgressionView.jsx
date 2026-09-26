@@ -229,10 +229,10 @@ export default function ProgressionView({ patient, progression, onOpenDetail, on
             <StatTile
               label="Visits on file"
               value={`${history?.n_visits ?? '—'} · ${history?.span_years ?? 0}yr`}
-              tone="#9B63DE"
+              tone="#3B82F6"
               delay={0.1}
             />
-            <StatTile label="MMSE" value={`${current.mmse ?? '—'} → ${projected.mmse ?? '—'}`} tone="#D34FB0" delay={0.15} />
+            <StatTile label="MMSE" value={`${current.mmse ?? '—'} → ${projected.mmse ?? '—'}`} tone="#8B5CF6" delay={0.15} />
             <StatTile
               label="Tier"
               value={`${TIER_WORD[current.risk_tier] ?? '—'} → ${TIER_WORD[projected.risk_tier] ?? '—'}`}
@@ -394,7 +394,7 @@ export default function ProgressionView({ patient, progression, onOpenDetail, on
 
           {/* What moved the forecast */}
           {drivers?.length > 0 && (
-            <Card icon={Info} title="Forecast drivers" tone="#D34FB0" delay={0.25}>
+            <Card icon={Info} title="Forecast drivers" tone="#8B5CF6" delay={0.25}>
               <div className="space-y-3">
                 {drivers.map((d, i) => {
                   const raises = d.contribution > 0;

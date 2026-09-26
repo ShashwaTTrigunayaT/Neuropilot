@@ -25,21 +25,14 @@
  */
 :root {
   /*
-   * THE PALETTE — the landing page's, applied app-wide.
+   * THE DESKTOP PALETTE.
    *
-   * The page is the landing page's own blue: the violet it draws its panel in,
-   * not a navy. Cards sit one step UP from it, so the surface a card provides is
-   * still visible against the page; the content inside a card rests on pure
-   * white; and one neon pink-red is the only thing allowed to shout. The soft
-   * periwinkle is the secondary — quiet text, dividers, selected states — which
-   * is the colour the landing page sets its supporting copy in.
-   *
-   * Nothing here is darker than the page except hairlines and shadows, which is
-   * deliberate: every darker value tried for the page read as black or navy
-   * rather than as part of this palette.
+   * A phone carries its own block further down (the landing page's system); this
+   * is what a desktop renders, and it is left exactly as it was. The landing
+   * palette is a PHONE theme — applying it here was not asked for.
    */
-  --accent-rgb: 255 46 99;
-  --accent-hover-rgb: 224 38 84;
+  --accent-rgb: 13 130 130;
+  --accent-hover-rgb: 11 110 110;
   --accent: rgb(var(--accent-rgb));
   /*
    * Type, as variables.
@@ -55,32 +48,32 @@
   --font-display: 'Space Grotesk', ui-sans-serif, system-ui, -apple-system, sans-serif;
   /* The page surfaces, as variables, so a theme can re-tint the paper and the
      console black without any component knowing. */
-  --paper-rgb: 255 255 255;
-  --dark-bg-rgb: 74 81 163;
+  --paper-rgb: 250 248 244;
+  --dark-bg-rgb: 9 11 14;
   /*
-   * The neutral scale, as variables, so a palette is a handful of numbers rather
-   * than forty hexes spread through the components.
+   * The neutral scale, as variables. These are the original desktop values; the
+   * phone theme redefines this whole block further down.
    */
-  --ink-rgb: 30 34 69;
-  --muted-rgb: 142 149 183;
-  --dust-rgb: 195 209 237;
-  --line-rgb: 195 209 237;
+  --ink-rgb: 19 21 26;
+  --muted-rgb: 110 113 117;
+  --dust-rgb: 199 196 188;
+  --line-rgb: 230 226 218;
   --surface-rgb: 255 255 255;
-  --tint-rgb: 195 209 237;
-  --dark-card-rgb: 88 96 184;
-  --dark-card-hover-rgb: 101 110 198;
-  --dark-border-rgb: 46 51 117;
-  --dark-border-subtle-rgb: 46 51 117;
-  --dark-muted-rgb: 195 209 237;
-  --dark-text-rgb: 255 255 255;
+  --tint-rgb: 244 241 236;
+  --dark-card-rgb: 17 21 28;
+  --dark-card-hover-rgb: 22 27 36;
+  --dark-border-rgb: 31 38 51;
+  --dark-border-subtle-rgb: 24 30 41;
+  --dark-muted-rgb: 129 139 153;
+  --dark-text-rgb: 230 237 245;
   /* How much atmosphere a theme carries: the strength of the page's radial
      wash. A minimal theme sets it near 0 for a flat sheet; a premium one
      pushes it up so the page has some depth. */
   --np-atmosphere: 1;
   /* the deep gradient behind a filled accent surface (the showcase summary) */
-  --accent-surface-top: #ff4d78;
-  --accent-surface-mid: #ff2e63;
-  --accent-surface-bottom: #e02654;
+  --accent-surface-top: #0f8f8f;
+  --accent-surface-mid: #0d8282;
+  --accent-surface-bottom: #0a6a6a;
   /*
    * Accent halos, washes and rings.
    *
@@ -140,32 +133,6 @@ body {
   color: #FFFFFF;
 }
 
-/*
- * Type, as the landing page sets it.
- *
- * Body copy is Inter; every heading is Space Grotesk. Both faces are variables,
- * so this is one rule rather than a class on each heading in the app.
- */
-h1,
-h2,
-h3,
-h4 {
-  font-family: var(--font-display);
-}
-
-/*
- * A filled accent is a pill.
- *
- * The landing page's only button is a stadium — pink, fully rounded — and that
- * shape is most of what makes a call to action read as one rather than as a
- * filled rectangle.
- */
-button.bg-accent,
-button.from-accent,
-a.bg-accent {
-  border-radius: 999px;
-}
-
 /* Focus outline */
 :where(button, a, input, select, [role='button']):focus-visible {
   outline: none;
@@ -182,19 +149,19 @@ a.bg-accent {
   height: 6px;
 }
 *::-webkit-scrollbar-thumb {
-  background-color: rgb(var(--line-rgb));
+  background-color: #DEDBD3;
   border-radius: 99px;
-  border: 1px solid rgb(var(--paper-rgb));
+  border: 1px solid #FAF8F4;
 }
 .dark *::-webkit-scrollbar-thumb {
-  background-color: rgb(var(--dark-border-rgb));
-  border-color: rgb(var(--dark-bg-rgb));
+  background-color: #232B3B;
+  border-color: #090B0E;
 }
 *::-webkit-scrollbar-thumb:hover {
-  background-color: rgb(var(--muted-rgb));
+  background-color: #C7C4BC;
 }
 .dark *::-webkit-scrollbar-thumb:hover {
-  background-color: rgb(var(--accent-rgb));
+  background-color: #313D53;
 }
 *::-webkit-scrollbar-track {
   background: transparent;
@@ -407,8 +374,61 @@ a.bg-accent {
    * setting left is a calmer atmosphere — a full-strength radial wash is a lot of
    * gradient across a 375px screen.
    */
-  :root {
-    --np-atmosphere: 0.6;
+  :root,
+  html.dark {
+    /* — the accent: the one strong colour a phone screen gets — */
+    --accent-rgb: 255 46 99;
+    --accent-hover-rgb: 224 38 84;
+    --accent-surface-top: #ff4d78;
+    --accent-surface-mid: #ff2e63;
+    --accent-surface-bottom: #e02654;
+
+    /*
+     * — the page: a LIGHT near-neutral, not a colour —
+     *
+     * A coloured page made the page, the cards and the dividers all the same blue,
+     * which is what read as "blue everywhere". Here the page is a near-white with
+     * only a trace of the theme in it, cards are pure white and sit ABOVE the page,
+     * and the dividers are a light grey — so the surfaces read as three different
+     * shades rather than one flat field.
+     */
+    --paper-rgb: 246 245 250;
+    --ink-rgb: 38 37 48;
+    --muted-rgb: 119 116 127;
+    --dust-rgb: 214 211 222;
+    --line-rgb: 228 226 235;
+    --surface-rgb: 255 255 255;
+    --tint-rgb: 244 242 248;
+
+    /*
+     * The dark side, for the mode toggle: a neutral dark rather than the cool
+     * blue-slate the desktop console uses.
+     */
+    --dark-bg-rgb: 28 27 33;
+    --dark-card-rgb: 40 39 46;
+    --dark-card-hover-rgb: 51 50 58;
+    --dark-border-rgb: 58 56 66;
+    --dark-border-subtle-rgb: 48 47 54;
+    --dark-muted-rgb: 150 148 158;
+    --dark-text-rgb: 245 244 248;
+
+    /* the page carries a soft wash, so its tones vary rather than sitting flat */
+    --np-atmosphere: 0.9;
+  }
+
+  /* headings, as the landing page sets them */
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+  }
+
+  /* a filled accent is a pill, as the landing page's one button is */
+  button.bg-accent,
+  button.from-accent,
+  a.bg-accent {
+    border-radius: 999px !important;
   }
 
   /*
@@ -444,13 +464,18 @@ a.bg-accent {
     border-color: rgb(var(--accent-rgb) / 0.55) !important;
   }
 
+  /*
+   * The page keeps its wash on a phone.
+   *
+   * It used to be forced to a flat fill, which suited a dark screen; a light page
+   * with no washes at all reads as one unbroken sheet, so the accent gradients are
+   * left in place and vary the tone across it instead.
+   */
   body {
     background-color: rgb(var(--paper-rgb));
-    background-image: none;
   }
   .dark body {
     background-color: rgb(var(--dark-bg-rgb));
-    background-image: none;
   }
 
   /* the app shell paints its own surface, so it has to be cleared too */
@@ -491,11 +516,12 @@ a.bg-accent {
   /*
    * Depth, and the shapes things come in.
    *
-   * Cards KEEP their surface on a phone now — the violet container is the design
-   * rather than something to flatten away — and carry a soft, low shadow instead
-   * of the hairline the old black theme used. Corners are generous (cards ~20px,
-   * fields ~14px, buttons pill), which together with the rounded face is most of
-   * what makes this read as soft rather than clinical.
+   * Cards keep their surface and take a soft, low shadow instead of a hairline.
+   *
+   * The corner radius is deliberately NOT restyled any more: cards were being
+   * forced to 20px and fields to 14px here, which made every panel on a phone
+   * rounder than the components ever asked for. They now use the radius each one
+   * was written with, so a phone and a desktop agree on the shape of a card.
    */
   .shadow-lift,
   .shadow-float,
@@ -504,15 +530,6 @@ a.bg-accent {
   .dark .shadow-float,
   .dark .shadow-soft {
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
-  }
-
-  .rounded-2xl {
-    border-radius: 20px;
-  }
-  input,
-  select,
-  textarea {
-    border-radius: 14px;
   }
 
 

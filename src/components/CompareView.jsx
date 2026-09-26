@@ -6,8 +6,8 @@ import { fmtScore } from '../lib.js';
 const SLOT_LABELS = { blood: 'Blood', imaging: 'MRI', pet: 'PET' };
 const VERDICT_META = {
   risk_score: { label: 'Risk score', hex: TIER_HEX.high },
-  conversion_forecast: { label: 'Conversion forecast', hex: '#7A3FB8' },
-  stage: { label: 'Pipeline stage', hex: '#B44AC0' },
+  conversion_forecast: { label: 'Conversion forecast', hex: '#7C3AED' },
+  stage: { label: 'Pipeline stage', hex: '#0E7490' },
   tie: { label: 'Dead heat', hex: '#6B7280' },
 };
 

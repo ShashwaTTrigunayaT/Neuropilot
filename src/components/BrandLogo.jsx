@@ -25,7 +25,7 @@ export function NeuroPilotIcon({ size = 'md', className = '' }) {
 
   return (
     <div
-      className={`np-brand relative flex shrink-0 items-center justify-center bg-gradient-to-tr from-[#4A51A3] via-[#8B5CF6] to-[#FF2E63] text-white shadow-glow-teal ${containerClass} ${className}`}
+      className={`np-brand relative flex shrink-0 items-center justify-center bg-gradient-to-tr from-[#0D8282] via-[#0FA0A0] to-[#2563EB] text-white shadow-glow-teal ${containerClass} ${className}`}
     >
       <svg
         viewBox="0 0 24 24"
