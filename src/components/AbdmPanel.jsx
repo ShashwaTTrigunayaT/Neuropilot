@@ -149,7 +149,7 @@ export default function AbdmPanel({ patients = [], initialPatientId, onToast }) 
   const fidelius = status?.fidelius;
 
   return (
-    <div className={`${PANEL} p-6`}>
+    <div className={`${PANEL} p-4 sm:p-6`}>
       {/* The same header idiom as every other panel on the interoperability view. */}
       <SectionHeader
         icon={KeyRound}

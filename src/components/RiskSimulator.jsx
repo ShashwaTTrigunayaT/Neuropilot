@@ -442,8 +442,8 @@ function ScoreSparkline({ history, height = 56, hint = true }) {
     >
       <defs>
         <linearGradient id="simSparkFill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#0D8282" stopOpacity="0.26" />
-          <stop offset="100%" stopColor="#0D8282" stopOpacity="0" />
+          <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.26" />
+          <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
         </linearGradient>
       </defs>
 
@@ -467,7 +467,7 @@ function ScoreSparkline({ history, height = 56, hint = true }) {
       <path
         d={line}
         fill="none"
-        stroke="#0D8282"
+        stroke="var(--accent)"
         strokeWidth="1.6"
         strokeLinejoin="round"
         vectorEffect="non-scaling-stroke"
@@ -813,7 +813,7 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
       {/* ================================================================ */}
       <header className="flex flex-wrap items-end justify-between gap-x-8 gap-y-5 border-b border-line/80 pb-6 dark:border-darkBorder/80">
         <div className="flex items-center gap-3.5">
-          <div className="flex h-[52px] w-[52px] items-center justify-center rounded-2xl border border-accent/25 bg-gradient-to-br from-accent/20 to-accent/5 text-accent shadow-sm dark:from-accent/25 dark:to-accent/10">
+          <div className="flex h-11 w-11 sm:h-[52px] sm:w-[52px] items-center justify-center rounded-2xl border border-accent/25 bg-gradient-to-br from-accent/20 to-accent/5 text-accent shadow-sm dark:from-accent/25 dark:to-accent/10">
             <SlidersHorizontal className="h-5 w-5" />
           </div>
           <div>
@@ -827,7 +827,7 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
                 className="h-px w-14 bg-gradient-to-r from-accent/45 to-transparent"
               />
             </div>
-            <h1 className="mt-2 text-[36px] font-black leading-[0.97] tracking-[-0.035em] text-ink dark:text-darkText sm:text-[40px]">
+            <h1 className="mt-2 text-[26px] font-black leading-[1.0] tracking-[-0.035em] text-ink dark:text-darkText sm:text-[40px]">
               Clinical Risk Simulator
             </h1>
             <p className="mt-2 hidden text-[13.5px] leading-relaxed text-muted sm:block dark:text-darkMuted">

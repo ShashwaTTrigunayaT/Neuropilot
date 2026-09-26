@@ -55,8 +55,8 @@ export const INK = '#13151A';
 export const INK_MUTED = '#6E7175';
 export const LINE = '#E6E2DA';
 export const SURFACE = '#FFFFFF';
-export const ACCENT = '#0D8282';
-export const ACCENT_SOFT = '#0D82821A';
+export const ACCENT = 'var(--accent)';
+export const ACCENT_SOFT = 'rgb(var(--accent-rgb) / 0.1)';
 export const PALE = '#F4F1EC';
 
 export const TIER_HEX = {
@@ -91,7 +91,7 @@ export const controlBase =
 export const PANEL =
   'rounded-2xl border border-line dark:border-darkBorder bg-white dark:bg-darkCard shadow-soft';
 
-export const PANEL_PAD = `${PANEL} p-5`;
+export const PANEL_PAD = `${PANEL} p-4 sm:p-5`;
 
 /* The interior of a joined grid (status ribbon, phase rail): hairline dividers
  * come from the gap showing a line-coloured backdrop through it. */
@@ -151,7 +151,7 @@ export function RibbonStat({ icon: Icon, label, value, tone = 'muted', hint, dot
     warn: '#D9822B',
     bad: '#E04836',
     muted: '#6E7175',
-    accent: '#0D8282',
+    accent: 'var(--accent)',
   };
 
   return (
@@ -237,7 +237,7 @@ export function SectionHeader({ icon: Icon, title, right }) {
         <div className="flex min-w-0 items-center gap-2.5">
           <span
             className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl"
-            style={{ backgroundColor: `${ACCENT}14`, color: ACCENT }}
+            style={{ backgroundColor: 'rgb(var(--accent-rgb) / 0.08)', color: ACCENT }}
           >
             <Icon className="h-3.5 w-3.5" />
           </span>
@@ -632,7 +632,7 @@ export function RiskHistogram({ patients, onSelectBin }) {
   const barW = plotW / data.length - barGap;
 
   return (
-    <div className="rounded-2xl border border-line/70 dark:border-darkBorder/70 bg-white/60 dark:bg-darkCard/60 p-6">
+    <div className="rounded-2xl border border-line/70 dark:border-darkBorder/70 bg-white/60 dark:bg-darkCard/60 p-4 sm:p-6">
       <SectionLabel size="sm" right={<span className="text-[11px] text-muted dark:text-darkMuted">N = {patients.length}</span>}>
         Risk score distribution
       </SectionLabel>
@@ -714,7 +714,7 @@ export function StageFunnel({ funnel }) {
   const total = Math.max(funnel.reduce((a, f) => a + f.count, 0), 1);
   const max = Math.max(...funnel.map((f) => f.count), 1);
   return (
-    <div className="rounded-2xl border border-line/70 dark:border-darkBorder/70 bg-white/60 dark:bg-darkCard/60 p-6">
+    <div className="rounded-2xl border border-line/70 dark:border-darkBorder/70 bg-white/60 dark:bg-darkCard/60 p-4 sm:p-6">
       <SectionLabel>Patients by diagnostic stage</SectionLabel>
       <div className="mt-5 space-y-4">
         {funnel.map(({ stage, count }, i) => {

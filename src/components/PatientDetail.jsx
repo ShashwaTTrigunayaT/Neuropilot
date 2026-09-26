@@ -45,7 +45,7 @@ const SLOT_LABEL = { blood: 'Blood biomarkers', imaging: 'MRI volumetrics', pet:
  */
 function ScoreSection({ patient }) {
   const tier = patient.risk_tier;
-  const hex = TIER_HEX[tier] || '#0D8282';
+  const hex = TIER_HEX[tier] || 'var(--accent)';
   const score = patient.score ?? 0;
   const marker = Math.max(0, Math.min(100, score * 100));
   const confidence = Math.round((patient.estimate_confidence ?? 1) * 100);
@@ -142,7 +142,7 @@ function ScoreSection({ patient }) {
                 <span
                   aria-hidden="true"
                   className="absolute inset-x-0 top-0 h-[3px]"
-                  style={{ background: s.accent ? '#0D8282' : hex }}
+                  style={{ background: s.accent ? 'var(--accent)' : hex }}
                 />
                 <p className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-muted dark:text-darkMuted">{s.label}</p>
                 <p
@@ -461,7 +461,7 @@ function PipelineSection({ patient }) {
                     done
                       ? { backgroundColor: TIER_HEX.low, color: '#fff' }
                       : active
-                        ? { backgroundColor: '#0D8282', color: '#fff', boxShadow: '0 0 0 4px rgba(13,130,130,0.18)' }
+                        ? { backgroundColor: 'var(--accent)', color: '#fff', boxShadow: '0 0 0 4px rgba(13,130,130,0.18)' }
                         : undefined
                   }
                 >
@@ -477,7 +477,7 @@ function PipelineSection({ patient }) {
                   className={`text-[9px] font-bold uppercase tracking-[0.14em] ${
                     done || active ? '' : 'text-dust dark:text-darkMuted'
                   }`}
-                  style={done ? { color: TIER_HEX.low } : active ? { color: '#0D8282' } : undefined}
+                  style={done ? { color: TIER_HEX.low } : active ? { color: 'var(--accent)' } : undefined}
                 >
                   {done ? 'On file' : active ? 'Current' : `Step ${step}`}
                 </span>
@@ -1099,13 +1099,13 @@ function AuditSection({ patient }) {
                 aria-hidden="true"
                 className="absolute -left-6 top-[3px] flex h-[15px] w-[15px] items-center justify-center rounded-full border-2 border-line bg-white dark:border-darkBorder dark:bg-darkCard"
                 style={{
-                  borderColor: i === 0 ? '#0D8282' : undefined,
+                  borderColor: i === 0 ? 'var(--accent)' : undefined,
                   boxShadow: i === 0 ? '0 0 0 3px rgba(13,130,130,0.14)' : undefined,
                 }}
               >
                 <span
                   className="h-[5px] w-[5px] rounded-full"
-                  style={{ backgroundColor: i === 0 ? '#0D8282' : '#C7C4BC' }}
+                  style={{ backgroundColor: i === 0 ? 'var(--accent)' : '#C7C4BC' }}
                 />
               </span>
               <p
@@ -1183,7 +1183,7 @@ const BTN_CHIP =
  * dossier, carries its icon, and states the one number that column is about —
  * and the hairline gradient keeps the sections inside visibly related.
  */
-function DossierCard({ icon: Icon, title, meta, tone = '#0D8282', children }) {
+function DossierCard({ icon: Icon, title, meta, tone = 'var(--accent)', children }) {
   return (
     <div className="relative overflow-hidden rounded-2xl border border-line/70 bg-white/70 shadow-soft dark:border-darkBorder/70 dark:bg-darkCard/60">
       <span
@@ -1237,7 +1237,7 @@ export default function PatientDetail({
         <div className="space-y-4">
           <div className="h-3 w-28 rounded-full bg-line/80 dark:bg-darkBorder" />
           <div className="flex items-center gap-4 border-b border-line/80 pb-6 dark:border-darkBorder/80">
-            <div className="h-[52px] w-[52px] shrink-0 rounded-[18px] bg-line/70 dark:bg-darkBorder" />
+            <div className="h-11 w-11 sm:h-[52px] sm:w-[52px] shrink-0 rounded-[18px] bg-line/70 dark:bg-darkBorder" />
             <div className="space-y-2.5">
               <div className="h-2.5 w-24 rounded-full bg-line/70 dark:bg-darkBorder" />
               <div className="h-7 w-44 rounded-lg bg-line/80 dark:bg-darkBorder" />
@@ -1283,7 +1283,7 @@ export default function PatientDetail({
   const action = pipeline?.recommended_next ?? null;
   const advanceable = Boolean(action) && !/^(Schedule|Return)/.test(action.button);
 
-  const tierHex = TIER_HEX[patient.risk_tier] || '#0D8282';
+  const tierHex = TIER_HEX[patient.risk_tier] || 'var(--accent)';
   const tierWord = TIER_LABEL[patient.risk_tier] ?? patient.risk_tier ?? 'Unbanded';
   const measuredPanels = ['blood', 'imaging', 'pet'].filter((slot) => patient[slot]?.status === 'completed').length;
   // Anchors are scrolled by hand rather than by `#id` hash links so the offset
@@ -1371,7 +1371,7 @@ export default function PatientDetail({
                 in, and a colour the rest of the app already means something by
                 says it before the sentence below does. */}
             <div
-              className="relative flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-[18px] border"
+              className="relative flex h-11 w-11 sm:h-[52px] sm:w-[52px] shrink-0 items-center justify-center rounded-[18px] border"
               style={{
                 borderColor: `${tierHex}40`,
                 background: `linear-gradient(135deg, ${tierHex}26, ${tierHex}0A 62%, transparent)`,
@@ -1402,7 +1402,7 @@ export default function PatientDetail({
               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
                 <h1
                   style={MONO}
-                  className="text-[30px] font-black leading-[1.02] tracking-[-0.03em] text-ink dark:text-darkText sm:text-[36px]"
+                  className="text-[24px] font-black leading-[1.05] tracking-[-0.03em] text-ink dark:text-darkText sm:text-[36px]"
                 >
                   {patient.id}
                 </h1>
@@ -1483,7 +1483,7 @@ export default function PatientDetail({
                   title={`${step}. ${label}`}
                   className="h-1.5 w-6 rounded-full transition-colors"
                   style={{
-                    backgroundColor: step < patient.stage ? TIER_HEX.low : step === patient.stage ? '#0D8282' : '#E6E2DA',
+                    backgroundColor: step < patient.stage ? TIER_HEX.low : step === patient.stage ? 'var(--accent)' : '#E6E2DA',
                   }}
                 />
               );
@@ -1583,20 +1583,20 @@ export default function PatientDetail({
           <DossierCard
             icon={Activity}
             title="Decision dossier"
-            tone="#0D8282"
+            tone="var(--accent)"
             meta={
               <span style={MONO} className="text-[10.5px] text-muted dark:text-darkMuted">
                 stage {patient.stage} of 4
               </span>
             }
           >
-            <div id="record-attribution" className="p-6">
+            <div id="record-attribution" className="p-4 sm:p-6">
               <ReasoningSection patient={patient} />
             </div>
-            <div id="record-pathway" className="p-6">
+            <div id="record-pathway" className="p-4 sm:p-6">
               <PipelineSection patient={patient} />
             </div>
-            <div id="record-next-step" className="p-6">
+            <div id="record-next-step" className="p-4 sm:p-6">
               <ActionSection
                 action={action}
                 advanceable={advanceable}
@@ -1613,17 +1613,17 @@ export default function PatientDetail({
           <DossierCard
             icon={ClipboardList}
             title="Biomarker profile & audit"
-            tone={TIER_HEX[patient.risk_tier] || '#0D8282'}
+            tone={TIER_HEX[patient.risk_tier] || 'var(--accent)'}
             meta={
               <span style={MONO} className="text-[10.5px] text-muted dark:text-darkMuted">
                 {measuredPanels} of 3 on file
               </span>
             }
           >
-            <div id="record-measurements" className="p-6">
+            <div id="record-measurements" className="p-4 sm:p-6">
               <ProfileSection patient={patient} onRecordResult={onRecordResult} />
             </div>
-            <div id="record-audit" className="p-6">
+            <div id="record-audit" className="p-4 sm:p-6">
               <AuditSection patient={patient} />
             </div>
           </DossierCard>

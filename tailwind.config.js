@@ -24,10 +24,12 @@ export default {
         darkText: '#E6EDF5',
 
         // Clinical Accent
-        accent: '#0D8282',
-        accentHover: '#0B6E6E',
-        accentSoft: '#0D82821A',
-        accentGlow: 'rgba(13, 130, 130, 0.25)',
+        // The accent is a CSS variable so it can differ per theme: teal on the
+        // desktop light/dark palettes, amber on the black phone theme.
+        accent: 'rgb(var(--accent-rgb) / <alpha-value>)',
+        accentHover: 'rgb(var(--accent-hover-rgb) / <alpha-value>)',
+        accentSoft: 'rgb(var(--accent-rgb) / 0.1)',
+        accentGlow: 'rgb(var(--accent-rgb) / 0.25)',
 
         // Clinical Risk Tiers
         tierHigh: '#E04836',

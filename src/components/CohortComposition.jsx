@@ -39,10 +39,6 @@ const PLOT_H = 168; // the plot height — one number governs the whole chart
  * what made the stack read as squeezed on a phone. */
 const COL_W = 56;
 const HEAD = 0.82; // the tallest column stops short of the top, leaving room for its label
-const AXIS_TICKS = [100, 75, 50, 25, 0]; // % of the largest stage
-
-// a tick's height, with the same headroom the columns keep
-const yPct = (v) => 100 - v * HEAD;
 
 const lighten = (hex, amt = 0.32) => {
   const n = parseInt(hex.slice(1), 16);
@@ -188,23 +184,7 @@ export default function CohortComposition({
       </div>
 
       {/* ================================================= the columns ==== */}
-      <div className="mt-2.5 flex gap-3">
-        {/* the axis: how tall a column is, as a share of the largest stage */}
-        <div className="relative w-9 shrink-0" style={{ height: PLOT_H }}>
-          {AXIS_TICKS.map((v) => (
-            <span
-              key={v}
-              className="absolute right-0 flex -translate-y-1/2 items-center gap-1"
-              style={{ top: `${yPct(v)}%` }}
-            >
-              <span style={MONO} className="text-[10.5px] tabular-nums text-dust dark:text-darkMuted">
-                {v}
-              </span>
-              <span className="h-px w-2 bg-line dark:bg-darkBorder" />
-            </span>
-          ))}
-        </div>
-
+      <div className="mt-2.5">
         <div className="min-w-0 flex-1">
           <div className="relative" style={{ height: PLOT_H }}>
             {/* the page has one chart now, so it gets the light: a violet-to-pink
@@ -214,17 +194,14 @@ export default function CohortComposition({
               className="pointer-events-none absolute -inset-x-8 -top-8 bottom-0 bg-[radial-gradient(62%_72%_at_50%_102%,rgba(109,40,217,0.11),rgba(236,72,153,0.07)_52%,transparent_80%)] dark:bg-[radial-gradient(62%_72%_at_50%_102%,rgba(139,92,246,0.2),rgba(236,72,153,0.12)_52%,transparent_80%)]"
             />
 
-            {/* the scale, drawn behind the columns */}
-            {AXIS_TICKS.map((v) => (
-              <span
-                key={v}
-                aria-hidden="true"
-                className={`pointer-events-none absolute inset-x-0 border-t ${
-                  v === 0 ? 'border-line dark:border-darkBorder' : 'border-dashed border-line/70 dark:border-darkBorder/60'
-                }`}
-                style={{ top: `${yPct(v)}%` }}
-              />
-            ))}
+            {/* Only the floor is drawn now. With the y-axis calibration gone a
+                labelled scale behind the columns would measure against nothing,
+                so the columns read as comparable to each other — which is the
+                only thing the chart claims. */}
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 bottom-0 border-t border-line dark:border-darkBorder"
+            />
 
             <div className="absolute inset-0 flex items-end">
               {columns.map((col) => {

@@ -272,7 +272,7 @@ function HandoffLinks({ containerRef, seen }) {
           markerHeight="5.5"
           orient="auto"
         >
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="#0D8282" />
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)" />
         </marker>
       </defs>
       {links.map((l, i) => (
@@ -280,7 +280,7 @@ function HandoffLinks({ containerRef, seen }) {
           {/* the wire itself: always there, so the mapping reads even if motion is off */}
           <path
             d={l.d}
-            stroke="#0D8282"
+            stroke="var(--accent)"
             strokeOpacity="0.3"
             strokeWidth="1.4"
             markerEnd="url(#handoff-head)"
@@ -290,7 +290,7 @@ function HandoffLinks({ containerRef, seen }) {
             d={l.d}
             className={`handoff-link transition-opacity ${seen ? '' : 'is-idle'}`}
             style={{ animationDelay: `${i * 130}ms`, strokeOpacity: seen ? 0.85 : undefined }}
-            stroke="#0D8282"
+            stroke="var(--accent)"
             strokeWidth="1.4"
             strokeLinecap="round"
           />
@@ -321,7 +321,7 @@ function Band({ id, tint = false, className = '', inner = '', children }) {
         tint ? 'bg-tint/50 dark:bg-darkCard/40' : ''
       } ${className}`}
     >
-      <div className={`mx-auto w-full max-w-6xl px-4 py-14 sm:px-6 lg:py-16 ${inner}`}>{children}</div>
+      <div className={`mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 lg:py-16 ${inner}`}>{children}</div>
     </section>
   );
 }
@@ -425,7 +425,7 @@ export default function Overview({
   const previewPanels = useMemo(() => [
     {
       id: 'neuropilot',
-      accent: '#0D8282',
+      accent: 'var(--accent)',
       tone: 'accent',
       badge: 'the whole system',
       eyebrow: 'NeuroPilot',
@@ -501,14 +501,14 @@ export default function Overview({
           icon: ptIcon(Target),
           label: 'Held-out AUROC',
           value: auc(modelInfo?.test_auc),
-          valueColor: '#0D8282',
+          valueColor: 'var(--accent)',
           detail: `${auc(modelInfo?.test_auc)} on data it never saw${stage1Auc ? `, and ${auc(stage1Auc)} on the cognition-only subgroup — the group most of a real cohort actually belongs to` : ''}. The model card publishes its own limitations beside these numbers instead of quarantining them in a repository.`,
         },
       ],
     },
     {
       id: 'stages',
-      accent: '#0D8282',
+      accent: 'var(--accent)',
       tone: 'accent',
       badge: '4 stages',
       eyebrow: 'The escalation protocol',
@@ -541,7 +541,7 @@ export default function Overview({
     },
     {
       id: 'scoring',
-      accent: '#0D8282',
+      accent: 'var(--accent)',
       tone: 'muted',
       badge: `${featureCount} features`,
       eyebrow: 'Scoring',
@@ -565,7 +565,7 @@ export default function Overview({
           icon: ptIcon(Sparkles),
           label: 'Provisional score',
           value: 'display only',
-          valueColor: '#0D8282',
+          valueColor: 'var(--accent)',
           detail: '48 plausible completions of the stages still missing, each sampled from the cohort’s own measured distributions and pushed back through the served model. It answers “what if the next tests came back?” — and it is never written into a record as an observation, so it cannot be mistaken for one.',
         },
         {
@@ -585,7 +585,7 @@ export default function Overview({
     },
     {
       id: 'evidence',
-      accent: '#0D8282',
+      accent: 'var(--accent)',
       tone: 'accent',
       badge: 'SHAP',
       eyebrow: 'Explainability',
@@ -609,14 +609,14 @@ export default function Overview({
           label: FEATURE_LABEL[f.feature] || f.feature,
           value: `${share.toFixed(0)}%`,
           bar: share,
-          tone: '#0D8282',
+          tone: 'var(--accent)',
           detail: `Mean |SHAP| ${Number(f.mean_abs_shap || 0).toFixed(3)} — the average size of this feature’s effect across the cohort, with the stage it belongs to marked by its icon.`,
         };
       }),
     },
     {
       id: 'record',
-      accent: '#0D8282',
+      accent: 'var(--accent)',
       tone: 'accent',
       badge: 'one record',
       eyebrow: 'The patient page',
@@ -692,7 +692,7 @@ export default function Overview({
     },
     {
       id: 'autonomy',
-      accent: '#0D8282',
+      accent: 'var(--accent)',
       tone: 'ok',
       badge: 'approval-gated',
       eyebrow: 'Autonomy',
@@ -976,7 +976,7 @@ export default function Overview({
               <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-accent">Hand-off</p>
               <span aria-hidden="true" className="h-px w-14 bg-gradient-to-r from-accent/45 to-transparent" />
             </div>
-            <h2 className="mx-auto mt-4 max-w-3xl text-[30px] font-black leading-[1.02] tracking-[-0.035em] text-ink dark:text-darkText sm:text-[42px]">
+            <h2 className="mx-auto mt-4 max-w-3xl text-[24px] font-black leading-[1.05] tracking-[-0.035em] text-ink dark:text-darkText sm:text-[42px]">
               Work the queue, not the charts.
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-[13px] leading-relaxed text-muted dark:text-darkMuted">

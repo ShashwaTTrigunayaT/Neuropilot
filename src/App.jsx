@@ -46,18 +46,33 @@ function DetailSkeleton() {
 }
 
 export default function App() {
-  const [theme, setTheme] = useState(() => {
-    return localStorage.getItem('theme') || 'light';
-  });
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
+
+  /*
+   * Phones are always the dark theme.
+   *
+   * The light clinical palette is tuned for a wide screen — on a phone the black
+   * console reads better in the hand. The desktop toggle still works; it simply
+   * does not apply under 768px. Tracked with a matchMedia listener rather than a
+   * resize handler so rotating the device settles it too.
+   */
+  const [isPhone, setIsPhone] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
+  );
 
   useEffect(() => {
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    const mq = window.matchMedia('(max-width: 767px)');
+    const onChange = (event) => setIsPhone(event.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
+  const darkActive = isPhone || theme === 'dark';
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', darkActive);
     localStorage.setItem('theme', theme);
-  }, [theme]);
+  }, [darkActive, theme]);
 
   const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
 

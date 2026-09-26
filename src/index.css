@@ -4,6 +4,20 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * The accent, as a variable.
+ *
+ * Every accent utility in Tailwind (`text-accent`, `bg-accent/10`, …) and every
+ * inline accent in the app resolve to these numbers, so the whole palette can be
+ * re-tinted from one place — which is how the phone theme swaps the teal for
+ * amber without touching a single component.
+ */
+:root {
+  --accent-rgb: 13 130 130;
+  --accent-hover-rgb: 11 110 110;
+  --accent: rgb(var(--accent-rgb));
+}
+
 html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -39,18 +53,18 @@ body {
 }
 
 ::selection {
-  background-color: #0D8282;
+  background-color: var(--accent);
   color: #FFFFFF;
 }
 
 /* Focus outline */
 :where(button, a, input, select, [role='button']):focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px #FAF8F4, 0 0 0 3px #0D8282;
+  box-shadow: 0 0 0 2px #FAF8F4, 0 0 0 3px var(--accent);
   border-radius: inherit;
 }
 .dark :where(button, a, input, select, [role='button']):focus-visible {
-  box-shadow: 0 0 0 2px #090B0E, 0 0 0 3px #0D8282;
+  box-shadow: 0 0 0 2px #090B0E, 0 0 0 3px var(--accent);
 }
 
 /* Thin precision scrollbars */
@@ -247,6 +261,84 @@ body {
     box-shadow: none !important;
     border: 1px solid #cccccc !important;
     break-inside: avoid;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Phone theme                                                        */
+/* ------------------------------------------------------------------ */
+/*
+ * Below `md` the desktop treatments stop earning their keep: the radial tint
+ * behind the page, the corner wash on every panel, the dot-grid texture and the
+ * coloured glows all read as noise at ~375px, and every tinted surface lowers
+ * the contrast of text that is already small. The phone palette is therefore
+ * flattened — plain white surfaces on a near-white page, decorative layers off.
+ *
+ * Colour survives only where it carries meaning: the tier accents, the stage
+ * colours, the risk bands, the accent rules. Atmosphere is dropped.
+ */
+@media (max-width: 767px) {
+  /* amber replaces the teal: green reads muddy against true black, and amber is
+     both higher-contrast and clearly distinct from the risk-tier colours */
+  :root {
+    --accent-rgb: 240 180 41;
+    --accent-hover-rgb: 214 158 32;
+  }
+
+  body {
+    background-color: #ffffff;
+    background-image: none;
+  }
+  .dark body {
+    background-color: #07090c;
+    background-image: none;
+  }
+
+  /* the app shell paints its own surface, so it has to be cleared too */
+  .bg-paper {
+    background-color: #ffffff;
+  }
+  .dark .bg-darkBg {
+    background-color: #07090c;
+  }
+
+  .card-wash,
+  .dark .card-wash {
+    background-image: none;
+  }
+  .dot-grid,
+  .dark .dot-grid {
+    background-image: none;
+  }
+  .glass-panel,
+  .dark .glass-panel {
+    background-color: #ffffff;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  /* glows are atmosphere, not signal */
+  .shadow-glow-teal,
+  .shadow-glow-high,
+  .shadow-glow-medium,
+  .shadow-glow-low,
+  .dark .shadow-glow-teal,
+  .dark .shadow-glow-high,
+  .dark .shadow-glow-medium,
+  .dark .shadow-glow-low {
+    box-shadow: none;
+  }
+
+  /* depth collapses to a single hairline */
+  .shadow-lift,
+  .shadow-float,
+  .shadow-soft {
+    box-shadow: 0 1px 2px rgba(19, 21, 26, 0.04);
+  }
+  .dark .shadow-lift,
+  .dark .shadow-float,
+  .dark .shadow-soft {
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
   }
 }
 

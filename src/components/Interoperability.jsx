@@ -45,7 +45,7 @@ import {
  */
 const CARD_DEPTH =
   'shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_1px_2px_rgba(19,21,26,0.03),0_10px_24px_-22px_rgba(19,21,26,0.14)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_2px_10px_-6px_rgba(0,0,0,0.55)] card-wash';
-const CARD = `${PANEL} ${CARD_DEPTH} p-6`;
+const CARD = `${PANEL} ${CARD_DEPTH} p-4 sm:p-6`;
 const CARD_RIBBON = `${PANEL} ${CARD_DEPTH}`;
 
 /** Two letters for a chart row's monogram — a name reads as a person, not a row. */
@@ -389,8 +389,11 @@ export default function Interoperability({
         <div className="flex flex-wrap items-start justify-between gap-x-10 gap-y-4">
           <div className="flex min-w-0 items-start gap-4">
             <div
-              className="relative flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-[18px] border border-white/60 shadow-soft dark:border-white/10"
-              style={{ background: `linear-gradient(135deg, ${ACCENT}26, ${ACCENT}0A 62%, transparent)` }}
+              className="relative flex h-11 w-11 sm:h-[52px] sm:w-[52px] shrink-0 items-center justify-center rounded-[18px] border border-white/60 shadow-soft dark:border-white/10"
+              style={{
+                background:
+                  'linear-gradient(135deg, rgb(var(--accent-rgb) / 0.15), rgb(var(--accent-rgb) / 0.04) 62%, transparent)',
+              }}
             >
               <Plug className="h-[22px] w-[22px]" style={{ color: ACCENT }} />
               <span
@@ -541,7 +544,7 @@ export default function Interoperability({
 
       {/* ── Connection detail — one surface split by a hairline ────── */}
       <div className={`${CARD_RIBBON} grid divide-y divide-line lg:grid-cols-2 lg:divide-x lg:divide-y-0 dark:divide-darkBorder`}>
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           <SectionHeader
             icon={Server}
             title="Outbound hospital server"
@@ -576,7 +579,7 @@ export default function Interoperability({
           </p>
         </div>
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           <SectionHeader
             icon={Plug}
             title="SMART on FHIR"
@@ -664,7 +667,7 @@ export default function Interoperability({
             <div className="flex items-center gap-2">
               <span
                 className="flex h-6 w-6 items-center justify-center rounded-lg"
-                style={{ backgroundColor: `${ACCENT}18`, color: ACCENT }}
+                style={{ backgroundColor: 'rgb(var(--accent-rgb) / 0.1)', color: ACCENT }}
               >
                 <Target className="h-3.5 w-3.5" />
               </span>
@@ -847,7 +850,7 @@ export default function Interoperability({
        * subject read two ways, so it is one card split by a hairline rather
        * than two cards implying two separate things. ── */}
       <div className={`${CARD_RIBBON} grid divide-y divide-line lg:grid-cols-2 lg:divide-x lg:divide-y-0 dark:divide-darkBorder`}>
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           <SectionHeader icon={Activity} title="Exchange surface" />
 
           {/* The composition, as one bar. It is the shape of the exchange before
@@ -894,7 +897,7 @@ export default function Interoperability({
           </p>
         </div>
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           <SectionHeader icon={Send} title="Export & push a patient" />
           {/* A labelled field, then the two actions on their own line: the old
               single row wrapped unpredictably and read as three equal things. */}

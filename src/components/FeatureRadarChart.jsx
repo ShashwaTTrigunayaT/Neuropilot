@@ -169,8 +169,8 @@ export default function FeatureRadarChart({ data = [] }) {
           <svg viewBox={`0 0 ${size} ${size}`} className="relative w-full overflow-visible">
             <defs>
               <linearGradient id="radarFill" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#0D8282" stopOpacity="0.34" />
-                <stop offset="100%" stopColor="#0D8282" stopOpacity="0.1" />
+                <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.34" />
+                <stop offset="100%" stopColor="var(--accent)" stopOpacity="0.1" />
               </linearGradient>
             </defs>
 

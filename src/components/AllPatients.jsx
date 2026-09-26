@@ -102,7 +102,7 @@ export default function AllPatients({ patients, onSelect, onSimulate, onCompare 
 
         <div className="relative flex flex-wrap items-end justify-between gap-x-8 gap-y-5">
           <div className="flex items-center gap-4">
-            <div className="relative flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-[18px] border border-accent/25 bg-gradient-to-br from-accent/30 via-accent/10 to-transparent text-accent shadow-[0_10px_24px_-12px_rgba(13,130,130,0.8)]">
+            <div className="relative flex h-11 w-11 sm:h-[52px] sm:w-[52px] shrink-0 items-center justify-center rounded-[18px] border border-accent/25 bg-gradient-to-br from-accent/30 via-accent/10 to-transparent text-accent shadow-[0_10px_24px_-12px_rgba(13,130,130,0.8)]">
               <Users className="h-[22px] w-[22px]" />
               <span
                 aria-hidden="true"
@@ -134,7 +134,7 @@ export default function AllPatients({ patients, onSelect, onSimulate, onCompare 
                   className="h-px w-14 bg-gradient-to-r from-accent/45 to-transparent"
                 />
               </div>
-              <h1 className="mt-2 text-[36px] font-black leading-[0.97] tracking-[-0.035em] text-ink dark:text-darkText sm:text-[40px]">
+              <h1 className="mt-2 text-[26px] font-black leading-[1.0] tracking-[-0.035em] text-ink dark:text-darkText sm:text-[40px]">
                 Patient Worklist
               </h1>
               <p className="mt-2 hidden text-[13.5px] leading-relaxed text-muted sm:block dark:text-darkMuted">

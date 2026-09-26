@@ -42,7 +42,7 @@ export default function CompareView({ compare, loading, error, onExit, onOpenPat
             <Scale className="h-5 w-5" />
           </div>
           <div>
-            <h1 className="text-[28px] font-black leading-none tracking-tight text-ink dark:text-darkText sm:text-[32px]">
+            <h1 className="text-[22px] font-black leading-none tracking-tight text-ink dark:text-darkText sm:text-[32px]">
               Priority Comparison
             </h1>
             <p className="mt-1.5 hidden text-[13px] text-muted sm:block dark:text-darkMuted">

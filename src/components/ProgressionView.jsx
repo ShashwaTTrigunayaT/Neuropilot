@@ -52,7 +52,7 @@ const TIER_WORD = { high: 'High', medium: 'Medium', low: 'Low' };
  * strip, and the body below. Every block on this page is one of these, so the page
  * reads as a set of related panels rather than floating boxes.
  */
-function Card({ icon: Icon, title, tone = '#0D8282', meta, delay = 0, children, bodyClass = '' }) {
+function Card({ icon: Icon, title, tone = 'var(--accent)', meta, delay = 0, children, bodyClass = '' }) {
   return (
     <section
       className="relative overflow-hidden rounded-2xl border border-line/70 bg-white/70 shadow-soft animate-fade-up dark:border-darkBorder/70 dark:bg-darkCard/60"
@@ -80,7 +80,7 @@ function Card({ icon: Icon, title, tone = '#0D8282', meta, delay = 0, children, 
   );
 }
 
-function StatTile({ label, value, tone = '#0D8282', delay = 0 }) {
+function StatTile({ label, value, tone = 'var(--accent)', delay = 0 }) {
   return (
     <div
       className="relative overflow-hidden rounded-2xl border border-line/70 bg-white/70 px-4 py-3 shadow-soft animate-fade-up dark:border-darkBorder/70 dark:bg-darkCard/60"
@@ -166,7 +166,7 @@ export default function ProgressionView({ patient, progression, onOpenDetail, on
         <div className="mt-4 flex flex-wrap items-start justify-between gap-x-10 gap-y-5 border-b border-line/80 pb-6 dark:border-darkBorder/80">
           <div className="flex min-w-0 items-start gap-4">
             <div
-              className="relative flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-[18px] border border-white/60 shadow-soft dark:border-white/10"
+              className="relative flex h-11 w-11 sm:h-[52px] sm:w-[52px] shrink-0 items-center justify-center rounded-[18px] border border-white/60 shadow-soft dark:border-white/10"
               style={{ background: `linear-gradient(135deg, ${tierHex}26, ${tierHex}0A 62%, transparent)` }}
             >
               <TrendingUp className="h-[22px] w-[22px]" style={{ color: tierHex }} />
@@ -191,7 +191,7 @@ export default function ProgressionView({ patient, progression, onOpenDetail, on
               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
                 <h1
                   style={MONO}
-                  className="text-[30px] font-black leading-[1.02] tracking-[-0.03em] text-ink dark:text-darkText sm:text-[36px]"
+                  className="text-[24px] font-black leading-[1.05] tracking-[-0.03em] text-ink dark:text-darkText sm:text-[36px]"
                 >
                   {patient.id}
                 </h1>
@@ -220,7 +220,7 @@ export default function ProgressionView({ patient, progression, onOpenDetail, on
           </div>
 
           <div className="grid w-full max-w-md grid-cols-2 gap-3 sm:w-auto">
-            <StatTile label="Pipeline stage" value={`${current.stage ?? '—'} of 4`} tone="#0D8282" delay={0.05} />
+            <StatTile label="Pipeline stage" value={`${current.stage ?? '—'} of 4`} tone="var(--accent)" delay={0.05} />
             <StatTile
               label="Visits on file"
               value={`${history?.n_visits ?? '—'} · ${history?.span_years ?? 0}yr`}
@@ -242,7 +242,7 @@ export default function ProgressionView({ patient, progression, onOpenDetail, on
       <Card
         icon={Activity}
         title="Risk trajectory"
-        tone="#0D8282"
+        tone="var(--accent)"
         delay={0.1}
         bodyClass="px-6 py-5"
         meta={

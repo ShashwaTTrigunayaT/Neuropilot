@@ -291,7 +291,7 @@ export default function Header({
             onClick={onToggleTheme}
             aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
             title={dark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-            className="group flex h-9 w-9 items-center justify-center rounded-xl border border-line bg-white shadow-soft transition-all duration-200 hover:border-accent/50 hover:shadow-lift dark:border-darkBorder dark:bg-darkCard"
+            className="group hidden h-9 w-9 items-center justify-center rounded-xl border border-line bg-white shadow-soft transition-all duration-200 hover:border-accent/50 hover:shadow-lift sm:flex dark:border-darkBorder dark:bg-darkCard"
           >
             {dark ? (
               <Sun className="h-4 w-4 text-amber-500 transition-transform duration-300 group-hover:rotate-45" />
