@@ -210,7 +210,7 @@ export default function App() {
     if (view === 'compare') setView('all'); // leaving comparison — open the record underneath
     setSelectedId(id);
     loadDetail(id);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // scroll reset is handled centrally by the effect on [view, selectedId]
   };
 
   const handleBack = () => {
@@ -385,7 +385,6 @@ export default function App() {
       setCompareStatus('loading');
       setCompareError('');
       setView('compare');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
       try {
         const payload = await api.comparePatients(ids);
         setCompare(payload);
@@ -475,7 +474,17 @@ export default function App() {
    * page: the nav, opening a record, closing it, and the comparison view.
    */
   useEffect(() => {
+    /*
+     * `html { scroll-behavior: smooth }` would turn this into an animation, so
+     * it is switched off for the single jump and restored immediately: the new
+     * page must START at the top, not glide to it from wherever the last one
+     * was scrolled to.
+     */
+    const root = document.documentElement;
+    const previous = root.style.scrollBehavior;
+    root.style.scrollBehavior = 'auto';
     window.scrollTo(0, 0);
+    root.style.scrollBehavior = previous;
   }, [view, selectedId]);
 
   return (
