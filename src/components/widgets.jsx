@@ -930,54 +930,24 @@ export function PatientTable({
                 </button>
               )}
 
-              <button type="button" onClick={() => onSelect(p.id)} className="min-w-0 flex-1 text-left">
-                <span className="flex items-center justify-between gap-3">
-                  <span className="flex min-w-0 items-center gap-2">
-                    <span style={MONO} className="text-[10px] font-bold tabular-nums text-dust dark:text-darkMuted">
-                      {String(pageOffset + i + 1).padStart(2, '0')}
-                    </span>
-                    <span style={MONO} className="truncate text-[13.5px] font-bold text-ink dark:text-darkText">
-                      {p.id}
-                    </span>
-                  </span>
-                  <span className="flex shrink-0 items-baseline gap-1.5">
-                    <span style={{ ...MONO, color: tierHex }} className="text-[15px] font-black tabular-nums">
-                      {fmtScore(p.final_score ?? p.score)}
-                    </span>
-                    <TierTag tier={p.risk_tier} />
-                  </span>
+              {/*
+               * On a phone the list is a queue of who to act on, so it carries
+               * only who and how urgent: the subject and its score. The
+               * demographics, the four-segment stage rail and the next-step
+               * sentence were three further lines per subject, which meant the
+               * queue itself fell off the screen behind its own annotations.
+               * The rest of the record is one tap away on the patient's page.
+               */}
+              <button type="button" onClick={() => onSelect(p.id)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                <span style={MONO} className="shrink-0 text-[10px] font-bold tabular-nums text-dust dark:text-darkMuted">
+                  {String(pageOffset + i + 1).padStart(2, '0')}
                 </span>
-
-                <span style={MONO} className="mt-1 block text-[10.5px] text-muted dark:text-darkMuted">
-                  {p.age ?? '—'}y · {p.sex ?? '—'} · Edu {p.education_years ?? '—'}y
+                <span style={MONO} className="min-w-0 flex-1 truncate text-[13.5px] font-bold text-ink dark:text-darkText">
+                  {p.id}
                 </span>
-
-                <span className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="flex items-center gap-1">
-                    {[1, 2, 3, 4].map((step) => {
-                      const done = step < p.stage;
-                      const current = step === p.stage;
-                      const hex = STAGE_FILLS[step - 1];
-                      return (
-                        <span
-                          key={step}
-                          className="h-1.5 w-5 rounded-full"
-                          style={{ background: done ? TIER_HEX.low : current ? hex : '#E4E0D8' }}
-                        />
-                      );
-                    })}
-                  </span>
-                  <span style={MONO} className="text-[10.5px] text-muted dark:text-darkMuted">
-                    {STAGES_SHORT[p.stage - 1] ?? p.stage_name} · Stage {p.stage}/4
-                  </span>
+                <span style={{ ...MONO, color: tierHex }} className="shrink-0 text-[15px] font-black tabular-nums">
+                  {fmtScore(p.final_score ?? p.score)}
                 </span>
-
-                {p.recommended_next && (
-                  <span className="mt-1.5 flex items-start gap-1.5 text-[11px] leading-snug text-ink dark:text-darkText">
-                    <ArrowRight className="mt-[2px] h-3 w-3 shrink-0 text-accent" />
-                    <span className="min-w-0">{p.recommended_next}</span>
-                  </span>
-                )}
               </button>
 
               {onSimulate && (
