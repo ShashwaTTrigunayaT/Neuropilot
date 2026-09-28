@@ -122,8 +122,9 @@ export default function CohortComposition({
   return (
     <section>
       <SectionLabel
+        tealHeader
         right={
-          <span className="hidden text-[10.5px] text-muted md:block dark:text-darkMuted">
+          <span className="hidden text-[10.5px] text-white/80 md:block">
             click a band, a column or the legend to filter the list below
           </span>
         }

@@ -279,8 +279,9 @@ function ReasoningSection({ patient }) {
   return (
     <section>
       <SectionLabel
+        tealHeader
         right={
-          <span className="flex items-center gap-3 text-[11px] text-muted dark:text-darkMuted">
+          <span className="flex items-center gap-3 text-[11px] text-white/80">
             <span className="inline-flex items-center gap-1">
               <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: TIER_HEX.high }} /> raises priority
             </span>
@@ -409,7 +410,7 @@ function PipelineSection({ patient }) {
 
   return (
     <section>
-      <SectionLabel right={<span className="text-[11px] text-muted dark:text-darkMuted">Cognitive → Blood → MRI → PET</span>}>
+      <SectionLabel tealHeader right={<span className="text-[11px] text-white/80">Cognitive → Blood → MRI → PET</span>}>
         Diagnostic Triage Pathway
       </SectionLabel>
 
@@ -520,7 +521,7 @@ function ActionSection({ action, advanceable, onAdvance, busy, error }) {
 
   return (
     <section>
-      <SectionLabel right={<span className="text-[11px] text-muted dark:text-darkMuted">Clinician-in-the-loop validation</span>}>
+      <SectionLabel tealHeader right={<span className="text-[11px] text-white/80">Clinician-in-the-loop validation</span>}>
         Recommended Next Step
       </SectionLabel>
       {/* A finished pathway is good news, so the box says so in green instead
@@ -764,7 +765,7 @@ function ProfileSection({ patient, onRecordResult }) {
 
   return (
     <section>
-      <SectionLabel right={<TierTag tier={patient.risk_tier} />}>Clinical Profile & Labs</SectionLabel>
+      <SectionLabel tealHeader right={<TierTag tier={patient.risk_tier} />}>Clinical Profile & Labs</SectionLabel>
 
       {cog?.latest != null && (
         <div className="mt-4">
@@ -878,14 +879,14 @@ function ProfileSection({ patient, onRecordResult }) {
                   style={{ backgroundColor: dotHex }}
                 />
 
-                <div className="flex items-center justify-between gap-3 border-b border-line/60 px-4 py-2.5 dark:border-darkBorder/60">
-                  <span className="flex items-center gap-2 text-[11.5px] font-bold tracking-tight text-ink dark:text-darkText">
+                <div className="np-card-heading-band np-card-heading flex items-center justify-between gap-3 border-b border-line/60 bg-[#0D8282] px-4 py-2.5 dark:border-darkBorder/60">
+                  <span className="flex items-center gap-2 text-[11.5px] font-bold tracking-tight text-white">
                     <span className="h-2 w-2 rounded-full" style={{ backgroundColor: dotHex }} />
                     {SLOT_LABEL[slot]}
                   </span>
                   <span
                     className="shrink-0 rounded-md px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-[0.1em]"
-                    style={{ color: dotHex, backgroundColor: `${dotHex}18` }}
+                    style={{ color: '#FFFFFF', backgroundColor: 'rgb(255 255 255 / 0.18)' }}
                   >
                     {statusLabel}
                   </span>
@@ -1076,8 +1077,9 @@ function AuditSection({ patient }) {
   return (
     <section>
       <SectionLabel
+        tealHeader
         right={
-          <span style={MONO} className="text-[11px] text-muted dark:text-darkMuted">
+          <span style={MONO} className="text-[11px] text-white/80">
             {history.length} event{history.length === 1 ? '' : 's'}
           </span>
         }
@@ -1192,22 +1194,22 @@ function DossierCard({ icon: Icon, title, meta, tone = 'var(--accent)', children
         className="absolute inset-x-0 top-0 h-[3px]"
         style={{ background: `linear-gradient(90deg, ${tone}, transparent)` }}
       />
-      <div className="flex items-center justify-between gap-4 border-b border-line/60 bg-gradient-to-b from-tint/60 to-transparent px-6 py-3 dark:border-darkBorder/60 dark:from-darkBorder/30">
+      <div className="np-card-heading-band np-card-heading flex items-center justify-between gap-4 border-b border-line/60 bg-[#0D8282] px-6 py-3 dark:border-darkBorder/60">
         <div className="flex items-center gap-2.5">
           <span
-            className="relative flex h-7 w-7 items-center justify-center rounded-xl"
-            style={{ color: tone }}
+            className="np-card-heading-icon relative flex h-7 w-7 items-center justify-center rounded-xl"
+            style={{ color: '#FFFFFF' }}
           >
             {/* A tinted fill without appending an alpha hex to the colour: `tone`
                 can be a CSS variable now, which cannot take a `18` suffix. */}
             <span
               aria-hidden="true"
               className="absolute inset-0 rounded-xl"
-              style={{ backgroundColor: tone, opacity: 0.12 }}
+              style={{ backgroundColor: 'rgb(255 255 255 / 0.15)', opacity: 1 }}
             />
             <Icon className="relative h-4 w-4" />
           </span>
-          <p className="text-[12px] font-bold tracking-tight text-ink dark:text-darkText">{title}</p>
+          <p className="text-[12px] font-bold tracking-tight text-white">{title}</p>
         </div>
         {meta}
       </div>

@@ -64,16 +64,16 @@ function Proposal({ action, approved, onToggle, onOpenPatient, isTop }) {
 
   return (
     <article className={`${PANEL} overflow-hidden transition-all ${approved ? 'ring-2 ring-accent/40' : 'opacity-70'}`}>
-      <header className="flex items-start gap-3.5 p-4">
+      <header className="np-proposal-header -mx-px -mt-px flex items-start gap-3.5 px-4 py-3">
         <button
           type="button"
           onClick={onToggle}
           aria-pressed={approved}
           aria-label={approved ? `Remove ${action.patient_id} from the approved batch` : `Approve ${action.patient_id}`}
-          className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition ${
+          className={`np-card-heading-check mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition ${
             approved
-              ? 'border-accent bg-accent text-white'
-              : 'border-line dark:border-darkBorder hover:border-accent'
+              ? 'border-white bg-white text-accent'
+              : 'border-white/70 hover:border-white'
           }`}
         >
           {approved && <CheckCircle2 className="h-3.5 w-3.5" />}
@@ -84,38 +84,16 @@ function Proposal({ action, approved, onToggle, onOpenPatient, isTop }) {
             <button
               type="button"
               onClick={() => onOpenPatient(action.patient_id)}
-              className="text-[13px] font-bold text-ink underline-offset-2 hover:text-accent hover:underline dark:text-darkText"
+              className="np-proposal-subject text-[13px] font-bold underline-offset-2 hover:underline"
             >
               {action.patient_id}
             </button>
-            <span style={MONO} className="text-[11px] text-muted dark:text-darkMuted">
+            <span style={MONO} className="np-proposal-rank text-[11px]">
               rank #{action.rank}
             </span>
-            {isTop && <Pill tone="accent">Top of queue</Pill>}
-            <Pill tone={impact.tone}>{impact.label}</Pill>
-            {action.result_on_file && <Pill tone="ok">No-cost</Pill>}
-          </div>
-
-          <p className="mt-1.5 text-[12px] font-medium text-ink dark:text-darkText">{action.test}</p>
-
-          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-muted dark:text-darkMuted">
-            <span>
-              priority{' '}
-              <span style={MONO} className="text-ink dark:text-darkText">
-                {fmt(action.priority_score)} → {fmt(action.projected_priority_score)}
-              </span>{' '}
-              <span style={MONO}>{signed(action.priority_delta)}</span>
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <TierChip tier={action.tier_before} />
-              <ArrowRight className="h-3 w-3" />
-              <TierChip tier={action.tier_after} />
-            </span>
-            {(climbed || slipped) && (
-              <span style={MONO} className={climbed ? 'text-tierLow' : 'text-tierMedium'}>
-                queue #{action.rank} → #{action.projected_rank}
-              </span>
-            )}
+            {isTop && <span className="np-proposal-badge np-proposal-badge-accent"><Pill tone="accent">Top of queue</Pill></span>}
+            <span className={`np-proposal-badge np-proposal-badge-${impact.tone}`}><Pill tone={impact.tone}>{impact.label}</Pill></span>
+            {action.result_on_file && <span className="np-proposal-badge np-proposal-badge-ok"><Pill tone="ok">No-cost</Pill></span>}
           </div>
         </div>
 
@@ -134,12 +112,36 @@ function Proposal({ action, approved, onToggle, onOpenPatient, isTop }) {
             type="button"
             aria-expanded={open}
             onClick={() => setOpen((o) => !o)}
-            className="mt-0.5 ml-auto shrink-0 text-[10.5px] font-semibold text-accent hover:underline"
+            className="np-proposal-help mt-0.5 ml-auto shrink-0 text-[10.5px] font-semibold hover:underline"
           >
             {open ? 'Hide why' : 'Why?'}
           </button>
         )}
       </header>
+
+      <div className="p-4">
+        <p className="text-[12px] font-medium text-ink dark:text-darkText">{action.test}</p>
+
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-muted dark:text-darkMuted">
+          <span>
+            priority{' '}
+            <span style={MONO} className="text-ink dark:text-darkText">
+              {fmt(action.priority_score)} → {fmt(action.projected_priority_score)}
+            </span>{' '}
+            <span style={MONO}>{signed(action.priority_delta)}</span>
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <TierChip tier={action.tier_before} />
+            <ArrowRight className="h-3 w-3" />
+            <TierChip tier={action.tier_after} />
+          </span>
+          {(climbed || slipped) && (
+            <span style={MONO} className={climbed ? 'text-tierLow' : 'text-tierMedium'}>
+              queue #{action.rank} → #{action.projected_rank}
+            </span>
+          )}
+        </div>
+      </div>
 
       {/* The reasoning is the product. Not a tooltip, not a modal — the same
         * three questions a clinician would ask before signing the order. */}
@@ -395,12 +397,13 @@ function Ledger({ result, onOpenPatient }) {
 
   return (
     <div className={`${PANEL} animate-fade-up overflow-hidden`}>
-      <div className="border-b border-line/70 px-5 py-4 dark:border-darkBorder/70">
+      <div className="np-ledger-header border-b border-line/70 px-5 py-4 dark:border-darkBorder/70">
         <SectionLabel
+          tealHeader
           size="sm"
           right={
             <div className="flex flex-wrap items-center gap-2.5">
-              <span style={MONO} className="text-[10px] text-muted dark:text-darkMuted">
+              <span style={MONO} className="text-[10px] text-white/80">
                 plan {result.plan_id || '—'}
               </span>
               <Pill tone={executed.length ? 'ok' : 'muted'}>
@@ -623,6 +626,7 @@ export default function AutonomousTriage({
         >
           <div className="sm:border-r sm:border-line dark:sm:border-darkBorder">
             <RibbonStat
+              tealHeader
               icon={Users}
               label="Awaiting workup"
               value={(cohort.awaiting_workup ?? 0).toLocaleString()}
@@ -632,6 +636,7 @@ export default function AutonomousTriage({
           </div>
           <div className="lg:border-r lg:border-line dark:lg:border-darkBorder">
             <RibbonStat
+              tealHeader
               icon={CheckCircle2}
               label="Pathway complete"
               value={(cohort.complete ?? 0).toLocaleString()}
@@ -641,6 +646,7 @@ export default function AutonomousTriage({
           </div>
           <div className="sm:border-r sm:border-line dark:sm:border-darkBorder">
             <RibbonStat
+              tealHeader
               icon={AlertTriangle}
               label="High tier"
               value={(cohort.tier_counts?.high ?? 0).toLocaleString()}
@@ -650,6 +656,7 @@ export default function AutonomousTriage({
           </div>
           <div>
             <RibbonStat
+              tealHeader
               icon={Activity}
               label="Medium / low"
               value={`${(cohort.tier_counts?.medium ?? 0).toLocaleString()} / ${(cohort.tier_counts?.low ?? 0).toLocaleString()}`}

@@ -125,9 +125,9 @@ export default function FeatureRadarChart({ data = [] }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-float dark:border-darkBorder dark:bg-darkCard">
       {/* ---------------------------------------------------------- header */}
-      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-line/70 bg-gradient-to-b from-tint/60 to-transparent px-4 py-4 sm:px-6 dark:border-darkBorder/70 dark:from-darkBg/50">
+      <div className="np-card-heading-band np-card-heading flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-line/70 bg-[#0D8282] px-4 py-4 sm:px-6 dark:border-darkBorder/70">
         <div className="flex items-center gap-3">
-          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-accent/10 text-accent ring-1 ring-inset ring-accent/20">
+          <span className="np-card-heading-icon flex h-8 w-8 items-center justify-center rounded-xl bg-white/15 text-white ring-1 ring-inset ring-white/25">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="9" />
               <circle cx="12" cy="12" r="4" />
@@ -135,7 +135,7 @@ export default function FeatureRadarChart({ data = [] }) {
             </svg>
           </span>
           <div>
-            <p className="text-[13.5px] font-bold leading-none text-ink dark:text-darkText">{RADAR_TITLE}</p>
+            <p className="text-[13.5px] font-bold leading-none text-white">{RADAR_TITLE}</p>
             {/*
              * Model mechanics are desktop detail: on a phone the radar shows
              * the shape and the rank numbers, and the sentence about which
@@ -143,7 +143,7 @@ export default function FeatureRadarChart({ data = [] }) {
              * radius is on is three facts about the model rather than one about
              * the patient.
              */}
-            <p className="mt-1.5 hidden text-[11px] leading-none text-muted dark:text-darkMuted md:block">
+            <p className="mt-1.5 hidden text-[11px] leading-none text-white/80 md:block">
               Served model · all {total} parameters · radius on a √ scale · exact mean |SHAP| per spoke
             </p>
           </div>
@@ -152,10 +152,10 @@ export default function FeatureRadarChart({ data = [] }) {
         {/* the four stages the spokes are coloured by — the radar's own key */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
           {stagesPresent.map((s) => (
-            <span key={s} className="inline-flex items-center gap-1.5 text-[10.5px] font-semibold text-muted dark:text-darkMuted">
+            <span key={s} className="inline-flex items-center gap-1.5 text-[10.5px] font-semibold text-white">
               <span className="h-2 w-2 rounded-full" style={{ background: STAGE_FILLS[s - 1] }} />
               {STAGE_LABEL[s]}
-              <span style={MONO} className="font-bold tabular-nums text-dust dark:text-darkMuted">
+              <span style={MONO} className="font-bold tabular-nums text-white/80">
                 {features.filter((d) => d.stage === s).length}
               </span>
             </span>

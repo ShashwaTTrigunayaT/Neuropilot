@@ -114,8 +114,8 @@ body {
   color: rgb(var(--ink-rgb));
   font-family: var(--font-sans);
   letter-spacing: -0.014em;
-  background-image: radial-gradient(920px 480px at 82% -8%, rgb(var(--accent-rgb) / calc(0.05 * var(--np-atmosphere))), transparent 60%),
-                    radial-gradient(700px 400px at 18% 92%, rgb(var(--accent-rgb) / calc(0.04 * var(--np-atmosphere))), transparent 65%);
+  background-image: radial-gradient(920px 480px at 82% -8%, rgb(var(--accent-rgb) / calc(0.08 * var(--np-atmosphere))), transparent 60%),
+                    radial-gradient(700px 400px at 18% 92%, rgb(var(--accent-rgb) / calc(0.06 * var(--np-atmosphere))), transparent 65%);
   background-attachment: fixed;
   transition: background-color 0.3s ease, color 0.3s ease;
 }
@@ -124,8 +124,8 @@ body {
 .dark body {
   background-color: rgb(var(--dark-bg-rgb));
   color: #E6EDF5;
-  background-image: radial-gradient(900px 500px at 75% -5%, rgb(var(--accent-rgb) / calc(0.12 * var(--np-atmosphere))), transparent 60%),
-                    radial-gradient(800px 500px at 15% 95%, rgb(var(--accent-rgb) / calc(0.05 * var(--np-atmosphere))), transparent 70%);
+  background-image: radial-gradient(900px 500px at 75% -5%, rgb(var(--accent-rgb) / calc(0.16 * var(--np-atmosphere))), transparent 60%),
+                    radial-gradient(800px 500px at 15% 95%, rgb(var(--accent-rgb) / calc(0.08 * var(--np-atmosphere))), transparent 70%);
 }
 
 ::selection {
@@ -288,21 +288,96 @@ body {
  * background-color instead of fighting it.
  */
 .card-wash {
-  background-image: radial-gradient(120% 90% at 0% 0%, rgba(13, 130, 130, 0.055), transparent 58%);
+  background-image: radial-gradient(120% 90% at 0% 0%, rgba(13, 130, 130, 0.09), transparent 58%);
 }
 .dark .card-wash {
-  background-image: radial-gradient(120% 90% at 0% 0%, rgba(13, 130, 130, 0.13), transparent 58%);
+  background-image: radial-gradient(120% 90% at 0% 0%, rgba(13, 130, 130, 0.20), transparent 58%);
+}
+
+/* Teal title bands unify card headers; card bodies stay white. */
+.np-card-heading-band {
+  border-top-left-radius: 1rem;
+  border-top-right-radius: 1rem;
+}
+.np-card-heading {
+  color: #FFFFFF !important;
+  background-color: #0D8282 !important;
+  border-color: rgb(255 255 255 / 0.24) !important;
+}
+.np-card-heading :is(p, h1, h2, h3, .text-ink, .text-muted, .text-dust, .text-accent, [class*="dark:text-darkMuted"], [class*="dark:text-darkText"]) {
+  color: #FFFFFF !important;
+}
+.np-card-heading svg {
+  color: #FFFFFF !important;
+}
+.np-card-heading-icon,
+.np-card-heading-icon > span {
+  background-color: rgb(255 255 255 / 0.15) !important;
+  color: #FFFFFF !important;
+}
+.np-card-heading-mark {
+  box-shadow: 0 0 8px rgb(255 255 255 / 0.35) !important;
+}
+.np-card-heading > :is(span, p) {
+  color: #FFFFFF !important;
+}
+/* Proposal header is independently scoped; avoid the shared teal-header descendant rules. */
+.np-proposal-header {
+  color: #FFFFFF;
+  background: #0D8282;
+}
+.np-proposal-header .np-proposal-subject,
+.np-proposal-header .np-proposal-rank,
+.np-proposal-header .np-proposal-help {
+  color: #FFFFFF !important;
+}
+.np-proposal-header .np-proposal-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: #FFFFFF;
+  padding: 0.25rem 0.5rem;
+}
+.np-proposal-header .np-proposal-badge-accent,
+.np-proposal-header .np-proposal-badge-accent * { color: #0D6F6F !important; }
+.np-proposal-header .np-proposal-badge-muted,
+.np-proposal-header .np-proposal-badge-muted * { color: #52525B !important; }
+.np-proposal-header .np-proposal-badge-ok,
+.np-proposal-header .np-proposal-badge-ok * { color: #047857 !important; }
+.np-proposal-header .np-proposal-badge-warn,
+.np-proposal-header .np-proposal-badge-warn * { color: #B45309 !important; }
+.np-proposal-header .np-proposal-badge-bad,
+.np-proposal-header .np-proposal-badge-bad * { color: #B91C1C !important; }
+.np-proposal-header .np-card-heading-check:has(svg),
+.np-proposal-header .np-card-heading-check:has(svg) svg { color: #0D6F6F !important; }
+.np-ledger-header {
+  background: #0D8282;
+}
+.np-ledger-header .np-card-section-heading {
+  margin: -1rem -1.25rem 1rem;
+  padding: 0.75rem 1.25rem;
+}
+.np-ledger-header .np-card-section-heading p,
+.np-ledger-header .np-card-section-heading span {
+  color: #FFFFFF !important;
+}
+.np-ledger-header .np-card-section-heading-mark {
+  background-color: #FFFFFF !important;
+}
+.np-card-heading-section-mark {
+  background-color: #FFFFFF !important;
+  box-shadow: 0 0 8px rgb(255 255 255 / 0.35) !important;
 }
 
 /* The masthead's dot grid. It reads as paper texture, not as a pattern, and it
    gives the top of the page somewhere for the eye to rest. */
 .dot-grid {
-  background-image: radial-gradient(rgba(19, 21, 26, 0.05) 1px, transparent 1px);
+  background-image: radial-gradient(rgba(13, 130, 130, 0.22) 1px, transparent 1px);
   background-size: 17px 17px;
   background-position: -1px -1px;
 }
 .dark .dot-grid {
-  background-image: radial-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-image: radial-gradient(rgba(13, 130, 130, 0.30) 1px, transparent 1px);
 }
 
 /* A hairline that draws itself across the top of a card on arrival, then stays
@@ -1015,4 +1090,3 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
-

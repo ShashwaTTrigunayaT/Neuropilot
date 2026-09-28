@@ -429,14 +429,51 @@ def fhir_status() -> dict:
 
     return {
         "phases": {
+            #
+            # `detail` is the single line a reader sees under each phase name on the
+            # desktop capability board (Interoperability.jsx — hidden below `md`,
+            # where the status ribbon above carries the same facts). It is written
+            # for that 240px cell, ONE clause, and in PLAIN WORDS.
+            #
+            # Short because a four-up board is scanned, not read: a sentence of
+            # justification per phase is four paragraphs of prose competing with
+            # the panels underneath. Plain because the reader here is a clinician
+            # or a judge deciding whether this thing is real — not an FHIR
+            # implementer. `atomic`, `$everything` and `PKCE` are correct and
+            # meaningless to that reader, so the cards say what happens to a
+            # patient's record instead of naming the mechanism that does it. The
+            # endpoint names and resource types are one click away, in the API
+            # tables (README §11) and the integration docs.
+            #
+            # `emphasis` names the ONE or TWO terms inside `detail` that the card
+            # should weight: the UI renders exactly these as bold accent, so a
+            # reader scanning the board sees what each phase is really about
+            # without the whole line being shouted at the same volume. It is data
+            # rather than markup because a consumer of this endpoint should not
+            # have to strip `**` out of a sentence, and because a term that is not
+            # a substring of `detail` is then a bug the API can be checked for
+            # rather than a rendering that silently does nothing.
+            #
+            # Two things are deliberately kept OFF these lines. The $validate gate
+            # has not been run against a live HAPI server (FHIR_REMAINING.md §3), so
+            # claiming it here would be a claim outrunning its evidence. The SMART
+            # sandbox launch WAS run, but it is a one-time manual verification and
+            # not test coverage (README §16) — a distinction this project keeps
+            # everywhere, and a 240px status cell is not the place to blur it. Both
+            # are documented where they can be qualified properly.
+            #
             "1_export": {"implemented": True,
-                         "detail": "Patient, Observation, RiskAssessment, AuditEvent + $everything"},
+                         "detail": "Send the patient's record out — never a diagnosis",
+                         "emphasis": ["never a diagnosis"]},
             "2_inbound": {"implemented": True,
-                          "detail": "POST /fhir/Bundle, atomic, re-scored by the served model"},
+                          "detail": "Take hospital results in — all or nothing, score updated",
+                          "emphasis": ["all or nothing"]},
             "3_bidirectional": {"implemented": True,
-                                "detail": "ServiceRequest orders + DiagnosticReport results, outbound push"},
+                                "detail": "Send test orders, get results back — one exchange",
+                                "emphasis": ["one exchange"]},
             "4_smart": {"implemented": True,
-                        "detail": "SMART launch (OAuth2 + PKCE), patient context held server-side"},
+                        "detail": "Start inside the hospital's own system — no second login",
+                        "emphasis": ["no second login"]},
         },
         "outbound_server": fhir_client.probe(),
         "smart": smart.status(),

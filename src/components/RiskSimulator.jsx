@@ -299,15 +299,15 @@ function StageCard({ n, title, icon: Icon, on, always, children }) {
         className="absolute inset-y-0 left-0 w-[3px]"
         style={{ background: hex, opacity: on ? 1 : 0.35 }}
       />
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line/70 px-5 py-3 dark:border-darkBorder/70">
+      <div className="np-card-heading-band np-card-heading flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line/70 bg-[#0D8282] px-5 py-3 dark:border-darkBorder/70">
         <span
-          style={{ ...MONO, color: hex, borderColor: `${hex}44`, background: `linear-gradient(135deg, ${hex}1f, ${hex}0a)` }}
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border text-[11px] font-black tabular-nums"
+          style={{ ...MONO, color: '#FFFFFF', borderColor: 'rgb(255 255 255 / 0.25)', background: 'rgb(255 255 255 / 0.15)' }}
+          className="np-card-heading-icon flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border text-[11px] font-black tabular-nums"
         >
           {n}
         </span>
-        <h2 className="flex items-center gap-2 text-[13.5px] font-bold tracking-[-0.01em] text-ink dark:text-darkText">
-          {Icon && <Icon className="h-3.5 w-3.5" style={{ color: hex }} />}
+        <h2 className="flex items-center gap-2 text-[13.5px] font-bold tracking-[-0.01em] text-white">
+          {Icon && <Icon className="h-3.5 w-3.5" />}
           {title}
         </h2>
         {/*
@@ -840,7 +840,7 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
         <div className="space-y-5 lg:col-span-7">
           {/* Scenarios */}
           <div>
-            <SectionLabel size="sm">Starting scenarios</SectionLabel>
+            <SectionLabel tealHeader size="sm">Starting scenarios</SectionLabel>
             {/*
              * One row of three at EVERY width.
              *
@@ -1180,19 +1180,21 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
                 </div>
 
                 {/* Score response */}
-                <div className="mt-5 rounded-xl border border-line/60 bg-white/70 p-3.5 backdrop-blur dark:border-darkBorder/60 dark:bg-darkCard/70">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <p className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-muted dark:text-darkMuted">
+                <div className="mt-5 overflow-hidden rounded-xl border border-line/60 bg-white/70 backdrop-blur dark:border-darkBorder/60 dark:bg-darkCard/70">
+                  <div className="np-card-heading-band np-card-heading flex items-baseline justify-between gap-3 px-3.5 py-2.5">
+                    <p className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-white">
                       Score response to your edits
                     </p>
-                    <span style={MONO} className="text-[10px] tabular-nums text-muted dark:text-darkMuted">
+                    <span style={MONO} className="text-[10px] tabular-nums text-white/80">
                       {history.length} reading{history.length === 1 ? '' : 's'}
                     </span>
                   </div>
-                  <ScoreSparkline history={history} />
-                  <p className="mt-1.5 text-[10px] text-muted dark:text-darkMuted">
-                    Dashed bands are the served thresholds — 0.70 High, 0.40 Medium.
-                  </p>
+                  <div className="p-3.5">
+                    <ScoreSparkline history={history} />
+                    <p className="mt-1.5 text-[10px] text-muted dark:text-darkMuted">
+                      Dashed bands are the served thresholds — 0.70 High, 0.40 Medium.
+                    </p>
+                  </div>
                 </div>
 
                 {/*
@@ -1229,9 +1231,10 @@ export default function RiskSimulator({ initialPatient = null, onSelectPatient }
               {/* Attribution */}
               <div className={`${PANEL} p-5`}>
                 <SectionLabel
+                  tealHeader
                   size="sm"
                   right={
-                    <span className="flex items-center gap-2 text-[10.5px] text-muted dark:text-darkMuted">
+                    <span className="flex items-center gap-2 text-[10.5px] text-white/80">
                       <span className="inline-flex items-center gap-1">
                         <span className="h-1.5 w-1.5 rounded-full bg-tierHigh" /> +Risk
                       </span>

@@ -152,7 +152,7 @@ export function Btn({ tone = 'ghost', icon: Icon, children, className = '', ...r
  * the smallest thing in the row. The bar is optional because only counts that
  * are a share of a whole have something honest to show.
  */
-export function RibbonStat({ icon: Icon, label, value, tone = 'muted', hint, dot, bar }) {
+export function RibbonStat({ icon: Icon, label, value, tone = 'muted', hint, dot, bar, tealHeader = false }) {
   // The tone's TEXT colour applies at every width; its chip FILL only above
   // `md`. On a phone a filled, rounded icon badge is the one thing here that
   // still reads as a little card, so the phone drops it and keeps the bare
@@ -179,6 +179,9 @@ export function RibbonStat({ icon: Icon, label, value, tone = 'muted', hint, dot
     accent: 'var(--accent)',
   };
 
+  const iconTone = tealHeader ? 'text-white' : toneText[tone];
+  const iconFill = tealHeader ? 'md:bg-white/15' : toneFill[tone];
+
   return (
     /*
      * A seamless ribbon cell at EVERY width.
@@ -193,9 +196,15 @@ export function RibbonStat({ icon: Icon, label, value, tone = 'muted', hint, dot
     <div
       className="group relative flex h-full flex-col gap-1.5 px-3 py-2.5 transition-colors md:gap-2.5 md:px-5 md:py-4 hover:bg-tint/40"
     >
-      <div className="flex items-center gap-2.5">
+      <div
+        className={`flex items-center gap-2.5 ${
+          tealHeader
+            ? 'np-card-heading-band np-card-heading text-white -mx-3 -mt-2.5 mb-1.5 bg-[#0D8282] px-3 py-2.5 md:-mx-5 md:-mt-4 md:mb-1 md:px-5 md:py-3'
+            : ''
+        }`}
+      >
         <span
-          className={`flex h-4 w-4 shrink-0 items-center justify-center md:h-7 md:w-7 md:rounded-lg md:ring-1 md:ring-inset md:ring-black/[0.04] dark:md:ring-white/[0.06] ${toneText[tone]} ${toneFill[tone]}`}
+          className={`${tealHeader ? 'np-card-heading-icon' : ''} flex h-4 w-4 shrink-0 items-center justify-center md:h-7 md:w-7 md:rounded-lg md:ring-1 md:ring-inset md:ring-black/[0.04] dark:md:ring-white/[0.06] ${iconTone} ${iconFill}`}
         >
           {dot ? (
             <span className="relative flex h-2 w-2">
@@ -419,7 +428,10 @@ export function FoldToggle({ label }) {
 /** A small metric tile (label over a monospace value). */
 export function MetricTile({ label, value, hint }) {
   return (
-    <div className="rounded-xl border border-line/70 dark:border-darkBorder/70 bg-tint/50 px-3 py-2 dark:bg-darkBorderSubtle">
+    <div className="rounded-xl border border-accent/20 dark:border-darkBorder/70 bg-tint/50 px-3 py-2 dark:bg-darkBorderSubtle">
+      {/* The darker end of the accent, not the accent itself: at 10px over the
+          tinted tile the full accent lands at ~4.2:1, under AA, while the hover
+          tone of the same hue clears it at ~5.5:1 without changing the colour. */}
       <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted dark:text-darkMuted">
         {label}
       </p>
@@ -431,14 +443,20 @@ export function MetricTile({ label, value, hint }) {
   );
 }
 
-export function SectionLabel({ children, right, size = 'md' }) {
+export function SectionLabel({ children, right, size = 'md', tealHeader = false }) {
   const labelProps = size === 'sm'
-    ? { className: 'text-[12px] font-semibold text-ink dark:text-darkText' }
-    : { className: 'text-[13px] font-semibold text-ink dark:text-darkText tracking-tight' };
+    ? { className: `text-[12px] font-semibold ${tealHeader ? 'text-white' : 'text-ink dark:text-darkText'}` }
+    : { className: `text-[13px] font-semibold tracking-tight ${tealHeader ? 'text-white' : 'text-ink dark:text-darkText'}` };
   return (
-    <div className="flex items-baseline justify-between gap-4">
+    <div
+      className={`flex items-baseline justify-between gap-4 ${
+        tealHeader
+          ? 'np-card-heading-band np-card-heading np-card-section-heading -mx-4 -mt-4 mb-4 bg-[#0D8282] px-4 py-3 sm:-mx-6 sm:-mt-6 sm:px-6'
+          : ''
+      }`}
+    >
       <div className="flex items-center gap-2">
-        <span className="h-2.5 w-[3px] rounded-full bg-accent shadow-[0_0_8px_var(--accent-glow-soft)]" />
+        <span className={`h-2.5 w-[3px] rounded-full ${tealHeader ? 'np-card-heading-section-mark bg-white' : 'bg-accent shadow-[0_0_8px_var(--accent-glow-soft)]'}`} />
         <p {...labelProps}>{children}</p>
       </div>
       {right}
@@ -447,35 +465,28 @@ export function SectionLabel({ children, right, size = 'md' }) {
 }
 
 /**
- * A panel header with an icon tile and a hairline that fades out to the right.
+ * Shared teal title band for panels that use an icon, title and optional status.
  *
- * Used by every panel on the interoperability view so the page reads as one
- * document. Kept beside SectionLabel rather than in one view because the ABDM
- * panel is its own component and must not drift from the rest of the page.
+ * Used across interoperability and other card panels so their headings share
+ * one clear treatment while the content area remains white.
  */
 export function SectionHeader({ icon: Icon, title, right }) {
   return (
     <>
-      <div className="flex items-center justify-between gap-4">
+      <div className="np-card-heading-band np-card-heading -mx-4 -mt-4 mb-3 flex items-center justify-between gap-4 bg-[#0D8282] px-4 py-3 sm:-mx-6 sm:-mt-6 sm:px-6">
         <div className="flex min-w-0 items-center gap-2.5">
           <span
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl"
-            style={{ backgroundColor: 'rgb(var(--accent-rgb) / 0.08)', color: ACCENT }}
+            className="np-card-heading-icon flex h-7 w-7 shrink-0 items-center justify-center rounded-xl"
+            style={{ backgroundColor: 'rgb(255 255 255 / 0.15)', color: '#FFFFFF' }}
           >
             <Icon className="h-3.5 w-3.5" />
           </span>
-          <h2 className="truncate text-[13px] font-semibold tracking-tight text-ink dark:text-darkText">
+          <h2 className="truncate text-[13px] font-semibold tracking-tight text-white">
             {title}
           </h2>
         </div>
         {right}
       </div>
-      {/* Draws itself across the card on arrival, then stays put. The animation
-          is disabled wholesale under prefers-reduced-motion (see index.css). */}
-      <span
-        aria-hidden="true"
-        className="rule-draw mt-3 block h-px w-full bg-gradient-to-r from-accent/35 via-line to-transparent dark:via-darkBorder"
-      />
     </>
   );
 }
@@ -823,7 +834,7 @@ export function Segment({ label, count, active, onClick, size = 'sm' }) {
           : 'text-muted dark:text-darkMuted hover:text-ink dark:hover:text-darkText'
       }`}
     >
-      {label} <span style={MONO} className={active ? 'text-accent dark:text-accent font-semibold' : 'text-dust dark:text-darkMuted'}>{count}</span>
+      {label} <span style={MONO} className={active ? 'text-accent font-semibold' : 'text-dust dark:text-darkMuted'}>{count}</span>
     </button>
   );
 }
@@ -858,7 +869,7 @@ export function RiskHistogram({ patients, onSelectBin }) {
 
   return (
     <div className="rounded-2xl border border-line/70 dark:border-darkBorder/70 bg-white/60 dark:bg-darkCard/60 p-4 sm:p-6">
-      <SectionLabel size="sm" right={<span className="text-[11px] text-muted dark:text-darkMuted">N = {patients.length}</span>}>
+      <SectionLabel tealHeader size="sm" right={<span className="text-[11px] text-white/80">N = {patients.length}</span>}>
         Risk score distribution
       </SectionLabel>
       <div className="mt-4">
@@ -940,7 +951,7 @@ export function StageFunnel({ funnel }) {
   const max = Math.max(...funnel.map((f) => f.count), 1);
   return (
     <div className="rounded-2xl border border-line/70 dark:border-darkBorder/70 bg-white/60 dark:bg-darkCard/60 p-4 sm:p-6">
-      <SectionLabel>Patients by diagnostic stage</SectionLabel>
+      <SectionLabel tealHeader>Patients by diagnostic stage</SectionLabel>
       <div className="mt-5 space-y-4">
         {funnel.map(({ stage, count }, i) => {
           const hex = STAGE_FILLS[stage - 1] || '#0D8282';
@@ -1076,7 +1087,7 @@ export function PatientTable({
       window.removeEventListener('resize', onScroll);
     };
   }, []);
-  const HEAD = 'px-4 py-3 text-left font-semibold uppercase tracking-[0.12em] text-muted dark:text-darkMuted';
+  const HEAD = 'np-card-heading px-4 py-3 text-left font-semibold uppercase tracking-[0.12em] text-white dark:text-white';
   const HEAD_STYLE = { fontSize: '10.5px' };
   /*
    * The table is a GRID, so it is drawn as one.
@@ -1248,7 +1259,7 @@ export function PatientTable({
          */}
         <thead>
           <tr className={`sticky-th border-b border-line dark:border-darkBorder ${stuck ? 'is-stuck' : ''}`}>
-            {selectable && <th className="w-10 px-3 py-3" />}
+            {selectable && <th className="np-card-heading w-10 px-3 py-3" />}
             <th className={`w-12 ${HEAD}`} style={HEAD_STYLE}>#</th>
             <th className={`px-5 ${HEAD}`} style={HEAD_STYLE}>Subject</th>
             {!compact && <th className={`${HEAD} ${RULE}`} style={HEAD_STYLE}>Cognition</th>}
@@ -1394,8 +1405,8 @@ export function PatientTable({
                           background: done
                             ? TIER_HEX.low
                             : current
-                            ? `linear-gradient(90deg, ${hex}cc, ${hex})`
-                            : undefined,
+                              ? `linear-gradient(90deg, ${hex}cc, ${hex})`
+                              : undefined,
                           boxShadow: current ? `0 0 8px ${hex}70` : undefined,
                         }}
                       >

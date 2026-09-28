@@ -933,22 +933,22 @@ export default function Overview({
 
         <div className={`${JOINED_GRID} mt-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6`}>
           <div className="bg-white dark:bg-darkCard">
-            <RibbonStat icon={Users} label="Subjects" value={total.toLocaleString()} tone="accent" hint="scored by the refined model" />
+            <RibbonStat tealHeader icon={Users} label="Subjects" value={total.toLocaleString()} tone="accent" hint="scored by the refined model" />
           </div>
           <div className="bg-white dark:bg-darkCard">
-            <RibbonStat icon={Siren} label="High priority" value={counts.high.toLocaleString()} tone="bad" bar={share(counts.high)} hint="biomarker evidence on file" />
+            <RibbonStat tealHeader icon={Siren} label="High priority" value={counts.high.toLocaleString()} tone="bad" bar={share(counts.high)} hint="biomarker evidence on file" />
           </div>
           <div className="bg-white dark:bg-darkCard">
-            <RibbonStat icon={AlertCircle} label="Medium" value={counts.medium.toLocaleString()} tone="warn" bar={share(counts.medium)} hint="awaiting the next stage" />
+            <RibbonStat tealHeader icon={AlertCircle} label="Medium" value={counts.medium.toLocaleString()} tone="warn" bar={share(counts.medium)} hint="awaiting the next stage" />
           </div>
           <div className="bg-white dark:bg-darkCard">
-            <RibbonStat icon={CheckCircle2} label="Low" value={counts.low.toLocaleString()} tone="ok" bar={share(counts.low)} hint="stable on current evidence" />
+            <RibbonStat tealHeader icon={CheckCircle2} label="Low" value={counts.low.toLocaleString()} tone="ok" bar={share(counts.low)} hint="stable on current evidence" />
           </div>
           <div className="bg-white dark:bg-darkCard">
-            <RibbonStat icon={Gauge} label="Mean priority" value={fmtScore(meanRisk)} tone="accent" bar={meanRisk * 100} hint="cohort average, 0–1" />
+            <RibbonStat tealHeader icon={Gauge} label="Mean priority" value={fmtScore(meanRisk)} tone="accent" bar={meanRisk * 100} hint="cohort average, 0–1" />
           </div>
           <div className="bg-white dark:bg-darkCard">
-            <RibbonStat icon={Upload} label="From FHIR" value={fhirFrom.toLocaleString()} tone="accent" hint="FHIR R4 exchange subjects" />
+            <RibbonStat tealHeader icon={Upload} label="From FHIR" value={fhirFrom.toLocaleString()} tone="accent" hint="FHIR R4 exchange subjects" />
           </div>
         </div>
       </Band>

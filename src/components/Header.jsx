@@ -17,9 +17,9 @@ import { MONO } from './widgets.jsx';
  *   scale      controls are 36px and labels are 13px. The earlier 12px-in-32px
  *              version was technically tidy and read as timid — at 1600px wide a
  *              header that size looks like a utility bar, not a product's chrome.
- *   layering   a warm white→paper wash, a real blur, a 1px border, and the logo's
- *              gradient as a 2px rule pinned to the top edge: four cheap cues
- *              that say "surface" instead of "divider".
+ *   layering   a white→paper wash, a real blur, a 1px border, and a 2px rule in
+ *              the brand colour pinned to the top edge: four cheap cues that say
+ *              "surface" instead of "divider".
  *   rhythm     every control on the bar is exactly 36px, so there is one baseline
  *              across three zones; the nav track is the only element that is
  *              deliberately larger, because it is a container, not a control.
@@ -27,7 +27,7 @@ import { MONO } from './widgets.jsx';
  *              action in the whole application, so nothing else competes with it.
  */
 
-/** A 2px rule in the logo's own gradient, pinned to the header's top edge. */
+/** A 2px rule in the brand colour, pinned to the header's top edge. */
 function BrandRule() {
   return (
     <span

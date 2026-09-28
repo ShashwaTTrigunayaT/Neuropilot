@@ -56,6 +56,50 @@ const initials = (name) => {
   return (words[0][0] + (words[1]?.[0] || '')).toUpperCase();
 };
 
+const escapeTerm = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * The display face, and why the capability cards get it.
+ *
+ * `--font-display` (Space Grotesk) is already loaded and already in the type
+ * system — the headings use it — but on a desktop it is only ever applied to
+ * `h1`-`h4` inside the phone block, so the whole console renders in Inter and the
+ * second face never appears where a reader can see it doing work. Here the card
+ * sets its own family: a geometric face at this size reads as a statement rather
+ * than as body copy, which is what lets four short lines scan as four cards
+ * instead of as four sentences. It is set on the cell, so the card's kicker and
+ * badge come with it and the card speaks in one voice.
+ */
+const DISPLAY = { fontFamily: 'var(--font-display)' };
+
+/**
+ * Wrap the one or two terms a phase is really about, and only those.
+ *
+ * `emphasis` arrives from the API as plain terms rather than as markup, so the
+ * server never has to embed `**` in a sentence and a consumer of the endpoint
+ * never has to strip it out. Those terms are set in bold accent; the rest of the
+ * line keeps the body weight. Bolding the WHOLE line is the alternative and it is
+ * the wrong one — on a four-up board nothing is emphasised when everything is,
+ * which is exactly what makes a card read as a block of text instead of an
+ * answer. A term that is not actually present is skipped, so a typo in the API
+ * degrades to plain text rather than breaking the render.
+ */
+function emphasised(text, terms) {
+  if (!text) return null;
+  const hits = (terms || []).filter((t) => t && text.includes(t));
+  if (!hits.length) return text;
+  const pattern = new RegExp(`(${hits.map(escapeTerm).join('|')})`, 'g');
+  return text.split(pattern).map((part, i) =>
+    hits.includes(part) ? (
+      <strong key={i} className="font-bold text-accent">
+        {part}
+      </strong>
+    ) : (
+      part
+    )
+  );
+}
+
 /**
  * Interoperability — the HL7 FHIR R4 surface (FHIR_INTEGRATION.md Phases 1-4).
  *
@@ -476,6 +520,7 @@ export default function Interoperability({
       <div className={`${CARD_RIBBON} divide-y divide-line dark:divide-darkBorder sm:grid sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4`}>
         <div className="sm:border-r sm:border-line dark:sm:border-darkBorder">
           <RibbonStat
+            tealHeader
             icon={Server}
             label="Hospital server"
             value={outbound.reachable ? outbound.software || 'Reachable' : 'Not connected'}
@@ -485,6 +530,7 @@ export default function Interoperability({
         </div>
         <div className="lg:border-r lg:border-line dark:lg:border-darkBorder">
           <RibbonStat
+            tealHeader
             icon={Plug}
             label="SMART session"
             value={smart?.connected ? 'Bound' : 'No session'}
@@ -494,6 +540,7 @@ export default function Interoperability({
         </div>
         <div className="sm:border-r sm:border-line dark:sm:border-darkBorder">
           <RibbonStat
+            tealHeader
             icon={Upload}
             label="Outbound push"
             value={overview.push_orders_on_order ? 'Enabled' : 'Disabled'}
@@ -503,6 +550,7 @@ export default function Interoperability({
         </div>
         <div>
           <RibbonStat
+            tealHeader
             icon={Activity}
             label="Exchange surface"
             value={`${(surface.patients ?? 0).toLocaleString()} patients`}
@@ -519,19 +567,31 @@ export default function Interoperability({
        * phones because the same facts already reach a phone through the status
        * ribbon above, and this board is four screens of reference material that
        * would sit between the reader and the panels they came to use.
+       *
+       * The DETAIL leads; the state is a dot and a count.
+       *
+       * These cells were `RibbonStat`s, which put the state in the 24px figure
+       * slot and the detail in the 10px caption — so on a board where every phase
+       * is live, the one word all four shares was the loudest thing on screen, and
+       * the only thing that actually differs between them was the smallest. The
+       * weight is spent on what each phase does instead. The state is still stated
+       * twice, but where it costs nothing: the tile's colour, and the count in the
+       * header above. That leaves the badge free to carry the one fact per card
+       * that is genuinely its own — see `PHASE_MODES`.
        */}
       <div className={`${CARD_RIBBON} hidden overflow-hidden md:block`}>
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-line bg-tint/40 px-5 py-2.5 dark:border-darkBorder dark:bg-darkBorderSubtle/40">
-          <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-muted dark:text-darkMuted">
-            <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-accent" />
-            FHIR R4 capability phases
-          </p>
-          <p style={MONO} className="text-[10.5px] font-bold text-ink dark:text-darkText">
-            {PHASE_KEYS.filter((key) => overview.phases?.[key]?.implemented).length}/{PHASE_KEYS.length} live
-          </p>
-        </div>
-
-        <div className="divide-y divide-line dark:divide-darkBorder sm:grid sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4">
+        {/*
+         * `sm:auto-rows-fr` is what makes the four cells ONE band.
+         *
+         * At `lg` they are a single row, so a grid stretches them to a common
+         * height for free — but from `md` to `lg` they are two rows of two, and
+         * two rows size independently: the pair whose detail runs longer sat
+         * visibly taller than the pair above it, which reads as two different
+         * boards stacked. Equal rows (`1fr`) fix that: every cell is as tall as
+         * the tallest in the whole board, exactly as the status ribbon above it
+         * already behaves.
+         */}
+        <div className="divide-y divide-line dark:divide-darkBorder sm:grid sm:auto-rows-fr sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4">
           {PHASE_KEYS.map((key, i) => {
             const phase = overview.phases?.[key] || {};
             const PhaseIcon = PHASE_ICONS[i];
@@ -543,16 +603,61 @@ export default function Interoperability({
                   (i < PHASE_KEYS.length - 1 ? 'lg:border-r lg:border-line dark:lg:border-darkBorder' : '')
                 }
               >
-                <RibbonStat
-                  icon={PhaseIcon}
-                  label={`0${i + 1} · ${PHASE_TITLES[key]}`}
-                  value={phase.implemented ? 'Live' : 'Planned'}
-                  tone={phase.implemented ? 'ok' : 'muted'}
-                  hint={phase.detail}
-                  // A live phase pulses where a planned one shows its icon: the
-                  // glyph itself carries the state, so the cell is not static.
-                  dot={phase.implemented}
-                />
+                <div
+                  className="flex h-full min-h-[6.25rem] flex-col px-4 py-3.5 md:px-5 md:py-4"
+                  style={DISPLAY}
+                >
+                  <div className="np-card-heading-band np-card-heading -mx-4 -mt-3.5 mb-2.5 flex items-center gap-2 bg-[#0D8282] px-4 py-2 md:-mx-5 md:-mt-4 md:px-5">
+
+                    {/*
+                     * The phase's OWN glyph, always — not a blinking "live" dot.
+                     *
+                     * The pulse said one thing, "this one is on", and it said it on
+                     * every card, in the one place where four cards have to be told
+                     * apart: an animation that is identical in all four cells and
+                     * repeated on every visit is spent attention, not information.
+                     * The header already states the count for all four at once, so
+                     * the tile is given back to the thing the card is ABOUT — the
+                     * phase's icon — with its colour carrying the state, quietly.
+                     */}
+                    <span
+                      className="np-card-heading-icon flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-white/15 text-white"
+                    >
+                      {PhaseIcon && <PhaseIcon className="h-3 w-3" />}
+                    </span>
+                    {/*
+                     * The SAME kicker the status ribbon above uses: 10px, bold,
+                     * uppercase, tracked, muted; and mono for the number, as every
+                     * figure on this page is. The two boards are stacked a few
+                     * hundred pixels apart, so a second label style up here read as
+                     * a different kind of object — the phase cards looked like a
+                     * separate module rather than the next row of the same one.
+                     * Nothing is lost in weight by it: the phase NAME is the
+                     * structure, and structure is quiet here by construction — the
+                     * detail line under it is what the card is for.
+                     */}
+                    <p className="min-w-0 truncate text-[10px] font-bold uppercase tracking-[0.14em] text-white">
+                      <span style={MONO}>{`0${i + 1}`}</span> · {PHASE_TITLES[key]}
+                    </p>
+
+                  </div>
+
+                  {/*
+                   * The content of the phase IS the card's headline.
+                   *
+                   * Full contrast, semi-bold, a step up from the body size — the
+                   * info is what should catch the eye here, not the phase name and
+                   * not the state. The one or two terms that carry the phase are
+                   * then set bold in the accent on top of that, so a card reads as
+                   * a sentence with its point underlined rather than as a block of
+                   * text. Every line is shaped the same way — plain clause, em dash,
+                   * the highlighted term — which is what makes four of them scan as
+                   * a set. Only that term is shouted; the line around it is not.
+                   */}
+                  <p className="mt-2.5 text-[15px] font-semibold leading-snug text-ink dark:text-darkText">
+                    {emphasised(phase.detail, phase.emphasis)}
+                  </p>
+                </div>
               </div>
             );
           })}
@@ -781,14 +886,14 @@ export default function Interoperability({
 
             {charts ? (
               <div className="mt-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-line/70 dark:border-darkBorder/70">
-                <p className="flex flex-wrap items-center gap-2 border-b border-line/60 bg-tint/50 px-3 py-2 dark:border-darkBorder/60 dark:bg-darkBorderSubtle">
-                  <span className="text-[10.5px] font-bold text-ink dark:text-darkText">
+                <p className="np-card-heading-band np-card-heading flex flex-wrap items-center gap-2 border-b border-line/60 bg-[#0D8282] px-3 py-2 dark:border-darkBorder/60">
+                  <span className="text-[10.5px] font-bold text-white">
                     {charts.count} chart{charts.count === 1 ? '' : 's'}
                   </span>
                   <Pill tone={charts.authenticated ? 'ok' : 'muted'}>
                     {charts.authenticated ? 'session token' : 'no token'}
                   </Pill>
-                  <span style={MONO} className="min-w-0 flex-1 truncate text-[10px] text-muted dark:text-darkMuted">
+                  <span style={MONO} className="min-w-0 flex-1 truncate text-[10px] text-white/80">
                     {charts.iss}
                   </span>
                   {charts.capped && <Pill tone="warn">truncated — narrow by name</Pill>}

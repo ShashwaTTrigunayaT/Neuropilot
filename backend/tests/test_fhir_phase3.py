@@ -511,6 +511,31 @@ def test_status_endpoint_reports_all_four_phases():
     assert "open_orders" in body["surface"] and "completed_orders" in body["surface"]
 
 
+def test_every_phase_emphasis_is_actually_in_its_own_detail():
+    """The capability board's `emphasis` terms must exist in the line they weight.
+
+    The board renders each emphasised term as bold accent, so a term that is not a
+    substring of its own `detail` is a silent no-op: the card looks normal and the
+    weight the author intended never lands, on a board whose entire job is to be
+    scannable. Same shape as the never-emit-a-Condition invariant — a rule the UI
+    depends on but cannot itself enforce, so it is asserted at the source.
+
+    The length bound is the other half of that: one clause fits a 240px cell, a
+    paragraph does not, and this board answers "what is it, and is it on?" rather
+    than documenting the phases.
+    """
+    phases = client.get("/fhir/status").json()["phases"]
+    assert phases, "no phases reported"
+    for key, phase in phases.items():
+        detail = phase["detail"]
+        assert detail, f"{key} has no detail"
+        assert len(detail) <= 60, f"{key} detail is {len(detail)} chars: {detail!r}"
+        terms = phase.get("emphasis", [])
+        assert 1 <= len(terms) <= 2, f"{key} should weight one or two terms, got {terms!r}"
+        for term in terms:
+            assert term in detail, f"{key}: emphasis {term!r} is not in {detail!r}"
+
+
 def test_capability_statement_advertises_phase_3_resources():
     cap = client.get("/fhir/metadata").json()
     rest = cap["rest"][0]

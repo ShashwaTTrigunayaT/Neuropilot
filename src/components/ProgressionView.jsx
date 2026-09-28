@@ -63,20 +63,20 @@ function Card({ icon: Icon, title, tone = 'var(--accent)', meta, delay = 0, chil
         className="absolute inset-x-0 top-0 h-[3px]"
         style={{ background: `linear-gradient(90deg, ${tone}, transparent)` }}
       />
-      <div className="flex items-center justify-between gap-4 border-b border-line/60 bg-gradient-to-b from-tint/60 to-transparent px-4 py-3 sm:px-6 dark:border-darkBorder/60 dark:from-darkBorder/30">
+      <div className="np-card-heading-band np-card-heading flex items-center justify-between gap-4 border-b border-line/60 bg-[#0D8282] px-4 py-3 sm:px-6 dark:border-darkBorder/60">
         <div className="flex items-center gap-2.5">
           <span
-            className="relative flex h-7 w-7 items-center justify-center rounded-xl"
-            style={{ color: tone }}
+            className="np-card-heading-icon relative flex h-7 w-7 items-center justify-center rounded-xl"
+            style={{ color: '#FFFFFF' }}
           >
             <span
               aria-hidden="true"
               className="absolute inset-0 rounded-xl"
-              style={{ backgroundColor: tone, opacity: 0.12 }}
+              style={{ backgroundColor: 'rgb(255 255 255 / 0.15)', opacity: 1 }}
             />
             <Icon className="relative h-4 w-4" />
           </span>
-          <p className="text-[12px] font-bold tracking-tight text-ink dark:text-darkText">{title}</p>
+          <p className="text-[12px] font-bold tracking-tight text-white">{title}</p>
         </div>
         {meta}
       </div>
