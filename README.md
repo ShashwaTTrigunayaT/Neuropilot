@@ -19,15 +19,14 @@ flow**, so it can live *inside* a hospital network instead of beside it.
 
 | | |
 |---|---|
-| **Cohort** | 3,636 real ADNI subjects · 2,581 served |
-| **Risk model** | XGBoost, 15 features · CV AUC **0.901** · test AUC **0.902** |
-| **Progression** | 24 months on real follow-up · conversion AUC **0.796** |
+| **Cohort** | 3,636 real ADNI subjects in the ingested source · **2,581 served** after the test-result filter |
+| **Served model** | Refined conversion XGBoost, 14 features · model-supported **12-month risk outlook** · CV AUC **0.819 ± 0.031** · held-out AUC **0.796** |
+| **Risk display** | Clinician-facing 12-month conversion-risk outlook with model attribution and a recommended next test |
+| **MMSE estimate** | Real ADNI follow-up · test MAE **1.549 points** (baseline 1.859) |
 | **Tests** | **229 passing** |
-| **Interoperability** | FHIR R4 phases 1–4 · ABDM consent flow (mock gateway) |
+| **Interoperability** | FHIR R4 phases 1–4 · SMART on FHIR launched **live against a real public EHR sandbox** · ABDM consent flow (mock gateway) |
 
-Everything below was re-verified against the served artifacts and the live
-cohort on **25 Sep 2026**. Where something is unverified, blocked, or still
-broken, it says so.
+The app presents a **12-month risk outlook**, supported by the active refined conversion model. Global feature attribution is distinct from the top SHAP factor for an individual patient.
 
 ---
 
@@ -36,8 +35,8 @@ broken, it says so.
 | | | |
 |---|---|---|
 | [1. The product in one minute](#1-the-product-in-one-minute) | [7. Repository map](#7-repository-map) | [13. Configuration](#13-configuration) |
-| [2. The loop, drawn](#2-the-loop-drawn) | [8. Risk model card](#8-risk-model-card) | [14. Tests](#14-tests) |
-| [3. Readiness](#3-readiness) | [9. Progression forecaster](#9-progression-forecaster) | [15. Verification](#15-verification) |
+| [2. The loop, drawn](#2-the-loop-drawn) | [8. Served model card](#8-served-model-card) | [14. Tests](#14-tests) |
+| [3. Readiness](#3-readiness) | [9. Model-supported outlook](#9-model-supported-outlook) | [15. Verification](#15-verification) |
 | [4. Quick start](#4-quick-start) | [10. Escalation rules](#10-escalation-rules) | [16. Limitations](#16-limitations) |
 | [5. Data policy](#5-data-policy) | [11. API](#11-api) | [17. Out of scope](#17-out-of-scope) |
 | [6. Architecture](#6-architecture) | [12. Dashboard](#12-dashboard) | [18. Stack](#18-stack) |
@@ -67,9 +66,12 @@ worked up first, and with what?
   disease.
 - **Not a black box.** Every tier, every order, every re-score carries its
   reasoning and its timestamp.
-- **Not a simulation dressed as data.** The risk model and the progression
-  forecaster both train on real ADNI labels and real follow-up outcomes. Where
-  a projection cannot beat *assume no change*, it is refused rather than shown.
+- **Model-supported, not fabricated.** The 12-month risk outlook comes from the
+  served conversion model. Clinical measurements are only recorded from real
+  results; unmeasured values remain missing.
+- **EHR import and results recording are separate steps.** SMART import reads the
+  bound patient's real chart; a missing result stays missing until a result is
+  entered or received. Importing a chart never fabricates test results.
 - **Not finished.** [§16](#16-limitations) is a long, honest list.
 
 ---
@@ -96,17 +98,17 @@ until a real value comes back — no stand-in results, ever.
 | Area | Status | Evidence |
 |---|---|---|
 | ADNI ingestion | ✅ Run & verified | 13-table drop, nearest-visit join (±183 d) across MMSE, ADAS-Cog 13, plasma panel, FreeSurfer MRI, amyloid/tau PET, APOE. Sentinel codes filtered, never read as values |
-| Risk model | ✅ Run & verified | 3,636 real subjects, 15 features, all four stages · CV AUC **0.901 ± 0.011** · held-out **0.902** · accuracy 0.812 |
-| Leakage audit | ✅ Run & verified | CDR and FAQ excluded (both are part of ADNI's diagnostic algorithm) · early stopping moved off the test set · complete-case cross-check ρ = 0.82 |
-| Progression forecaster | ✅ Run & verified | 24 months, real follow-up (1,634 pairs · 138 conversions) · MMSE-delta MAE **1.549** (baseline 1.859) · conversion AUC **0.796** |
+| Served conversion model | ✅ Run & verified | Refined XGBoost · 14 features · model-supported 12-month risk outlook · CV AUC **0.819 ± 0.031** · held-out AUC **0.796** |
+| Leakage & outcome audit | ✅ Run & verified | FAQ excluded; `mmse_change` excluded because unavailable at first visits · bounded follow-up labels; short follow-up is unknown, not stable |
+| MMSE forecaster | ✅ Run & verified | Real follow-up · held-out MAE **1.549** (baseline 1.859) · R² **0.296** |
 | Explainability | ✅ Run & verified | Global SHAP with per-stage rollup, plus a *measured-only* view so a rarely-ordered test is not diluted to zero |
 | Escalation engine | ✅ Run & verified | Deterministic stage gates, no second ML layer · clinician-in-the-loop `override` · ordering gaps carried forward, never overwritten |
 | Autonomous triage | ✅ Run & verified | `/workup/next`, `/run`, `/plan` (read-only), `/execute` (approved subset, re-checked) |
-| Cohort filtering | ✅ Run & verified | Subjects with no blood/MRI/PET result anywhere are dropped from the served cohort: 3,636 scored → **2,581 served** |
+| Cohort filtering | ✅ Run & verified | From the ADNI serving cohort, subjects with no blood/MRI/PET result anywhere are dropped: **2,581 served** |
 | Backend API | ✅ Run & verified | FastAPI + Swagger at `/docs` · `/health` names the resolved data source · startup batch re-score |
 | PostgreSQL store | ✅ Run & verified (Railway) | Store of record in a deployment · created and seeded on boot · re-seeds when the cohort **or** the served model changes |
-| Frontend | ✅ Run & verified | React + Vite + Tailwind · **zero mock data** · clean production build, no console errors |
-| FHIR R4 | ✅ Run & verified | Export · atomic inbound ingestion · bidirectional orders/results · SMART launch · 104 tests |
+| Frontend | ✅ Run & verified | React + Vite + Tailwind · **zero mock data** · clean production build, no console errors · a second, phone-only design system below 768px |
+| FHIR R4 | ✅ Run & verified | Export · atomic inbound ingestion · bidirectional orders/results · SMART on FHIR launch · **134 tests** across the FHIR and SMART suites · the launch sequence additionally ran **end-to-end against the real public SMART Health IT sandbox** ([§16](#16-limitations)) |
 | ABDM (India) | ✅ Run & verified (mock) | Consent → grant → encrypted pull → re-score · Fidelius checked byte-for-byte against published `fidelius-cli` vectors · 28 tests |
 | Docker & deploy | ✅ Run & verified | One image: SPA build (node 20) served by FastAPI (`python:3.11-slim`, `$PORT`) · `railway.json` · `docker-compose.yml` |
 | CI | ⛔ Not built | Deliberately out of scope |
@@ -121,7 +123,7 @@ python -m venv .venv && source .venv/bin/activate    # Windows: .venv\Scripts\ac
 pip install -r requirements-ml.txt
 # Put the ADNI tables in "ADNI DATA/" first (DUA-restricted — see data/raw/README.md)
 python scripts/inspect_adni_coverage.py              # per-modality coverage, read-only
-python scripts/run_pipeline.py                       # ingest → risk model → progression
+python scripts/run_pipeline.py                       # ingest → model artifacts + follow-up conversion/MMSE forecasts
 
 # ── 2. API ────────────────────────────────────────────────────────────────────
 pip install -r backend/requirements.txt
@@ -145,17 +147,19 @@ docker compose up --build          # web :8080 · API docs :8000
 > [!NOTE]
 > **This repository contains no patient data.** ADNI is access-controlled under
 > a Data Use Agreement and is not redistributable. What ships is the code that
-> turns the tables into a model — plus the trained artifacts, so a deploy serves
-> both model families without retraining.
+> turns the tables into trained artifacts. The app serves the refined conversion
+> model and presents its model-supported **12-month risk outlook**. The older
+> same-visit classifier is not used for the app's default scores.
 
 | Path | What it is | In git? |
 |---|---|---|
 | `ADNI DATA/*.csv` | The 13-table ADNI drop | ❌ never |
-| `data/processed/risk_scores.json` | Per-subject scores + attributions, written **de-identified** | ✅ yes |
+| `data/processed/risk_scores.json` | De-identified precomputed fallback scores; not the default live scores when the refined model is available | ✅ yes |
 | `data/processed/adni_*.{json,csv}` | Serving records, training matrix, visit table, follow-up pairs | ❌ gitignored |
-| `artifacts/pipeline.joblib` + risk model card, SHAP, eval, audit | The served risk model and its evidence | ✅ yes |
-| `artifacts/progression_{delta,conversion}.joblib` + card, report, importance | The served forecaster and its evidence | ✅ yes |
-| `artifacts/rf_pipeline.joblib`, `progression_projection.joblib` | RF fallback · multi-target projection models | ❌ local only |
+| `artifacts/progression_conversion.joblib` + `progression_meta.json` + importance | The served refined conversion classifier, model card and attribution for the 12-month risk outlook | ✅ yes |
+| `artifacts/progression_delta.joblib` + progression report | The served MMSE-change forecaster | ✅ yes |
+| `artifacts/pipeline.joblib` + `model_meta.json` + eval/audit | Separate same-visit classifier artifact; not used for default served scores | ✅ yes |
+| `artifacts/rf_pipeline.joblib`, `progression_projection.joblib` | RF fallback · local-only attribute-estimate models | ❌ local only |
 
 ### Where the cohort lives in a deployment
 
@@ -171,8 +175,8 @@ DATABASE_URL='postgresql://user:pw@host:5432/railway' python scripts/seed_db.py
 Set `PATIENT_DATA=adni` on the service. A healthy boot logs:
 
 ```
-[api] data source: adni+postgres (2582 patients loaded)   # cohort file + database
-[api] data source: postgres    (2582 patients loaded)     # cohort from the database
+[api] data source: adni+postgres (2581 patients loaded)   # cohort file + database
+[api] data source: postgres    (2581 patients loaded)     # cohort from the database
 ```
 
 Three guards protect stored patients — each one written after a real deploy went
@@ -197,12 +201,12 @@ flowchart TB
     ADNI["ADNI DATA/*.csv<br/>13 tables · DUA-restricted"]
 
     subgraph ETL["ETL — scripts/ingest_adni.py"]
-        JOIN["nearest-visit join ±183 d<br/>sentinel filtering<br/>features + real labels<br/>serving cohort + follow-up pairs"]
+        JOIN["nearest-visit join ±183 d<br/>sentinel filtering<br/>features + follow-up labels<br/>serving cohort"]
     end
 
     subgraph TRAIN["Training — scripts/train_*.py"]
-        RISK["risk: 15 features<br/>XGBoost + SHAP"]
-        PROG["progression: 24-month<br/>delta + conversion"]
+        CONV["served 12-month risk outlook:<br/>14 features · XGBoost + SHAP"]
+        PROG["supported outlook: MMSE delta +<br/>accepted forward estimates"]
     end
 
     subgraph APIG["API — backend/app (FastAPI)"]
@@ -216,9 +220,9 @@ flowchart TB
     end
 
     ADNI --> JOIN
-    JOIN --> RISK
+    JOIN --> CONV
     JOIN --> PROG
-    RISK --> STORE
+    CONV --> STORE
     PROG --> STORE
     STORE --> RULES
     RULES --> IO
@@ -251,8 +255,8 @@ every path shares — stage gating and the evidence-gated tier.
 ├── scripts/
 │   ├── ingest_adni.py           drop → visits / features / labels / serving cohort
 │   ├── train_model.py           features → XGB/RF → eval → SHAP → artifacts
-│   ├── train_progression_model.py   24-month delta + conversion + projection targets
-│   ├── build_projection_targets.py  which attributes are predictable enough to show
+│   ├── train_progression_model.py   conversion + MMSE delta + follow-up estimates
+│   ├── build_projection_targets.py  which attributes have enough support to show
 │   ├── run_pipeline.py          ingest + both models, one command
 │   ├── audit_model_fixes.py     leakage + robustness audit
 │   ├── inspect_adni_coverage.py per-modality coverage (read-only)
@@ -271,7 +275,7 @@ every path shares — stage gating and the evidence-gated tier.
 │       ├── service.py           business logic: advance, results, workups
 │       ├── escalation.py        deterministic stage rule engine
 │       ├── model_service.py     served pipeline + batch SHAP
-│       ├── progression.py · visits.py    24-month forecast · visit history
+│       ├── progression.py · visits.py    model-supported risk outlook · visit history
 │       ├── seed_data.py         placeholder stubs (last resort only)
 │       ├── fhir.py              R4 resources (Patient / Observation / RiskAssessment …)
 │       ├── fhir_ingest.py       inbound mapper (pure) — atomic, unit-checked
@@ -288,96 +292,95 @@ every path shares — stage gating and the evidence-gated tier.
 │                                PatientDetail · ProgressionView · TrajectoryChart
 │                                RiskSimulator · FeatureRadarChart · CohortComposition
 │                                CompareView · AutonomousTriage · Interoperability
-│                                AbdmPanel · Footer · TierTag · BrandLogo · widgets
+│                                AbdmPanel · MobileWelcome · Footer · TierTag · BrandLogo · widgets
 │
 └── frontend/                    docker-compose dashboard image (nginx → /api)
 ```
 
 ---
 
-## 8. Risk model card
+## 8. Served model and attribution
 
-Trained on the real ADNI drop: **3,636 subjects**, one row each at their latest
-labelled visit. Labels are the cohort's own clinician assessment —
-`1 = MCI or Dementia` · `0 = CN` (2,168 / 1,468; 59.6% impaired). No simulated
-label rule anywhere.
+The app serves a **model-supported 12-month conversion-risk outlook** from the
+refined XGBoost classifier. It uses 14 features from cognition, blood, MRI and
+PET, with SHAP attribution and a recommended clinical next step. The evaluation
+metrics below are for this served model. Served cohort records are latest visits
+while training baselines are first visits, a train/serve shift that needs
+monitoring.
 
 | Metric | Value |
 |---|---|
-| Model | XGBoost (`pipeline.joblib`), RandomForest fallback alongside |
-| Features | 15, spanning all four stages |
-| 5-fold CV AUC | **0.901 ± 0.011** |
-| Held-out test AUC | **0.902** |
-| Held-out accuracy @0.5 | 0.812 |
-| Stage 1 only (no biomarker) | AUC **0.845** |
-| Biomarker measured | AUC **0.921** |
-| RF fallback | AUC 0.903 |
-| Majority-class baseline | accuracy 0.596, AUC 0.500 |
+| Model | XGBoost conversion classifier (`progression_conversion.joblib`) |
+| Features | 14, spanning cognition, blood, MRI and PET |
+| 5-fold CV AUC | **0.819 ± 0.031** |
+| Held-out test AUC | **0.796** |
+| Held-out PR AUC | **0.386** (8.45% conversion prevalence) |
+| Held-out Brier score | **0.089** |
+| Stage 1 only | AUC **0.822** (n=232) |
+| Blood measured | AUC **0.732** (n=95) |
+| PET measured | AUC **0.793** (n=205) |
 
-`age` · `sex` · `education_years` · `apoe_e4` · `mmse` · `mmse_change` ·
-`adas_cog_13` · `ptau217` · `abeta4240` · `nfl` · `gfap` ·
-`hippocampal_volume` · `hippocampal_icv_ratio` · `centiloids` ·
-`tau_meta_temporal`
+### Confusion matrix at threshold 0.5
 
-The held-out number is honest: the early-stopping fold is carved from **train
-only**, so the test set is never touched during model selection.
+Rows are actual outcome; columns are model prediction. `0` = did not convert,
+`1` = converted.
 
-### 8.1 Attribution — mean |SHAP|
+| Actual \\ Predicted | 0 · No conversion | 1 · Conversion |
+|---|---:|---:|
+| **0 · No conversion** | 273 | 26 |
+| **1 · Conversion** | 14 | 14 |
 
-`overall` is cohort-wide. `measured` counts only the subjects who actually had
-that test, which is the only honest way to read a partially-observed cohort.
+This is the 327-subject held-out set; accuracy is **0.878**.
 
-| # | Feature | Overall | Measured | Coverage | Stage |
-|---|---|---|---|---|---|
-| 1 | `adas_cog_13` | 1.070 | 1.204 | 77.9% | 1 · Cognition |
-| 2 | `mmse` | 0.974 | 0.974 | 100% | 1 · Cognition |
-| 3 | `tau_meta_temporal` | 0.232 | **0.608** | 19.7% | 4 · PET |
-| 4 | `centiloids` | 0.249 | **0.433** | 29.3% | 4 · PET |
-| 5 | `ptau217` | 0.074 | **0.158** | 30.9% | 2 · Blood |
-| 6 | `hippocampal_icv_ratio` | 0.076 | 0.115 | 58.3% | 3 · MRI |
-| 7 | `nfl` | 0.033 | **0.113** | 16.9% | 2 · Blood |
-| 8 | `hippocampal_volume` | 0.074 | 0.103 | 58.3% | 3 · MRI |
-| 9 | `sex` | 0.089 | 0.089 | 99.9% | 1 |
-| 10 | `age` | 0.083 | 0.083 | 99.9% | 1 |
-| 11 | `mmse_change` | 0.064 | 0.077 | 64.2% | 1 |
-| 12 | `abeta4240` | 0.032 | 0.050 | 30.8% | 2 · Blood |
-| 13 | `gfap` | 0.012 | 0.047 | 16.9% | 2 · Blood |
-| 14 | `education_years` | 0.015 | 0.015 | 99.9% | 1 |
-| 15 | `apoe_e4` | 0.017 | 0.014 | 78.7% | 1 · Genetics |
+`age` · `sex` · `education_years` · `mmse` · `adas_cog_13` · `apoe_e4` ·
+`ptau217` · `abeta4240` · `nfl` · `gfap` · `hippocampal_volume` ·
+`hippocampal_icv_ratio` · `centiloids` · `tau_meta_temporal`
 
-| Stage | Σ mean \|SHAP\| | Share |
-|---|---|---|
-| 1 · Cognitive / clinical | 2.313 | 74.7% |
-| 2 · Blood | 0.150 | 4.8% |
-| 3 · MRI | 0.150 | 4.8% |
-| 4 · **PET** | 0.482 | **15.6%** |
+### 8.1 Relative feature attribution
 
-> **"Isn't it just MMSE?"** No. With cognition held out, **PET carries more
-> weight than blood and MRI combined** — 15.6% against 4.8% + 4.8%. PET only
-> looks small cohort-wide because 20–29% of subjects have a scan; among those
-> who do, tau SUVR is the third-strongest result in the model. Both views ship
-> so neither can be quoted misleadingly.
+**Relative feature attribution** in the Overview is the cohort-level, global
+mean absolute SHAP ranking from the active refined model. Its checked-in local
+artifact ranks Amyloid PET just above Tau PET. That is different from the
+patient-detail attribution: those SHAP factors are calculated for one person,
+so **Tau PET can be that patient's top factor**. The patient-specific leader
+need not match the global ranking. The Overview loads global importance from
+`GET /model/info`; individual factors come from that patient's explanation.
+Neither ranking is a causal effect or diagnosis.
 
-### 8.2 Leakage — what is excluded, and why
+| # | Feature | Mean \|SHAP\| | Share | Stage |
+|---|---|---:|---:|---|
+| 1 | Amyloid PET (Centiloids) | 1.186 | 16% | PET |
+| 2 | Tau PET (temporal SUVR) | 1.168 | 16% | PET |
+| 3 | ADAS-Cog 13 | 1.070 | 15% | Cognition |
+| 4 | Hippocampal / ICV ratio | 0.973 | 13% | MRI |
+| 5 | Hippocampal volume | 0.549 | 8% | MRI |
+| 6 | Aβ42/40 ratio (plasma) | 0.380 | 5% | Blood |
+| 7 | NfL (plasma) | 0.380 | 5% | Blood |
+| 8 | Age | 0.311 | 4% | Clinical |
+| 9 | APOE ε4 carrier | 0.292 | 4% | Clinical |
+| 10 | p-tau217 (plasma) | 0.248 | 3% | Blood |
+| 11 | Biological sex | 0.232 | 3% | Clinical |
+| 12 | MMSE | 0.178 | 2% | Cognition |
+| 13 | Education (years) | 0.167 | 2% | Clinical |
+| 14 | GFAP (plasma) | 0.102 | 1% | Blood |
 
-ADNI derives `DIAGNOSIS` from clinical staging, so anything in that derivation
-leaks the label. Two variables are barred from the feature set:
+### 8.2 Outcome and feature exclusions
 
-- **CDR** — the diagnosis is essentially a function of it.
-- **FAQ** — functional status, computed inside the same algorithm.
-
-Both are still loaded for provenance and concordance reporting, never as
-predictors. **MMSE is kept**: it overlaps with diagnosis through standard
-cutoffs but is not deterministic, and a triage tool that could not see a
-cognitive score would be useless. That caveat lives in the model card and in
-`artifacts/model_audit.txt`.
+The target is conversion from a first labelled CN/MCI visit to a strictly worse
+ADNI diagnostic category within the bounded follow-up window. Subjects without
+adequate follow-up are excluded as **unknown outcome**, not treated as stable.
+The served feature set excludes `faq_total` (label leakage) and
+`mmse_change` (available at only 2.5% of first visits, so recent decline speed
+is not part of the baseline model). The model card and evaluation details are in
+`artifacts/progression_meta.json` and `artifacts/progression_report.txt`.
 
 ### 8.3 Tiers require corroborating evidence
 
-The score answers *"how much does this look like the thing we are looking for?"*
-The tier answers *"do we have enough to act on?"* Different questions — and
-cognition is the test the referral was already based on, so it cannot
-corroborate itself.
+The served model provides a **12-month conversion-risk outlook**, not a
+same-visit classification of whether someone currently has MCI or dementia. The
+tier answers *"do we have enough evidence to act on this score?"* Cognition is
+the assessment the referral was already based on, so it cannot corroborate
+itself.
 
 | Tier | Requires |
 |---|---|
@@ -391,15 +394,8 @@ Medium** (mean MMSE 19.5) — their biomarker is on file but sits *beyond* the
 pathway, so the score cannot see it either (§8.4). They are promoted
 automatically the moment the intervening test is reached.
 
-Two things this deliberately does **not** do:
-
-- **It does not weaken triage.** At Stage 1 both Medium and High order the blood
-  panel, so the automation behaves identically — a cognition-only patient is
-  still first to be tested.
-- **It does not touch attribution.** ADAS-Cog 13 and MMSE stay the top two SHAP
-  features because they measurably are (single-feature AUC 0.885 and 0.836).
-  Flattening those bars to look more even would misrepresent the model; the
-  honest lever was the tier rule.
+At Stage 1 both Medium and High order the blood panel, so the automation behaves
+identically — a cognition-only patient is still first to be tested.
 
 ### 8.4 Ordering gaps, and why the stage stops at the first missing test
 
@@ -433,17 +429,17 @@ Served cohort shape: **1,459 · 332 · 231 · 559** across stages 1–4.
 
 ---
 
-## 9. Progression forecaster
+## 9. Model-supported outlook
 
-Same baseline feature vector as the risk model. Labels are **real ADNI
-follow-up outcomes** — a first labelled CN/MCI visit paired with its follow-up
-diagnosis: **1,634 pairs · 138 conversions · 8.45% prevalence** (1,307 train /
-327 test, split by subject). Horizon: **24 months**.
+The served model provides a 12-month conversion-risk outlook alongside
+MMSE-change estimates and supported attribute estimates, based on real ADNI
+follow-up data. Evaluation metrics for the refined classifier and MMSE estimate
+are listed below.
 
 | Model | Metric | Result |
 |---|---|---|
 | MMSE-delta regressor | test MAE | **1.549 pts** (mean-baseline 1.859) |
-| | RMSE / R² | 2.217 / 0.297 (n = 1,387) |
+| | RMSE / R² | 2.217 / 0.296 (n = 1,387) |
 | Conversion classifier | 5-fold CV AUC | **0.819 ± 0.031** |
 | | held-out ROC AUC | **0.796** |
 | | PR AUC | 0.386 — ≈4.6× lift over 8.45% prevalence |
@@ -451,34 +447,41 @@ diagnosis: **1,634 pairs · 138 conversions · 8.45% prevalence** (1,307 train /
 | | accuracy @0.5 | 0.878 (majority baseline 0.914) |
 | | by baseline | CN **0.657** (n = 775, 2.97% convert) · MCI **0.761** (n = 859, 13.39%) |
 
+Held-out confusion matrix at the 0.5 threshold (rows = actual, columns = predicted;
+`0` = no conversion, `1` = conversion):
+
+| Actual \\ Predicted | 0 | 1 |
+|---|---:|---:|
+| **0 · No conversion** | 273 | 26 |
+| **1 · Conversion** | 14 | 14 |
+
 > **Accuracy below the majority baseline is intentional.** At 8.45% prevalence,
 > answering "will not convert" for everyone scores 0.914 while carrying no
 > information. AUC, PR AUC and Brier are the honest measures here.
 
-### Which attributes are projected — and which are refused
+### Which attribute estimates are supported — and which are withheld
 
-A 24-month value is shown only when the model beats *assume no change* by at
-least 10% on CV MAE. On the current run exactly one target clears the bar:
+An attribute estimate is shown only when its model beats *assume no change*
+by at least 10% on CV MAE. On the current run exactly one target clears the bar:
 
 | Target | Gain vs no-change | Shown? |
 |---|---|---|
-| Hippocampal volume | **+28.7%** | ✅ projected |
+| Hippocampal volume | **+28.7%** | ✅ model-supported estimate |
 | ADAS-Cog 13 | +5.1% | ❌ carried at today's value |
 | Centiloids | +6.6% | ❌ carried at today's value |
 | Hippocampal / ICV ratio | +0.0% | ❌ carried at today's value |
 
-The refusal and its reason are surfaced on the page rather than hidden. The
-projection model is local-only (gitignored), so a deployment reports the same
-reasons instead of guessing.
+The reason an attribute estimate is withheld is surfaced on the page. The
+attribute-estimate models are local-only (gitignored), so a deployment reports
+the same reasons instead of guessing.
 
 **Guardrails.** Subject-level holdout · conversion defined over a bounded
 evaluation window, with subjects whose follow-up is too short **excluded rather
 than assumed stable** · a shorter window was rejected for carrying too few
 positives to calibrate · baseline features are *first* visits while served
 records are *latest* visits · `mmse_change` excluded (present in only 2.5% of
-first visits) · `faq_total` excluded (leakage) · the projected tier comes from
-re-scoring the **current risk model** on the projected vector, so both model
-families stay consistent.
+first visits) · `faq_total` excluded (leakage) · the future tier is calculated by
+re-scoring the **served conversion model** on the model-supported future vector.
 
 > A flat forecast is a real answer: **ADNI-0500** (stage 1, MMSE 28, score 0.017)
 > projects a conversion probability near zero and a Low tier.
@@ -516,14 +519,21 @@ field.** CORS allows the Vite dev server plus `CORS_ORIGINS`.
 | `GET /health` · `GET /debug/env` | Resolved data source + count · deploy diagnostics (database shape, outbound FHIR destination, and whether the configured URL needed trimming — never secrets) |
 | `GET /patients?tier=&q=&sort=&page=&limit=` | Ranked worklist. `sort`: `risk-desc`, `risk-asc`, `stage` |
 | `GET /patients/{id}` | Full profile: slots, all SHAP `factors`, `history`, `slots_on_file`, `beyond_stage` |
-| `GET /patients/{id}/explain` | Score, tier, all factors, global importance |
+| `GET /patients/{id}/explain` | Score, tier, patient-specific SHAP factors and global importance |
+| `GET /model/info` | Active served model card, metrics, feature list and global SHAP importance (`legacy` is reference metadata, not the scored model) |
 | `GET /patients/{id}/pipeline` | Stage, stage names, history, `recommended_next` |
-| `GET /patients/{id}/refined` | Refined outlook: observed + projected MMSE with a band, top drivers, projected score/tier |
-| `GET /patients/{id}/progression` | 24-month forecast: trajectory, conversion probability + drivers, projected tier, per-stage score checkpoints |
+| `GET /patients/{id}/refined` | Refined outlook: observed + model-estimated MMSE with a band, top drivers and supported risk score/tier |
+| `GET /patients/{id}/progression` | 12-month risk outlook with trajectory, conversion probability + drivers, risk tier and per-stage score checkpoints |
 | `POST /patients/compare` | Side-by-side comparison of subjects |
 | `POST /patients/score` | Score an arbitrary feature vector with the served pipeline + SHAP (powers the simulator) |
 
 ### Acting on a record
+
+Patients arriving through SMART or an inbound FHIR Bundle are filed in the
+NeuroPilot store, then scored by the configured served model. From patient
+detail, a clinician can also record a result manually. A blank/unavailable test
+remains missing; no result is fabricated. The model-supported risk outlook is
+separate from these import and result-entry workflows.
 
 | Endpoint | Behaviour |
 |---|---|
@@ -548,15 +558,15 @@ field.** CORS allows the Vite dev server plus `CORS_ORIGINS`.
 | `GET /fhir/Observation?patient=` · `/fhir/RiskAssessment?patient=` | LOINC-coded measurements (MMSE 72106-8 …) · score, tier and SHAP basis |
 | `GET /fhir/ServiceRequest?patient=&status=` | Placed orders — `active` = result owed, `completed` = real value on file |
 | `GET /fhir/DiagnosticReport?patient=` | Completed panels; the conclusion describes *the test*, never the model |
-| `POST /fhir/Bundle` | **Inbound.** `transaction` / `collection` / `document` (NRCES). Prefers the **ABHA address** as subject id, keeps a crosswalk, **idempotent** on ABHA + observation date. Atomic: any unmappable resource or wrong UCUM unit rejects the whole bundle with a 422 `OperationOutcome` naming every offender |
+| `POST /fhir/Bundle` | **Inbound.** `transaction` / `collection` / `document` (NRCES). Prefers the **ABHA address** as subject id, keeps a crosswalk, **idempotent** on patient + measurement fingerprint/date. Atomic: any unmappable resource or wrong UCUM unit rejects the whole bundle with a 422 `OperationOutcome` naming every offender; accepted observations update/create the record and recalculate its score/tier |
 | `POST /ingest/fhir` | Direct ingestion for a HIP pushing without a consent exchange |
 | `POST /fhir/push/{id}` | Push orders + results + RiskAssessment + AuditEvent as one atomic FHIR transaction |
-| `GET /fhir/status` | Four phases, outbound reachability, SMART session, exchange-surface counts |
+| `GET /fhir/status` | Four phases, outbound reachability, SMART session, exchange-surface counts — subjects, **`from_fhir`** (subjects posted in over the FHIR boundary), RiskAssessments, observations, open and completed orders |
 | `GET /fhir/smart/launch` | 302 to the authorize URL (PKCE S256, single-use `state`); accepts a per-launch patient and an opaque `launch` context |
-| `GET /fhir/smart/charts` | Browse the server's own `Patient` results — the only ids a launch can name |
+| `GET /fhir/smart/charts` | Browse/filter the connected FHIR server's own `Patient` records (optionally by name), identify records already imported, and select a real server-local id for launch |
 | `GET /fhir/smart/callback` | Exchanges the code, holds the token server-side, returns the browser with `?smart=connected&patient=…`; failures return `?smart=error&reason=…` instead of a raw document |
 | `GET /fhir/smart/status` · `/context` · `POST /refresh` · `POST /logout` | Registration facts, bound patient context, renewal, disconnect — never token material |
-| `POST /fhir/smart/import-patient` | Reads the chart the session is bound to, then runs the **same** ingest + re-score path as a pasted Bundle |
+| `POST /fhir/smart/import-patient` | Explicitly imports the patient bound to the active SMART session: reads `Patient`, `Observation` and `DiagnosticReport`, maps supported measurements, records EHR provenance, then creates or updates and re-scores the NeuroPilot record. Re-importing identical data is idempotent; unmappable data returns an `OperationOutcome` without a partial write |
 
 ### ABDM (India)
 
@@ -592,24 +602,25 @@ React + Vite + Tailwind. **Zero mock data** — `src/api.js` is the only source;
 the API is down you get an error and a Retry, never fake rows.
 
 **Overview** · a self-advancing capability preview, the cohort ribbon (subjects ·
-High/Medium/Low · mean risk), the served model's attribution radar, and the
-top-8 shortlist.
+High/Medium/Low · mean risk · **From FHIR**), the served model's attribution
+radar, and the top-8 shortlist.
 
 **Patients** (`P`) · cohort shape charts, stage-gate pills directly above the
 table they filter, then the ranked worklist: tier/stage filters, search, sort,
 pagination, page state preserved when you open a subject and come back.
 
-**Detail** · score gauge with 0.4/0.7 thresholds · **Clinical Risk Attribution**
-grouped by stage with signed bars, measured values and `model default` badges for
-un-ordered tests · the Cognitive → Blood → MRI → PET stepper · recommended next
+**Detail** · score gauge with 0.4/0.7 thresholds · patient-specific **Clinical
+Risk Attribution** grouped by stage with signed SHAP bars, measured values and
+`model default` badges for un-ordered tests · the Cognitive → Blood → MRI → PET
+stepper · recommended next
 step with Confirm (`409` messages surface inline) and an explicit *Override —
 escalate anyway* path · interactive result entry · the audit trail · printable
 consultation report.
 
 **Progression** · a full page, not a popup: observed → predicted MMSE with
 an uncertainty band, the risk score at each completed stage test plotted as
-outcome-coloured markers, the 24-month projected score at the right edge, metric
-cards, graded conversion probability, top drivers.
+outcome-coloured markers, the model-supported 12-month risk outlook, metric
+cards, conversion probability and top drivers.
 
 **Autonomous Neuro** (`A`) · the approval console. A proposed batch with
 per-action reasoning and a blunt impact verdict, independent approve/reject, a
@@ -619,15 +630,21 @@ supervised run mode with a fixed-height, auto-following log that keeps its rows
 after Stop.
 
 **Interoperability** (`F`) · the four FHIR phases with live state, outbound
-reachability, the bound SMART session with launch/renew/disconnect, a per-launch
-chart picker backed by the server's own `Patient` search, an export-and-push
-panel, an inbound-bundle tester that shows the 422 `OperationOutcome` verbatim,
-and the **ABDM consent flow** panel (request → grant → encrypted pull →
-post-ingest stage, tier and scores).
+reachability, SMART launch/renew/disconnect, and a name-filterable chart picker
+backed by the hospital server's own `Patient` records. Select a server-local
+chart, launch it in context, then explicitly import its `Patient`, `Observation`
+and `DiagnosticReport` data into NeuroPilot. The import maps supported records,
+keeps the EHR id and issuer as provenance, avoids duplicate writes on re-import,
+and shows the new/refreshed subject, score, tier and mapped counts; errors reject
+without partial writes. Also includes preview/export-and-push, a manual inbound
+Bundle tester, and the **ABDM consent flow** (request → grant → encrypted pull →
+post-ingest stage, tier and scores), plus exchange-surface counts. Clinical test
+results can also be recorded from the patient detail workflow; an order alone
+never invents or completes a result.
 
-**Simulator** (`S`) · what-if scoring on the model's real 15 features, with
-per-stage *Measured / Not ordered* switches that send `null` and route the model
-through its learned missing-value path, plus a live SHAP waterfall.
+**Simulator** (`S`) · what-if scoring on the served conversion model's 14
+features, with per-stage *Measured / Not ordered* switches that send `null` and
+route the model through its learned missing-value path, plus a live SHAP waterfall.
 
 **Keyboard** · `D` overview · `P` patients · `S` simulator · `F` interoperability
 · `A` autonomous · `T` theme · `Esc` back · `←` `→` step between patients.
@@ -635,6 +652,26 @@ through its learned missing-value path, plus a live SHAP waterfall.
 **Design** · Inter type, ambient background, glass sticky header with a live
 data-source pill, hairline cards, skeletons, light and dark themes, tier colours
 reserved for risk semantics, and `prefers-reduced-motion` respected throughout.
+
+**On a phone** · below 768px the dashboard is a second design system, not a
+scaled-down desktop. A pale aquamarine page and one aquamarine accent that
+draws edges instead of filling them; cards, badges, glows and explanatory prose
+are dropped rather than shrunk, so what is left is the numbers and the decision.
+Every grid that names a column count at `sm` or above collapses to **two**
+columns — the widest that still leaves a cell readable at 360px — and a lone
+card left over in an odd row spans the full width instead of stranding beside an
+empty half. Below `sm` a ribbon stops being one divided panel and becomes
+uniformly-sized cards. The sliding showcase is replaced by a single full-bleed
+welcome panel whose height is measured from the device viewport, so it meets the
+fold exactly; that panel is the one exemption from the phone rules and renders as
+drawn. `prefers-reduced-motion` is honoured on both.
+
+**On a large screen** · at 1536px and up the layout keeps responding rather than
+growing empty margins. The 1152px rail widens in steps — 1312px at 1536, 1536px
+at 1920, 1792px at 2560 — and the small label type steps up with it, because
+almost all of it is set in px and would otherwise stay fixed while the page grew
+around it. Prose keeps its own narrow measure, so only the rails widen. Nothing
+below 1536px is affected.
 
 ---
 
@@ -677,10 +714,19 @@ Every variable is documented in `.env.example`.
 **229 cases, all green.** `conftest.py` forces the in-memory store
 (`DATABASE_URL=""`), so no test can ever mutate a persistent database.
 
+Every suite runs against a **mock** that speaks the real contract shapes — an
+in-process mock EHR for the SMART and chart-import suites, a mock Consent
+Manager plus mock HIP for ABDM, all over real HTTP. That is deliberate: a test
+suite must not depend on a network it does not control. The one **live**
+interoperability exercise is separate and manual — a real SMART launch against
+the public SMART Health IT sandbox — and is recorded in
+[§16](#16-limitations) as a one-time verification, not as test coverage. The two
+claims are kept apart on purpose.
+
 | Suite | Cases | Covers |
 |---|---|---|
 | `test_api.py` | 45 | Worklist, detail, attribution, ordering gaps, results, thresholds, tier gating |
-| `test_fhir_import.py` | 34 | Chart browsing, SMART-session import, token scoping per server, credential-leak guards |
+| `test_fhir_import.py` | 34 | Chart browsing, SMART-session import, token scoping per server, credential-leak guards — against a mock EHR speaking the real contract shapes |
 | `test_smart.py` | 30 | Discovery, PKCE/state, callback, refresh, expiry, no-token-material guarantees |
 | `test_fhir_phase3.py` | 27 | Orders, reports, push, status, launch targeting, value validation, export robustness |
 | `test_fhir.py` | 17 | Export resources · **never-emit-Condition** invariant · values match the record |
@@ -711,7 +757,7 @@ cd backend && uvicorn app.main:app --reload
 curl http://127.0.0.1:8000/health                            # data_source: adni (+postgres)
 curl "http://127.0.0.1:8000/patients?limit=3"                # top-3 ranked subjects
 curl http://127.0.0.1:8000/patients/ADNI-0500/explain        # full attribution
-curl http://127.0.0.1:8000/patients/ADNI-0500/progression    # 24-month forecast
+curl http://127.0.0.1:8000/patients/ADNI-0500/progression    # model-supported 12-month risk outlook
 curl -X POST http://127.0.0.1:8000/workup/next               # one autonomous step
 curl -X POST http://127.0.0.1:8000/workup/plan \
      -H "Content-Type: application/json" -d '{"limit": 5}'   # read-only proposal
@@ -730,6 +776,14 @@ curl -s $BASE/abdm/consent/$S              # RECEIVED + post-ingest scores
 
 # 5 · Dashboard
 npm install && npm run build && npm run dev
+
+# 6 · SMART on FHIR against a REAL public sandbox (one-time, manual — not a test)
+#      register the client id at launch.smarthealthit.org, set SMART_CLIENT_ID,
+#      SMART_REDIRECT_URI and FRONTEND_BASE_URL to the host the EHR must return to
+curl -s "http://127.0.0.1:8000/fhir/smart/launch?iss=https://launch.smarthealthit.org/v/r4/fhir&format=json" \
+  | python -m json.tool          # the authorize URL: PKCE S256 + single-use state
+curl -s http://127.0.0.1:8000/fhir/smart/status | python -m json.tool
+#      -> "connected": true, "iss": "https://launch.smarthealthit.org/v/r4/fhir"
 ```
 
 ---
@@ -743,34 +797,46 @@ npm install && npm run build && npm run dev
 **Data & model**
 
 - **ADNI is a research cohort, not a population sample** — highly educated,
-  largely Western, volunteer-recruited — and the latest-visit label mix reflects
-  years of follow-up rather than community prevalence. Real deployment needs
-  local validation data.
+  largely Western, volunteer-recruited. Its follow-up and conversion rates do
+  not represent community prevalence. Real deployment needs local validation
+  data.
 - **ADNI is DUA-restricted.** The CSVs stay gitignored; this repository ships the
   code that turns them into a model, never the cohort.
-- **PET is measured in a minority of subjects** (tau 19.7%, amyloid 29.3%),
-  because those scans were added in later study phases. Both SHAP views are
-  published for that reason.
-- **Served records are latest visits, while the progression models train on first
-  visits.** The 24-month horizon is what the data supports; a shorter window was
-  rejected for carrying too few positives to calibrate.
-- **APOE-ε4 is a weak cross-sectional signal here.** Binary carrier, copy count,
-  an explicit APOE × age interaction, and dropping it entirely all land within
-  0.0006 CV AUC of each other (`artifacts/model_audit.txt`). Its value is in
-  progression, not same-day prevalence.
-- **Only hippocampal volume is projected forward.** ADAS-Cog 13, Centiloids and
-  hippocampal/ICV ratio fail the *beat assume-no-change by 10%* bar and are
-  carried at today's value, with the reason shown on the page.
-- **The forecast assumes nothing changes** — standard care continuing. A real
-  intervention would alter the trajectory. It is a probability, never a guarantee.
+- **Training and serving visits differ.** The refined conversion model trains
+  from first labelled CN/MCI visits, while served cohort records represent latest
+  visits; this train/serve shift needs monitoring.
+- **PET coverage varies by dataset and model artifact.** For the refined model's
+  checked evaluation cohort, amyloid coverage is about 59% and tau PET coverage
+  about 25%. Individual patient-specific SHAP factors can rank differently from
+  the global importance list shown on Overview.
+- **The retained same-visit classifier is not the default served model.** Its
+  evaluation and attribution files describe a different task; they are not
+  evidence for the live conversion scores. The default configuration serves
+  `progression_conversion.joblib`.
+- **Only hippocampal volume has a supported attribute estimate.** ADAS-Cog 13,
+  Centiloids and hippocampal/ICV ratio fail the *beat assume-no-change by 10%*
+  bar and are carried at today's value, with the reason shown on the page.
+- **This is decision support, not a diagnosis.** A real intervention or new
+  clinical information can change the patient's outlook; the model output is one
+  input to clinician review.
 
 **Interoperability**
 
+- **SMART on FHIR is verified against a real public EHR sandbox, not a mock.** The
+  full OAuth2/PKCE launch was run live: client registration with SMART Health IT's
+  `launch.smarthealthit.org`, real token exchange, and a real Synthea patient and
+  encounter context returned to the session — `/fhir/smart/status` reported
+  `connected: true` against `iss: https://launch.smarthealthit.org/v/r4/fhir`. What
+  remains is registration with a **production** EHR — Epic, Oracle Health, or a
+  hospital's own FHIR server — which needs institutional access this project does
+  not have.
 - **No real hospital network has been exercised.** Export, ingestion, orders,
-  results, chart browsing and the SMART launch are implemented and tested, but the
-  SMART flow is verified against a **mock** server and an outbound push needs
-  `FHIR_BASE_URL` pointed at a real server. The remaining external step is
-  registering a client id with an EHR sandbox.
+  results and chart browsing are implemented and tested, but the automated suites
+  run against a **mock** server speaking the real contract shapes, and an outbound
+  push needs `FHIR_BASE_URL` pointed at a real server. The live sandbox run above
+  is a **one-time manual verification, not test coverage** — "tested against a
+  real sandbox" (manual) and "tested in the suite" (automated, against a mock) are
+  two different claims and are not conflated.
 - **SMART sessions are per-process memory** — unencrypted, lost on restart, not
   shared across replicas. Right for a sandbox demo; explicitly not production
   authentication.

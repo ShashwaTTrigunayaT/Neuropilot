@@ -188,7 +188,16 @@ export default function Interoperability({
     setChartError('');
   }, [launchIss]);
 
-  const patientOptions = useMemo(() => patients.slice(0, 400), [patients]);
+  const patientOptions = useMemo(() => {
+    const options = patients.slice(0, 400);
+    // Keep an explicitly selected/current patient in the native select even if
+    // it falls outside the capped cohort slice (or arrived from an EHR import).
+    if (patientId && !options.some((patient) => patient.id === patientId)) {
+      const selectedPatient = patients.find((patient) => patient.id === patientId);
+      options.unshift(selectedPatient || { id: patientId });
+    }
+    return options;
+  }, [patients, patientId]);
 
   /** The standalone launch URL, carrying the chosen chart and server.
    *
@@ -916,14 +925,18 @@ export default function Interoperability({
                 Patient to export
               </span>
               <select
+                id="interop-export-patient"
+                name="patientId"
                 value={patientId}
                 onChange={(e) => setPatientId(e.target.value)}
+                disabled={patientOptions.length === 0}
                 style={MONO}
-                className="mt-1.5 w-full rounded-xl border border-line bg-white px-3 py-2 text-[11px] font-semibold text-ink outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20 dark:border-darkBorder dark:bg-darkCard dark:text-darkText"
+                className="mt-1.5 w-full min-w-0 cursor-pointer appearance-none rounded-xl border border-line bg-white px-3 py-2 text-[11px] font-semibold text-ink outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-darkBorder dark:bg-darkCard dark:text-darkText"
               >
+                {patientOptions.length === 0 && <option value="">No patients available</option>}
                 {patientOptions.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.id}
+                    {p.id}{p.name ? ` · ${p.name}` : ''}
                   </option>
                 ))}
               </select>

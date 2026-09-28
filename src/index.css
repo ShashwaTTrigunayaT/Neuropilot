@@ -900,6 +900,107 @@ body {
   }
 }
 
+/* ========================================================== LARGE DISPLAYS
+ * THE OTHER END OF THE RANGE.
+ *
+ * A phone has its own design system above; this is what happens at the other
+ * end. Everything here is scoped to `min-width: 1536px`, so below that the
+ * desktop renders byte-for-byte as it always did.
+ *
+ * The problem on a TV or a 4K monitor is not that the layout breaks. It is that
+ * it stops RESPONDING. Every rail in the app is `max-w-6xl` (1152px) — the app
+ * bar, the page shell, the footer, every landing band — so past that width the
+ * page grows empty margins on both sides and the whole console sits as a strip
+ * in the middle of a large panel. Two levers fix that, both deliberately
+ * conservative:
+ *
+ *   1 · THE COLUMN GROWS with the viewport, in steps, so the extra width is
+ *       used instead of being left as margin. Prose keeps its own narrow
+ *       `max-w-2xl`/`max-w-3xl` measure — only the rails widen.
+ *
+ *   2 · THE SMALL TYPE GROWS with it. This app sets almost all of its label
+ *       type in px (`text-[10.5px]` and friends — 467 of them, against 63 on
+ *       the rem scale), so raising `html`'s font-size would widen the layout
+ *       while leaving the text exactly as small: the wrong way round. `zoom`
+ *       would scale both, but it also multiplies `100dvh`, which would break
+ *       the hero pinned to the measured viewport height. So the sizes step up
+ *       here, where it stays bounded: only the sub-15px tier — the part that
+ *       becomes illegible across a room — and only by a step.
+ *
+ * Larger headings are left alone. At 24–52px they are already right on a big
+ * screen, and nudging them would change the composition for no gain.
+ *
+ * `--np-type-bump` is one number per tier; the rules below read it, so the
+ * steps can be retuned in three places rather than thirty-three.
+ * ======================================================================== */
+@media (min-width: 1536px) {
+  :root {
+    --np-type-bump: 1px;
+  }
+  .max-w-6xl {
+    max-width: 82rem !important;
+  }
+
+  /*
+   * The attribute selectors are not a shortcut around the escaping in
+   * `.text-\[10\.5px\]` — they are the same pattern the phone block already
+   * uses to reach utility classes by name. The trailing `px]` is what keeps
+   * each one unambiguous: `text-[10px]` is not a substring of `text-[10.5px]`,
+   * and `text-[9px]` is not a substring of `text-[19px]`.
+   */
+  [class*="text-[9px]"] {
+    font-size: calc(9px + var(--np-type-bump)) !important;
+  }
+  [class*="text-[9.5px]"] {
+    font-size: calc(9.5px + var(--np-type-bump)) !important;
+  }
+  [class*="text-[10px]"] {
+    font-size: calc(10px + var(--np-type-bump)) !important;
+  }
+  [class*="text-[10.5px]"] {
+    font-size: calc(10.5px + var(--np-type-bump)) !important;
+  }
+  [class*="text-[11px]"] {
+    font-size: calc(11px + var(--np-type-bump)) !important;
+  }
+  [class*="text-[11.5px]"] {
+    font-size: calc(11.5px + var(--np-type-bump)) !important;
+  }
+  [class*="text-[12px]"] {
+    font-size: calc(12px + var(--np-type-bump)) !important;
+  }
+  [class*="text-[12.5px]"] {
+    font-size: calc(12.5px + var(--np-type-bump)) !important;
+  }
+  [class*="text-[13px]"] {
+    font-size: calc(13px + var(--np-type-bump)) !important;
+  }
+  [class*="text-[13.5px]"] {
+    font-size: calc(13.5px + var(--np-type-bump)) !important;
+  }
+  [class*="text-[15px]"] {
+    font-size: calc(15px + var(--np-type-bump)) !important;
+  }
+}
+
+@media (min-width: 1920px) {
+  :root {
+    --np-type-bump: 2px;
+  }
+  .max-w-6xl {
+    max-width: 96rem !important;
+  }
+}
+
+@media (min-width: 2560px) {
+  :root {
+    --np-type-bump: 3px;
+  }
+  .max-w-6xl {
+    max-width: 112rem !important;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

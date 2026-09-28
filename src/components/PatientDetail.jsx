@@ -1088,7 +1088,7 @@ function AuditSection({ patient }) {
       {history.length === 0 ? (
         <p className="mt-5 text-xs text-muted dark:text-darkMuted">No events recorded.</p>
       ) : (
-        <ol className="relative mt-5 space-y-4 pl-6">
+        <ol data-np-keep="" className="relative mt-5 space-y-4 pl-6">
           <span
             aria-hidden="true"
             className="absolute bottom-1 left-[6px] top-1 w-px bg-gradient-to-b from-accent/60 via-line to-transparent dark:via-darkBorder"
