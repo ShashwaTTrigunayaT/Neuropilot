@@ -157,20 +157,20 @@ export default function AllPatients({ patients, onSelect, onSimulate, onCompare 
                   type="button"
                   onClick={() => setTierFilter(active ? 'all' : t)}
                   title={active ? 'Clear this filter' : `Show ${TIER_LABEL[t]} priority only`}
-                  className={`relative w-[90px] overflow-hidden rounded-2xl border px-2.5 pb-2 pt-2.5 text-left transition sm:w-[106px] sm:px-3.5 sm:pb-2.5 sm:pt-3 ${
+                  className={`relative flex h-[76px] w-[90px] flex-col justify-between overflow-hidden rounded-2xl border px-2.5 pb-2 pt-2.5 text-left transition sm:h-[82px] sm:w-[106px] sm:px-3.5 sm:pb-2.5 sm:pt-3 ${
                     active
                       ? 'border-accent/50 bg-white shadow-soft ring-1 ring-accent/30 dark:border-accent/50 dark:bg-darkCard'
                       : 'border-line/80 bg-white/60 hover:border-accent/40 hover:bg-white dark:border-darkBorder dark:bg-darkCard/50 dark:hover:bg-darkCard'
                   }`}
                 >
                   <span className="absolute inset-x-0 top-0 h-[3px]" style={{ background: TIER_HEX[t] }} />
-                  <p className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-muted dark:text-darkMuted">
+                  <p className="whitespace-nowrap text-[9.5px] font-bold uppercase tracking-[0.14em] text-muted dark:text-darkMuted">
                     {TIER_LABEL[t]}
                   </p>
                   <p style={MONO} className="mt-1 text-[19px] font-black leading-none tabular-nums text-ink dark:text-darkText">
                     {n.toLocaleString()}
                   </p>
-                  <p style={MONO} className="mt-1 text-[9.5px] tabular-nums text-muted dark:text-darkMuted">
+                  <p style={MONO} className="mt-1 whitespace-nowrap text-[9.5px] tabular-nums text-muted dark:text-darkMuted">
                     {share}% of cohort
                   </p>
                 </button>
