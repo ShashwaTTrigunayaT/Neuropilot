@@ -30,7 +30,7 @@ import {
   Pill,
   RibbonStat,
   Row,
-  FoldHeader,
+  SectionHeader,
   shortId,
 } from './widgets.jsx';
 
@@ -134,7 +134,6 @@ export default function Interoperability({
   const [charts, setCharts] = useState(null);
   const [chartError, setChartError] = useState('');
   const [chartName, setChartName] = useState('');
-  const [patientSearch, setPatientSearch] = useState('');
 
   const [patientId, setPatientId] = useState(initialPatientId || patients[0]?.id || '');
   const [exported, setExported] = useState(null);
@@ -199,27 +198,6 @@ export default function Interoperability({
     }
     return options;
   }, [patients, patientId]);
-  const mobilePatientOptions = useMemo(() => {
-    const options = [...patients];
-    if (patientId && !options.some((patient) => patient.id === patientId)) {
-      options.unshift({ id: patientId });
-    }
-    return options;
-  }, [patients, patientId]);
-  const filteredPatientOptions = useMemo(() => {
-    const query = patientSearch.trim().toLowerCase();
-    const matches = query
-      ? mobilePatientOptions.filter((patient) =>
-          `${patient.id} ${patient.name || ''}`.toLowerCase().includes(query)
-        ).slice(0, 100)
-      : mobilePatientOptions.slice(0, 100);
-    const selectedPatient = mobilePatientOptions.find((patient) => patient.id === patientId);
-    if (selectedPatient && !matches.some((patient) => patient.id === patientId)) {
-      matches.unshift(selectedPatient);
-    }
-    return matches;
-  }, [mobilePatientOptions, patientId, patientSearch]);
-
   /** The standalone launch URL, carrying the chosen chart and server.
    *
    * Omitted parameters are omitted on purpose: `iss` then falls back to the
@@ -584,7 +562,7 @@ export default function Interoperability({
       {/* ── Connection detail — one surface split by a hairline ────── */}
       <div className={`${CARD_RIBBON} divide-y divide-line md:grid lg:grid-cols-2 lg:divide-x lg:divide-y-0 dark:divide-darkBorder`}>
         <div className="p-4 sm:p-6">
-          <FoldHeader
+          <SectionHeader
             icon={Server}
             title="Outbound hospital server"
             right={outbound.reachable ? <Pill tone="ok">Reachable</Pill> : <Pill tone="warn">Offline</Pill>}
@@ -619,7 +597,7 @@ export default function Interoperability({
         </div>
 
         <div className="p-4 sm:p-6">
-          <FoldHeader
+          <SectionHeader
             icon={Plug}
             title="SMART on FHIR"
             right={
@@ -684,7 +662,7 @@ export default function Interoperability({
        * that list needs room to be readable. This used to live inside the
        * half-width session column, where it read as a pile of cramped boxes. */}
       <div className={`${CARD} transition-shadow duration-300 hover:shadow-lift`}>
-        <FoldHeader
+        <SectionHeader
           icon={Target}
           title="Standalone launch"
           right={
@@ -890,7 +868,7 @@ export default function Interoperability({
        * than two cards implying two separate things. ── */}
       <div className={`${CARD_RIBBON} divide-y divide-line md:grid lg:grid-cols-2 lg:divide-x lg:divide-y-0 dark:divide-darkBorder`}>
         <div className="p-4 sm:p-6">
-          <FoldHeader icon={Activity} title="Exchange surface" />
+          <SectionHeader icon={Activity} title="Exchange surface" />
 
           {/* The composition, as one bar. It is the shape of the exchange before
               it is the count of it, and the row dots below key into it. */}
@@ -937,69 +915,11 @@ export default function Interoperability({
         </div>
 
         <div className="p-4 sm:p-6">
-          <FoldHeader icon={Send} title="Export & push a patient" />
+          <SectionHeader icon={Send} title="Export & push a patient" />
           {/* A labelled field, then the two actions on their own line: the old
               single row wrapped unpredictably and read as three equal things. */}
           <div className="mt-3.5">
-            <div className="block md:hidden">
-              <label htmlFor="interop-export-patient-search" className="block">
-                <span className="text-[9.5px] font-bold uppercase tracking-[0.12em] text-dust dark:text-darkMuted">
-                  Patient to export
-                </span>
-                <input
-                  id="interop-export-patient-search"
-                  type="search"
-                  value={patientSearch}
-                  onChange={(event) => setPatientSearch(event.target.value)}
-                  placeholder="Search patient ID or name…"
-                  autoComplete="off"
-                  className="mt-1.5 w-full min-w-0 rounded-xl border border-line bg-white px-3 py-2 text-[12px] text-ink outline-none transition placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/20 dark:border-darkBorder dark:bg-darkCard dark:text-darkText"
-                />
-              </label>
-              {!patientSearch.trim() && mobilePatientOptions.length > 100 && (
-                <p className="mt-1.5 text-[10px] text-muted dark:text-darkMuted">
-                  Showing the first 100 patients; search to find another.
-                </p>
-              )}
-              <div
-                role="listbox"
-                aria-label="Patients to export"
-                className="mt-2 max-h-56 overflow-y-auto rounded-xl border border-line/70 bg-white dark:border-darkBorder/70 dark:bg-darkCard"
-              >
-                {filteredPatientOptions.length === 0 ? (
-                  <p className="px-3 py-3 text-[11px] text-muted dark:text-darkMuted">
-                    {patientOptions.length ? 'No patients match that search.' : 'No patients available.'}
-                  </p>
-                ) : filteredPatientOptions.map((patient) => {
-                  const selected = patient.id === patientId;
-                  return (
-                    <button
-                      key={patient.id}
-                      type="button"
-                      role="option"
-                      aria-selected={selected}
-                      onClick={() => setPatientId(patient.id)}
-                      className={`flex min-h-11 w-full items-center justify-between gap-3 border-b border-line/60 px-3 py-2 text-left last:border-b-0 dark:border-darkBorder/60 ${
-                        selected ? 'bg-accent/[0.08]' : 'bg-transparent'
-                      }`}
-                    >
-                      <span className="min-w-0">
-                        <span className="block truncate text-[11.5px] font-semibold text-ink dark:text-darkText">
-                          {patient.name || patient.id}
-                        </span>
-                        {patient.name && (
-                          <span style={MONO} className="block truncate text-[10px] text-muted dark:text-darkMuted">
-                            {patient.id}
-                          </span>
-                        )}
-                      </span>
-                      {selected && <CheckCircle2 className="h-4 w-4 shrink-0 text-accent" />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            <label htmlFor="interop-export-patient" className="hidden md:block">
+            <label htmlFor="interop-export-patient" className="block">
               <span className="text-[9.5px] font-bold uppercase tracking-[0.12em] text-dust dark:text-darkMuted">
                 Patient to export
               </span>
@@ -1184,8 +1104,7 @@ export default function Interoperability({
       </div>
 
       {/* ── Inbound bundle tester ──────────────────────────────── */}
-      <div className={CARD}>
-        <FoldHeader
+      <div className={CARD}>          <SectionHeader
           icon={DownloadCloud}
           title="Inbound ingestion"
           right={<Pill tone="accent">atomic — all or nothing</Pill>}
