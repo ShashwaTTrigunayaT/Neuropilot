@@ -230,7 +230,7 @@ export default function TrajectoryChart({
           y={PAD_.t}
           width={W_ - PAD_.l - PAD_.r}
           height={mainBottom - PAD_.t}
-          rx={large ? 14 : 10}
+          rx={isLarge ? 14 : 10}
           fill={`url(#riskPanel-${uid})`}
         />
 
