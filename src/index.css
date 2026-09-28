@@ -470,13 +470,7 @@ body {
     border-color: rgb(var(--accent-rgb) / 0.55) !important;
   }
 
-  /*
-   * The page keeps its wash on a phone.
-   *
-   * It used to be forced to a flat fill, which suited a dark screen; a light page
-   * with no washes at all reads as one unbroken sheet, so the accent gradients are
-   * left in place and vary the tone across it instead.
-   */
+  /* The page keeps its wash on a phone. */
   body {
     background-color: rgb(var(--paper-rgb));
   }
@@ -500,11 +494,13 @@ body {
   .dark .dot-grid {
     background-image: none;
   }
-  .glass-panel,
-  .dark .glass-panel {
+  .glass-panel {
     background-color: #ffffff;
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
+  }
+  .dark .glass-panel {
+    background-color: rgb(var(--dark-card-rgb));
   }
 
   /* glows are atmosphere, not signal */
@@ -558,26 +554,9 @@ body {
     background-color: rgb(var(--dark-card-rgb)) !important;
   }
 
-  /*
-   * The INNER content card, and its text.
-   *
-   * The system is a three-level hierarchy: a deep navy page holds violet
-   * containers, and the content inside a container rests on a WHITE card whose
-   * text is dark blue-grey (#1E2245). The app only ever had two levels, so the
-   * surfaces that are a nested tile — the shaded value blocks, glyph chips and
-   * small boards that sit INSIDE a panel — are promoted to white here and get
-   * the system's dark text.
-   *
-   * Nothing else is re-coloured: text on the navy page and text on the violet
-   * container stay white, which is what the hierarchy calls for.
-   */
+  /* Nested subtle surfaces follow the active dark palette instead of staying white. */
   [class*="dark:bg-darkBorderSubtle"]:is(.dark *) {
-    background-color: #ffffff !important;
-  }
-  [class*="dark:bg-darkBorderSubtle"]:is(.dark *)
-    :is(h1, h2, h3, h4, h5, h6, p, span, li, strong, b, em, code, td, th, small, label, time, dt, dd, div, svg),
-  [class*="dark:bg-darkBorderSubtle"]:is(.dark *):is(svg) {
-    color: rgb(var(--ink-rgb));
+    background-color: rgb(var(--dark-card-rgb)) !important;
   }
 
   /*
@@ -607,15 +586,6 @@ body {
   p.leading-relaxed:not([data-np-preview] *):not([data-np-keep]):not([data-np-keep] *),
   p.text-muted:not([class*="uppercase"]):not([data-np-preview] *):not([data-np-keep]):not([data-np-keep] *) {
     display: none;
-  }
-
-  /* Audit event text and timestamps are essential record data, not commentary. */
-  [data-np-audit-text] {
-    display: block !important;
-    color: rgb(var(--ink-rgb)) !important;
-  }
-  [data-np-audit-text][style*="font-family"] {
-    color: rgb(var(--muted-rgb)) !important;
   }
 
   /*

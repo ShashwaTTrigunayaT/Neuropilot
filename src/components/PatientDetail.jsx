@@ -67,12 +67,12 @@ function ScoreSection({ patient }) {
   ];
 
   return (
-    <section>
-      <div className="flex flex-col items-center gap-7 lg:flex-row lg:items-center lg:gap-10">
+    <section className="w-full min-w-0">
+      <div className="flex w-full min-w-0 flex-col items-center gap-7 lg:flex-row lg:items-center lg:gap-10">
         <RiskGauge score={patient.score} tier={tier} />
 
-        <div className="w-full flex-1">
-          <div className="flex items-baseline justify-between gap-4">
+        <div className="w-full min-w-0 flex-1">
+          <div className="flex min-w-0 items-baseline justify-between gap-4">
             <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-muted dark:text-darkMuted">
               Predicted probability
             </p>
@@ -133,7 +133,7 @@ function ScoreSection({ patient }) {
             {stats.map((s) => (
               <div
                 key={s.label}
-                className={`relative overflow-hidden rounded-xl border px-3.5 pb-2.5 pt-3.5 ${
+                className={`relative min-w-0 overflow-hidden rounded-xl border px-3.5 pb-2.5 pt-3.5 ${
                   s.accent
                     ? 'border-accent/35 bg-accent/[0.07]'
                     : 'border-line/70 bg-white/70 dark:border-darkBorder/70 dark:bg-darkCard/50'
@@ -1186,7 +1186,7 @@ const BTN_CHIP =
  */
 function DossierCard({ icon: Icon, title, meta, tone = 'var(--accent)', children }) {
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-line/70 bg-white/70 shadow-soft dark:border-darkBorder/70 dark:bg-darkCard/60">
+    <div className="relative w-full min-w-0 overflow-hidden rounded-2xl border border-line/70 bg-white/70 shadow-soft dark:border-darkBorder/70 dark:bg-darkCard/60">
       <span
         aria-hidden="true"
         className="absolute inset-x-0 top-0 h-[3px]"
@@ -1315,7 +1315,7 @@ export default function PatientDetail({
      * `margin-top` space-y gives it simply cancels the pull-up. Explicit margins
      * on the three blocks below cannot fight each other.
      */
-    <div className="animate-fade-up">
+    <div className="animate-fade-up w-full min-w-0">
       {/*
        * Print-only record header.
        *
@@ -1339,7 +1339,7 @@ export default function PatientDetail({
       {/* ================================================================ */}
       {/* Masthead — the same lockup as the worklist and the simulator      */}
       {/* ================================================================ */}
-      <header className="relative -mt-5">
+      <header className="relative -mt-5 w-full min-w-0">
         {/* A soft accent wash behind the lockup. The block sat on flat paper
             with nothing behind it, which is most of why three lines of type
             read as plain; this gives the surface depth without adding a box. */}
@@ -1475,6 +1475,7 @@ export default function PatientDetail({
        * it and disappear. Below `xl` this is an ordinary toolbar in the flow.
        */}
       <div className="no-print z-20 -mx-4 mt-5 border-b border-line/70 bg-paper/95 px-4 py-2 backdrop-blur-xl sm:-mx-6 sm:px-6 xl:sticky xl:top-[75px] dark:border-darkBorder/70 dark:bg-darkBg/95">
+        <div className="mx-auto w-full max-w-6xl">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5">
           {/* Pathway progress, compressed to four segments: the toolbar doubles
               as the status line, so the stage is readable from anywhere. */}
@@ -1579,10 +1580,11 @@ export default function PatientDetail({
             </button>
           </div>
         </div>
+        </div>
       </div>
 
-      <div className="mt-5 grid items-start gap-8 lg:grid-cols-5">
-        <div className="space-y-8 lg:col-span-3">
+      <div className="mt-5 grid w-full min-w-0 grid-cols-1 items-start gap-8 lg:grid-cols-5">
+        <div className="w-full min-w-0 space-y-8 lg:col-span-3">
           <HeroPanel tier={patient.risk_tier}>
             <ScoreSection patient={patient} />
           </HeroPanel>
@@ -1616,7 +1618,7 @@ export default function PatientDetail({
           </DossierCard>
         </div>
 
-        <div className="space-y-8 lg:col-span-2">
+        <div className="w-full min-w-0 space-y-8 lg:col-span-2">
           {/* Unified Biomarker Profile & Audit Trail */}
           <DossierCard
             icon={ClipboardList}

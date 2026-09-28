@@ -29,7 +29,7 @@
  * custom-widget convention and zero new dependencies.
  */
 import { useState } from 'react';
-import { ACCENT, MONO, TIER_HEX } from './widgets.jsx';
+import { ACCENT, MONO, TIER_HEX, useIsPhone } from './widgets.jsx';
 
 const W = 560;
 const H = 270;
@@ -100,13 +100,14 @@ export default function TrajectoryChart({
   large = false,
 }) {
   const [hover, setHover] = useState(null);
+  const isPhone = useIsPhone();
+  const isLarge = large && !isPhone;
 
-  const W_ = large ? W_LG : W;
-  const H_ = large ? H_LG : H;
-  const PAD_ = large ? PAD_LG : PAD;
-  const mainBottom = large ? MAIN_BOTTOM_L : MAIN_BOTTOM_S;
-  const big = large ? 1 : 0.85;
-  const uid = large ? 'lg' : 'sm';
+  const W_ = isLarge ? W_LG : W;
+  const H_ = isLarge ? H_LG : H;
+  const PAD_ = isLarge ? PAD_LG : PAD;
+  const mainBottom = isLarge ? MAIN_BOTTOM_L : MAIN_BOTTOM_S;
+  const uid = isLarge ? 'lg' : 'sm';
 
   const obs = riskTrajectory.filter((p) => p.score != null);
   const today = obs[obs.length - 1] || { t: 0, score: currentScore };
@@ -188,7 +189,7 @@ export default function TrajectoryChart({
           : null,
       ].filter(Boolean)
     : [];
-  const cardW = large ? 150 : 124;
+  const cardW = isLarge ? 150 : 124;
   const cardH = 26 + cardLines.length * 14;
   const cardX = hovered
     ? x(hovered.t) + cardW + 18 > W_ - PAD_.r
@@ -201,9 +202,10 @@ export default function TrajectoryChart({
 
   return (
     <div>
+      <div className={isPhone ? 'overflow-x-auto' : undefined}>
       <svg
         viewBox={`0 0 ${W_} ${H_}`}
-        className="w-full h-auto select-none"
+        className={`h-auto select-none ${isPhone ? 'w-[520px] max-w-none' : 'w-full'}`}
         role="img"
         aria-label={`Risk score across ${obs.length} real visit${obs.length === 1 ? '' : 's'}, with the forecast to ${FORECAST_LABEL}`}
       >
@@ -335,7 +337,7 @@ export default function TrajectoryChart({
 
         {/* the break itself: a zigzag on the axis at "today" */}
         <g transform={`translate(${x(today.t)}, ${mainBottom})`}>
-          <rect x="-8" y="-4" width="16" height="8" fill="#fff" className="dark:fill-[#11151C]" />
+          <rect x="-8" y="-4" width="16" height="8" className="fill-white dark:fill-[#11151C]" />
           <path d="M-5,-3 L-1,3 M1,-3 L5,3" stroke="currentColor" className="text-muted dark:text-darkMuted" strokeWidth="1.4" strokeLinecap="round" fill="none" />
         </g>
 
@@ -353,7 +355,7 @@ export default function TrajectoryChart({
             stroke="currentColor"
             className="animate-fade-in text-ink dark:text-darkText"
             style={{ animationDelay: '0.15s' }}
-            strokeWidth={large ? 8 : 6}
+            strokeWidth={isLarge ? 8 : 6}
             strokeLinecap="round"
             strokeLinejoin="round"
             opacity="0.07"
@@ -366,7 +368,7 @@ export default function TrajectoryChart({
             stroke="currentColor"
             className="traj-draw text-ink dark:text-darkText"
             pathLength="1"
-            strokeWidth={large ? 2.6 : 2.4}
+            strokeWidth={isLarge ? 2.6 : 2.4}
             strokeLinecap="round"
             strokeLinejoin="round"
           />
@@ -391,17 +393,17 @@ export default function TrajectoryChart({
           const hex = hexForTier(tierOf(p.score)) || currentTierHex;
           return (
             <g key={`v${i}`} className="animate-fade-in" style={{ animationDelay: `${0.35 + i * 0.045}s` }}>
-              {isToday && <circle cx={x(p.t)} cy={y(p.score)} r={large ? 15 : 11} fill={hex} opacity="0.13" />}
+              {isToday && <circle cx={x(p.t)} cy={y(p.score)} r={isLarge ? 15 : 11} fill={hex} opacity="0.13" />}
               <circle
                 cx={x(p.t)}
                 cy={y(p.score)}
-                r={isToday ? (large ? 6.5 : 5) : large ? 4 : 3}
+                r={isToday ? (isLarge ? 6.5 : 5) : isLarge ? 4 : 3}
                 fill={isToday ? '#fff' : hex}
                 stroke={isToday ? hex : '#fff'}
                 strokeWidth={isToday ? 2.6 : 1.4}
               />
               {isHovered && (
-                <circle cx={x(p.t)} cy={y(p.score)} r={large ? 8 : 6.5} fill="none" stroke={hex} strokeWidth="2" />
+                <circle cx={x(p.t)} cy={y(p.score)} r={isLarge ? 8 : 6.5} fill="none" stroke={hex} strokeWidth="2" />
               )}
             </g>
           );
@@ -439,12 +441,12 @@ export default function TrajectoryChart({
         {/* ---- forecast marker --------------------------------------------- */}
         {projectedScore != null && (
           <g className="animate-fade-in" style={{ animationDelay: '1.05s' }}>
-            <circle cx={xFuture} cy={y(projectedScore)} r={large ? 14 : 11} fill={projectedTierHex} opacity="0.16" />
-            <circle cx={xFuture} cy={y(projectedScore)} r={large ? 6.5 : 5} fill="#fff" stroke={projectedTierHex} strokeWidth="2.6" />
-            <g transform={`translate(${xFuture - (large ? 36 : 30)}, ${y(projectedScore) - (large ? 32 : 27)})`}>
-              <rect width={large ? 36 : 30} height="16" rx="8" fill={projectedTierHex} opacity="0.15" />
+            <circle cx={xFuture} cy={y(projectedScore)} r={isLarge ? 14 : 11} fill={projectedTierHex} opacity="0.16" />
+            <circle cx={xFuture} cy={y(projectedScore)} r={isLarge ? 6.5 : 5} fill="#fff" stroke={projectedTierHex} strokeWidth="2.6" />
+            <g transform={`translate(${xFuture - (isLarge ? 36 : 30)}, ${y(projectedScore) - (isLarge ? 32 : 27)})`}>
+              <rect width={isLarge ? 36 : 30} height="16" rx="8" fill={projectedTierHex} opacity="0.15" />
               <text
-                x={large ? 18 : 15}
+                x={isLarge ? 18 : 15}
                 y="11.5"
                 textAnchor="middle"
                 fontSize="9.5"
@@ -493,9 +495,9 @@ export default function TrajectoryChart({
         {obs.map((p, i) => (
           <rect
             key={`h${i}`}
-            x={x(p.t) - (large ? 16 : 12)}
+            x={x(p.t) - (isLarge ? 16 : 12)}
             y={PAD_.t}
-            width={large ? 32 : 24}
+            width={isLarge ? 32 : 24}
             height={mainBottom - PAD_.t}
             fill="transparent"
             onMouseEnter={() => setHover(i)}
@@ -503,6 +505,7 @@ export default function TrajectoryChart({
           />
         ))}
       </svg>
+      </div>
 
       {/* ---- legend ---- */}
       <div className="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 text-[10px] text-muted dark:text-darkMuted">
