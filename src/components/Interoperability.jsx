@@ -1104,7 +1104,8 @@ export default function Interoperability({
       </div>
 
       {/* ── Inbound bundle tester ──────────────────────────────── */}
-      <div className={CARD}>          <SectionHeader
+      <div className={CARD}>
+        <SectionHeader
           icon={DownloadCloud}
           title="Inbound ingestion"
           right={<Pill tone="accent">atomic — all or nothing</Pill>}
