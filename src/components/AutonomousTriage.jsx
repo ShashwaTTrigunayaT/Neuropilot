@@ -171,7 +171,7 @@ function Proposal({ action, approved, onToggle, onOpenPatient, isTop }) {
  * test, why), plus what the model EXPECTED before acting next to what actually
  * happened, so agreement or surprise is visible on the row itself.
  */
-function LoopStep({ step }) {
+function LoopStep({ step, onOpenPatient }) {
   const [open, setOpen] = useState(false);
   if (!step) return null;
   const expected = step.expected || {};
@@ -187,10 +187,21 @@ function LoopStep({ step }) {
   return (
     <li className="overflow-hidden rounded-xl border border-line/70 bg-white/70 dark:border-darkBorder/70 dark:bg-darkCard/70">
       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 px-3 pt-2.5">
+        {/*
+         * The subject id OPENS THE RECORD, exactly as it does on a proposal above.
+         *
+         * It used to toggle this row's reasoning instead, which made the two
+         * lists disagree: the same bold, hover-underlined id meant "open the
+         * patient" in the batch and "expand the why" here, so a reader who had
+         * learned the control in one place got the wrong thing in the other.
+         * Expanding is the `Why?` button's job on both rows; the id navigates on
+         * both.
+         */}
         <button
           type="button"
-          onClick={() => step.rationale?.length && setOpen((o) => !o)}
-          className="text-[11.5px] font-bold text-ink underline-offset-2 hover:text-accent dark:text-darkText"
+          onClick={() => onOpenPatient?.(step.id)}
+          title={`Open ${step.id}`}
+          className="text-[11.5px] font-bold text-ink underline-offset-2 hover:underline hover:text-accent dark:text-darkText"
         >
           {step.id}
         </button>
@@ -281,7 +292,7 @@ function LoopStep({ step }) {
  */
 const LOG_TAIL_SLACK = 40;
 
-function StepLog({ steps, running, busy }) {
+function StepLog({ steps, running, busy, onOpenPatient }) {
   const bodyRef = useRef(null);
   const followRef = useRef(true);
   const [atTail, setAtTail] = useState(true);
@@ -331,7 +342,7 @@ function StepLog({ steps, running, busy }) {
         {busy && running && <span className="text-[10.5px] font-medium text-accent">working…</span>}
         {steps.length > 0 && (
           <span className="ml-auto hidden text-[10.5px] text-muted dark:text-darkMuted sm:inline">
-            oldest → newest · expand a row for its reasoning
+            oldest → newest · open a subject, or expand a row for its reasoning
           </span>
         )}
       </div>
@@ -354,7 +365,7 @@ function StepLog({ steps, running, busy }) {
         ) : (
           <ul className="space-y-2">
             {ordered.map((l) => (
-              <LoopStep key={l.id} step={l.step} />
+              <LoopStep key={l.id} step={l.step} onOpenPatient={onOpenPatient} />
             ))}
           </ul>
         )}
@@ -378,7 +389,7 @@ function StepLog({ steps, running, busy }) {
   );
 }
 
-function Ledger({ result }) {
+function Ledger({ result, onOpenPatient }) {
   if (!result) return null;
   const { executed = [], skipped = [] } = result;
 
@@ -415,7 +426,14 @@ function Ledger({ result }) {
                 key={e.patient_id}
                 className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-xl border border-line/70 bg-tint/50 px-3 py-2 text-[11px] dark:border-darkBorder/70 dark:bg-darkBorderSubtle"
               >
-                <span className="font-bold text-ink dark:text-darkText">{e.patient_id}</span>
+                <button
+                  type="button"
+                  onClick={() => onOpenPatient?.(e.patient_id)}
+                  title={`Open ${e.patient_id}`}
+                  className="font-bold text-ink underline-offset-2 hover:underline hover:text-accent dark:text-darkText"
+                >
+                  {e.patient_id}
+                </button>
                 <span className="text-muted dark:text-darkMuted">
                   Stage {e.stage_before} → {e.stage_after} · {e.test}
                 </span>
@@ -456,7 +474,14 @@ function Ledger({ result }) {
               {skipped.map((s) => (
                 <li key={s.patient_id} className="flex flex-wrap items-baseline gap-x-2 text-[11px]">
                   <Ban className="h-3 w-3 shrink-0 text-tierMedium" />
-                  <span className="font-semibold text-ink dark:text-darkText">{s.patient_id}</span>
+                  <button
+                    type="button"
+                    onClick={() => onOpenPatient?.(s.patient_id)}
+                    title={`Open ${s.patient_id}`}
+                    className="font-semibold text-ink underline-offset-2 hover:underline hover:text-accent dark:text-darkText"
+                  >
+                    {s.patient_id}
+                  </button>
                   <span className="text-muted dark:text-darkMuted">{s.reason}</span>
                 </li>
               ))}
@@ -832,7 +857,7 @@ export default function AutonomousTriage({
           </>
         )}
 
-        <Ledger result={ledger} />
+        <Ledger result={ledger} onOpenPatient={onOpenPatient} />
       </Collapsible>
 
       {/* ---------------------------------------------------------------- */}
@@ -901,7 +926,9 @@ export default function AutonomousTriage({
                   One row per step, oldest first: the subject and its rank, the stage transition,
                   priority and official score before → after, the test, and what the model
                   <span className="font-semibold text-ink dark:text-darkText"> projected before acting</span>{' '}
-                  beside what actually happened. Expand any row for the full reasoning.
+                  beside what actually happened. The subject id opens that record, as it does on a
+                  proposal above; <span className="font-semibold text-ink dark:text-darkText">Why?</span>{' '}
+                  expands the full reasoning.
                 </p>
               </div>
             </div>
@@ -912,7 +939,12 @@ export default function AutonomousTriage({
              * away the evidence of what had just run. Its height is fixed, so the
              * page geometry is identical at step 1 and step 50.
              */}
-            <StepLog steps={autoLog || []} running={autopilot} busy={autoBusy} />
+            <StepLog
+              steps={autoLog || []}
+              running={autopilot}
+              busy={autoBusy}
+              onOpenPatient={onOpenPatient}
+            />
           </div>
         </div>
       </section>

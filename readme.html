@@ -1,0 +1,1999 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>NeuroPilot — README, explained</title>
+<meta name="description" content="A guided, navigable explainer for the NeuroPilot README: what the system is, how it is built, what is verified, and what is honestly still missing." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<script>
+  /* Settle the theme before first paint, so the page never flashes the wrong one. */
+  (function () {
+    try {
+      var saved = localStorage.getItem('np-doc-theme');
+      var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.setAttribute('data-theme', saved || (prefersDark ? 'dark' : 'light'));
+    } catch (e) {}
+  })();
+</script>
+<style>
+/* ------------------------------------------------------------------ tokens */
+:root {
+  --bg: #faf8f4;
+  --bg-deep: #f4f1ec;
+  --panel: #ffffff;
+  --panel-2: #fbfaf7;
+  --ink: #13151a;
+  --muted: #6e7175;
+  --dust: #a9a49a;
+  --line: #e6e2da;
+  --line-soft: #efece5;
+  --accent: #0d8282;
+  --accent-ink: #0a6a6a;
+  --accent-soft: rgba(13, 130, 130, 0.08);
+  --accent-line: rgba(13, 130, 130, 0.28);
+  --high: #e04836;
+  --medium: #d9822b;
+  --low: #1eb980;
+  --shadow: 0 1px 2px rgba(19, 21, 26, 0.03), 0 12px 28px -24px rgba(19, 21, 26, 0.18);
+  --shadow-lg: 0 2px 8px -2px rgba(19, 21, 26, 0.05), 0 24px 44px -28px rgba(19, 21, 26, 0.24);
+  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --display: 'Space Grotesk', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --radius: 16px;
+}
+[data-theme='dark'] {
+  --bg: #090b0e;
+  --bg-deep: #0d1016;
+  --panel: #11151c;
+  --panel-2: #151a23;
+  --ink: #e6edf5;
+  --muted: #94a1b1;
+  --dust: #5f6b7a;
+  --line: #1f2633;
+  --line-soft: #1a212b;
+  --accent: #35c2b4;
+  --accent-ink: #7fe0d6;
+  --accent-soft: rgba(53, 194, 180, 0.1);
+  --accent-line: rgba(53, 194, 180, 0.32);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 16px 34px -26px rgba(0, 0, 0, 0.8);
+  --shadow-lg: 0 2px 10px -4px rgba(0, 0, 0, 0.6), 0 28px 50px -30px rgba(0, 0, 0, 0.9);
+}
+
+/* ------------------------------------------------------------------ reset */
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+body {
+  margin: 0;
+  background-color: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.62;
+  letter-spacing: -0.011em;
+  -webkit-font-smoothing: antialiased;
+  background-image:
+    radial-gradient(760px 420px at 88% -6%, var(--accent-soft), transparent 62%),
+    radial-gradient(620px 380px at 4% 100%, var(--accent-soft), transparent 65%);
+  background-attachment: fixed;
+}
+h1, h2, h3, h4 { font-family: var(--display); letter-spacing: -0.02em; line-height: 1.2; }
+a { color: var(--accent-ink); text-decoration: none; }
+a:hover { text-decoration: underline; text-underline-offset: 3px; }
+code, pre, .mono { font-family: var(--mono); }
+strong { font-weight: 650; }
+hr { border: 0; border-top: 1px solid var(--line); margin: 2rem 0; }
+::selection { background: var(--accent); color: #fff; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+
+/* thin scrollbars */
+* { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: var(--line); border-radius: 99px; }
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* ------------------------------------------------------------------ chrome */
+.progress {
+  position: fixed; inset: 0 auto auto 0; height: 2px; width: 0;
+  background: linear-gradient(90deg, var(--accent), var(--low));
+  z-index: 60; transition: width 0.08s linear;
+}
+.topbar {
+  position: sticky; top: 0; z-index: 50;
+  display: flex; align-items: center; gap: 14px;
+  padding: 10px clamp(14px, 3vw, 28px);
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.brand-mark {
+  display: grid; place-items: center; width: 30px; height: 30px; flex: 0 0 auto;
+  border-radius: 9px; color: #fff; font-weight: 700; font-size: 13px;
+  background-image: linear-gradient(150deg, #0f8f8f, #0d8282 55%, #0a6a6a);
+  box-shadow: 0 2px 8px -3px var(--accent-line);
+}
+.brand-text { min-width: 0; }
+.brand-name { font-family: var(--display); font-weight: 700; font-size: 15px; letter-spacing: -0.02em; }
+.brand-sub { display: block; font-size: 10.5px; color: var(--muted); letter-spacing: 0.02em; }
+.topbar-spacer { flex: 1 1 auto; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--panel);
+  font-size: 11px; font-weight: 600; color: var(--muted); white-space: nowrap;
+}
+.chip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--low); }
+.btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 7px 12px; border-radius: 11px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  font: inherit; font-size: 12px; font-weight: 600; white-space: nowrap;
+  transition: border-color 0.15s, background 0.15s, transform 0.1s;
+}
+.btn:hover { border-color: var(--accent-line); background: var(--accent-soft); }
+.btn:active { transform: scale(0.98); }
+.btn-icon { padding: 7px 9px; }
+.menu-btn { display: none; }
+
+/* ------------------------------------------------------------------ shell */
+.shell {
+  display: grid; grid-template-columns: 264px minmax(0, 1fr);
+  gap: clamp(24px, 4vw, 56px);
+  width: 100%; max-width: 1280px; margin: 0 auto;
+  padding: clamp(20px, 3vw, 34px) clamp(14px, 3vw, 28px) 96px;
+}
+.sidebar { position: sticky; top: 68px; align-self: start; max-height: calc(100vh - 96px); overflow-y: auto; padding-right: 6px; }
+.sidebar-title {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--dust); margin: 18px 8px 6px;
+}
+.sidebar-title:first-child { margin-top: 0; }
+.nav a {
+  display: block; padding: 6px 10px; border-radius: 9px;
+  color: var(--muted); font-size: 13px; font-weight: 500;
+  border-left: 2px solid transparent;
+  transition: color 0.14s, background 0.14s, border-color 0.14s;
+}
+.nav a:hover { color: var(--ink); background: var(--panel); text-decoration: none; }
+.nav a.sub { padding-left: 22px; font-size: 12.5px; }
+.nav a.active {
+  color: var(--accent-ink); background: var(--accent-soft);
+  border-left-color: var(--accent); font-weight: 600;
+}
+.nav .num { display: inline-block; min-width: 18px; font-family: var(--mono); font-size: 10.5px; color: var(--dust); }
+.nav a.active .num { color: var(--accent); }
+
+main { min-width: 0; }
+.scrim {
+  display: none; position: fixed; inset: 0; z-index: 40;
+  background: rgba(9, 11, 14, 0.5); backdrop-filter: blur(2px);
+}
+
+/* ------------------------------------------------------------------ hero */
+.hero {
+  position: relative; overflow: hidden;
+  border: 1px solid var(--line); border-radius: 22px;
+  background: var(--panel); box-shadow: var(--shadow-lg);
+  padding: clamp(22px, 3.4vw, 40px);
+}
+.hero::after {
+  content: ''; position: absolute; inset: 0 0 auto 0; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent-line), transparent);
+}
+.eyebrow {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase;
+  color: var(--accent-ink); margin-bottom: 12px;
+}
+.eyebrow::before { content: ''; width: 22px; height: 1px; background: var(--accent); }
+.hero h1 { font-size: clamp(28px, 4.6vw, 46px); margin: 0 0 10px; }
+.hero .tagline { font-size: clamp(15px, 1.7vw, 18px); color: var(--muted); max-width: 64ch; margin: 0 0 18px; }
+.hero p { max-width: 70ch; }
+.hero-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-top: 24px; }
+.stat {
+  border: 1px solid var(--line-soft); border-radius: 14px;
+  background: var(--panel-2); padding: 12px 14px;
+}
+.stat .k { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dust); }
+.stat .v { font-family: var(--display); font-size: 20px; font-weight: 700; margin-top: 4px; letter-spacing: -0.02em; }
+.stat .h { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.stat.accent .v { color: var(--accent-ink); }
+
+/* ------------------------------------------------------------------ sections */
+.doc { scroll-margin-top: 82px; margin-top: clamp(38px, 5vw, 62px); }
+.sec-head { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 16px; }
+.sec-num {
+  flex: 0 0 auto; display: grid; place-items: center;
+  min-width: 34px; height: 34px; padding: 0 8px; border-radius: 11px;
+  font-family: var(--mono); font-size: 13px; font-weight: 700;
+  color: var(--accent-ink); background: var(--accent-soft); border: 1px solid var(--accent-line);
+}
+.sec-head h2 { font-size: clamp(20px, 2.6vw, 27px); margin: 2px 0 0; }
+.sec-lead { color: var(--muted); margin: 6px 0 0; max-width: 76ch; font-size: 14.5px; }
+h3 { font-size: 16.5px; margin: 28px 0 10px; }
+h4 { font-size: 14.5px; margin: 22px 0 8px; color: var(--muted); letter-spacing: 0; }
+p { margin: 0 0 12px; max-width: 78ch; }
+ul, ol { margin: 0 0 12px; padding-left: 20px; max-width: 78ch; }
+li { margin-bottom: 6px; }
+li::marker { color: var(--dust); }
+
+/* ------------------------------------------------------------------ cards */
+.card {
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--panel); box-shadow: var(--shadow);
+  padding: 18px 20px; margin: 14px 0;
+}
+.card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.card-head h3, .card-head h4 { margin: 0; font-size: 15px; }
+.grid { display: grid; gap: 12px; }
+.grid.two { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.grid.three { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.grid.four { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+.card.flat { box-shadow: none; background: var(--panel-2); }
+.card h4 { margin-top: 0; color: var(--ink); font-size: 14px; }
+
+/* lists of parts, as bullets with a mono lead */
+.parts { list-style: none; padding: 0; margin: 0; }
+.parts > li { display: flex; gap: 12px; padding: 11px 0; border-top: 1px solid var(--line-soft); }
+.parts > li:first-child { border-top: 0; padding-top: 0; }
+.parts .n {
+  flex: 0 0 auto; width: 22px; height: 22px; border-radius: 7px;
+  display: grid; place-items: center; font-family: var(--mono); font-size: 11px; font-weight: 700;
+  background: var(--accent-soft); color: var(--accent-ink); border: 1px solid var(--accent-line);
+}
+.parts .body { min-width: 0; }
+.parts .body b { display: block; }
+
+/* ------------------------------------------------------------------ callouts */
+.callout {
+  display: flex; gap: 12px; margin: 16px 0; padding: 14px 16px;
+  border-radius: 13px; border: 1px solid var(--line);
+  background: var(--panel-2); border-left: 3px solid var(--accent);
+}
+.callout .ic { flex: 0 0 auto; font-size: 14px; line-height: 1.5; }
+.callout p:last-child, .callout ul:last-child { margin-bottom: 0; }
+.callout .label { font-size: 10.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent-ink); }
+.callout.important { border-left-color: var(--high); background: color-mix(in srgb, var(--high) 6%, var(--panel)); }
+.callout.important .label { color: var(--high); }
+.callout.warn { border-left-color: var(--medium); background: color-mix(in srgb, var(--medium) 7%, var(--panel)); }
+.callout.warn .label { color: var(--medium); }
+.callout.note { border-left-color: var(--accent); }
+
+/* ------------------------------------------------------------------ tables */
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); margin: 14px 0; box-shadow: var(--shadow); }
+table { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 420px; }
+thead th {
+  position: sticky; top: 0; text-align: left; white-space: nowrap;
+  background: var(--panel-2); color: var(--muted);
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  padding: 10px 14px; border-bottom: 1px solid var(--line);
+}
+tbody td { padding: 10px 14px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr:hover { background: var(--accent-soft); }
+td.num, th.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+td .mono, .mono { font-family: var(--mono); font-size: 12px; }
+.ok { color: var(--low); font-weight: 600; }
+.no { color: var(--medium); font-weight: 600; }
+.pill {
+  display: inline-block; padding: 1px 8px; border-radius: 999px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.02em;
+  border: 1px solid var(--line); background: var(--panel-2); color: var(--muted);
+}
+.pill.high { color: var(--high); border-color: color-mix(in srgb, var(--high) 35%, var(--line)); }
+.pill.medium { color: var(--medium); border-color: color-mix(in srgb, var(--medium) 35%, var(--line)); }
+.pill.low { color: var(--low); border-color: color-mix(in srgb, var(--low) 35%, var(--line)); }
+.pill.done { color: var(--low); }
+
+/* ------------------------------------------------------------------ code */
+pre {
+  position: relative; overflow-x: auto; margin: 14px 0; padding: 15px 16px;
+  border: 1px solid var(--line); border-radius: 14px;
+  background: var(--panel-2); box-shadow: var(--shadow);
+  font-size: 12.2px; line-height: 1.72; tab-size: 2;
+}
+pre code { white-space: pre; color: var(--ink); }
+pre.tree { font-size: 12px; line-height: 1.65; }
+.code-wrap { position: relative; }
+.copy {
+  position: absolute; top: 9px; right: 9px; z-index: 2;
+  padding: 4px 9px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--panel); color: var(--muted);
+  font-family: var(--sans); font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  opacity: 0; transition: opacity 0.15s, color 0.15s, border-color 0.15s;
+}
+.code-wrap:hover .copy, .copy:focus-visible { opacity: 1; }
+.copy:hover { color: var(--accent-ink); border-color: var(--accent-line); }
+.copy.done { color: var(--low); border-color: var(--low); opacity: 1; }
+
+details {
+  border: 1px solid var(--line); border-radius: 13px;
+  background: var(--panel); margin: 14px 0; box-shadow: var(--shadow);
+}
+details > summary {
+  cursor: pointer; padding: 12px 16px; font-weight: 600; font-size: 13.5px;
+  list-style: none; display: flex; align-items: center; gap: 9px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: '▸'; color: var(--accent); font-size: 11px; transition: transform 0.18s;
+}
+details[open] > summary::before { transform: rotate(90deg); }
+details[open] > summary { border-bottom: 1px solid var(--line-soft); }
+details .details-body { padding: 4px 16px 14px; }
+details .details-body > *:first-child { margin-top: 10px; }
+
+/* ------------------------------------------------------------------ loop diagram */
+.flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 16px 0; }
+.node {
+  border: 1px solid var(--line); border-radius: 13px; background: var(--panel);
+  padding: 10px 13px; box-shadow: var(--shadow); min-width: 0;
+}
+.node .t { font-weight: 650; font-size: 12.5px; }
+.node .s { font-size: 11px; color: var(--muted); }
+.node.accent { border-color: var(--accent-line); background: var(--accent-soft); }
+.node.decision { border-style: dashed; }
+.arrow { color: var(--dust); font-size: 15px; }
+.arrow em { font-style: normal; font-size: 10.5px; color: var(--muted); font-weight: 600; }
+.loop-note { font-size: 12px; color: var(--muted); }
+
+/* architecture */
+.layers { display: grid; gap: 10px; margin: 16px 0; }
+.layer {
+  border: 1px solid var(--line); border-radius: 14px; background: var(--panel);
+  padding: 13px 16px; box-shadow: var(--shadow);
+}
+.layer .lh { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
+.layer .lh b { font-size: 13.5px; }
+.layer .lh span { font-family: var(--mono); font-size: 11px; color: var(--dust); }
+.layer .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.tag {
+  font-family: var(--mono); font-size: 11px; padding: 3px 9px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--panel-2); color: var(--muted);
+}
+.layer-arrow { text-align: center; color: var(--dust); font-size: 13px; line-height: 1; margin: -4px 0; }
+
+/* ------------------------------------------------------------------ footer */
+.foot {
+  margin-top: 64px; padding-top: 24px; border-top: 1px solid var(--line);
+  color: var(--muted); font-size: 12.5px;
+}
+.foot-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
+.foot h4 { color: var(--ink); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; margin: 0 0 8px; }
+.foot a { display: block; margin-bottom: 5px; }
+
+.totop {
+  position: fixed; right: 18px; bottom: 18px; z-index: 45;
+  opacity: 0; pointer-events: none; transition: opacity 0.2s, transform 0.2s;
+  transform: translateY(6px);
+}
+.totop.show { opacity: 1; pointer-events: auto; transform: none; }
+
+/* ------------------------------------------------------------------ responsive */
+@media (max-width: 1024px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .menu-btn { display: inline-flex; }
+  .sidebar {
+    position: fixed; inset: 0 auto 0 0; z-index: 45;
+    width: min(320px, 86vw); max-height: none; height: 100dvh; padding: 18px 14px 40px;
+    background: var(--panel); border-right: 1px solid var(--line);
+    transform: translateX(-102%); transition: transform 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+    overflow-y: auto;
+  }
+  body.nav-open .sidebar { transform: none; }
+  body.nav-open .scrim { display: block; }
+  .brand-sub { display: none; }
+}
+@media (max-width: 560px) {
+  body { font-size: 14.5px; }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .chip.hide-sm { display: none; }
+  main { min-width: 0; overflow-wrap: anywhere; }
+}
+@media print {
+  .topbar, .sidebar, .scrim, .totop, .progress, .copy, .hero-actions { display: none !important; }
+  .shell { grid-template-columns: 1fr; max-width: none; padding: 0; }
+  body { background: #fff; color: #000; }
+  .doc { break-inside: avoid; }
+  details { break-inside: avoid; }
+  details > summary::before { content: ''; }
+}
+</style>
+</head>
+<body>
+
+<div class="progress" id="progress" aria-hidden="true"></div>
+
+<header class="topbar">
+  <button class="btn btn-icon menu-btn" id="menuBtn" aria-label="Open the section navigation" aria-expanded="false">☰</button>
+  <div class="brand">
+    <div class="brand-mark" aria-hidden="true">NP</div>
+    <div class="brand-text">
+      <div class="brand-name">NeuroPilot</div>
+      <span class="brand-sub">README, explained</span>
+    </div>
+  </div>
+  <div class="topbar-spacer"></div>
+  <span class="chip hide-sm"><span class="dot"></span> 2,581 served · 229 tests green</span>
+  <a class="btn hide-sm" href="README.md">README.md</a>
+  <button class="btn btn-icon" id="themeBtn" aria-label="Switch between light and dark">◐</button>
+</header>
+
+<div class="scrim" id="scrim" hidden></div>
+
+<div class="shell">
+
+  <aside class="sidebar" id="sidebar" aria-label="Section navigation">
+    <nav class="nav" id="nav">
+      <p class="sidebar-title">Start here</p>
+      <a href="#sec-hero"><span class="num">00</span>Summary</a>
+      <a href="#sec-product"><span class="num">01</span>The product in one minute</a>
+      <a href="#sec-loop"><span class="num">02</span>The loop, drawn</a>
+      <a href="#sec-readiness"><span class="num">03</span>Readiness</a>
+      <a href="#sec-quickstart"><span class="num">04</span>Quick start</a>
+      <a href="#sec-data"><span class="num">05</span>Data policy</a>
+
+      <p class="sidebar-title">System</p>
+      <a href="#sec-architecture"><span class="num">06</span>Architecture</a>
+      <a href="#sec-repo"><span class="num">07</span>Repository map</a>
+      <a href="#sec-model"><span class="num">08</span>Served model &amp; attribution</a>
+      <a class="sub" href="#sec-attribution">8.1 Feature attribution</a>
+      <a class="sub" href="#sec-exclusions">8.2 Feature exclusions</a>
+      <a class="sub" href="#sec-tiers">8.3 Evidence-gated tiers</a>
+      <a class="sub" href="#sec-gaps">8.4 Ordering gaps</a>
+
+      <p class="sidebar-title">Model</p>
+      <a href="#sec-outlook"><span class="num">09</span>Model-supported outlook</a>
+      <a href="#sec-escalation"><span class="num">10</span>Escalation rules</a>
+
+      <p class="sidebar-title">Interfaces</p>
+      <a href="#sec-api"><span class="num">11</span>API</a>
+      <a href="#sec-dashboard"><span class="num">12</span>Dashboard</a>
+      <a href="#sec-config"><span class="num">13</span>Configuration</a>
+
+      <p class="sidebar-title">Quality</p>
+      <a href="#sec-tests"><span class="num">14</span>Tests</a>
+      <a href="#sec-verification"><span class="num">15</span>Verification</a>
+
+      <p class="sidebar-title">Honesty</p>
+      <a href="#sec-limitations"><span class="num">16</span>Limitations</a>
+      <a href="#sec-outofscope"><span class="num">17</span>Out of scope</a>
+      <a href="#sec-stack"><span class="num">18</span>Stack</a>
+    </nav>
+  </aside>
+
+  <main>
+
+    <!-- ============================================================ hero -->
+    <section class="hero" id="sec-hero">
+      <span class="eyebrow">Precision Care Challenge 2026 · clinical decision support</span>
+      <h1>AI-driven prioritization for early Alzheimer's diagnostic pathways</h1>
+      <p class="tagline">
+        NeuroPilot scores a dementia cohort from <strong>cognition, blood biomarkers, MRI volumetrics
+        and PET</strong>, explains every score with SHAP, and moves each patient down a fixed pathway:
+        <span class="mono">Cognitive → Blood → MRI → PET</span>. It can walk that pathway unattended, and
+        it speaks <strong>HL7 FHIR R4</strong> and the <strong>ABDM (India) consent flow</strong>, so it
+        can live <em>inside</em> a hospital network instead of beside it.
+      </p>
+
+      <div class="callout important">
+        <span class="ic" aria-hidden="true">⚠</span>
+        <div>
+          <span class="label">Load-bearing invariant</span>
+          <p><strong>NeuroPilot never outputs a diagnosis.</strong> Every screen and every API contract
+          carries one of three things: a <strong>risk tier</strong>, the <strong>reasoning</strong> behind
+          it, and a <strong>recommended next test</strong>. No <span class="mono">Condition</span>
+          resource is emitted in either direction. The decision is the clinician's.</p>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat">
+          <div class="k">Cohort</div>
+          <div class="v">3,636 → 2,581</div>
+          <div class="h">real ADNI subjects ingested · served after the test-result filter</div>
+        </div>
+        <div class="stat accent">
+          <div class="k">Served model</div>
+          <div class="v">AUC 0.819</div>
+          <div class="h">refined conversion XGBoost · 14 features · 5-fold CV ± 0.031</div>
+        </div>
+        <div class="stat">
+          <div class="k">Held-out AUC</div>
+          <div class="v">0.796</div>
+          <div class="h">PR AUC 0.386 · Brier 0.089</div>
+        </div>
+        <div class="stat">
+          <div class="k">MMSE estimate</div>
+          <div class="v">1.549 pts</div>
+          <div class="h">real ADNI follow-up · test MAE (baseline 1.859)</div>
+        </div>
+        <div class="stat">
+          <div class="k">Tests</div>
+          <div class="v">229</div>
+          <div class="h">passing, in-memory store only</div>
+        </div>
+        <div class="stat">
+          <div class="k">Interoperability</div>
+          <div class="v">FHIR 1–4</div>
+          <div class="h">SMART on FHIR run live against a public EHR sandbox · ABDM consent flow (mock gateway)</div>
+        </div>
+      </div>
+
+      <p class="loop-note" style="margin-top:16px">
+        The app presents a <strong>12-month risk outlook</strong>, supported by the active refined
+        conversion model. Global feature attribution is distinct from the top SHAP factor for an
+        individual patient.
+      </p>
+
+      <div class="hero-actions">
+        <a class="btn" href="#sec-product">Start reading →</a>
+        <a class="btn" href="#sec-limitations">§16 Limitations</a>
+        <a class="btn" href="README.md">Read the source README</a>
+      </div>
+    </section>
+
+    <!-- ============================================================ 1 -->
+    <section class="doc" id="sec-product">
+      <div class="sec-head">
+        <span class="sec-num">01</span>
+        <div>
+          <h2>The product in one minute</h2>
+          <p class="sec-lead">The problem, the answer in three parts, and the four things the project
+          deliberately refuses to be — the framing the rest of the README builds on.</p>
+        </div>
+      </div>
+
+      <div class="card flat">
+        <h4>The problem</h4>
+        <p style="margin:0">A memory clinic has more referrals than scan slots. Who gets worked up
+        first, and with what?</p>
+      </div>
+
+      <h3>The answer, in three parts</h3>
+      <ul class="parts">
+        <li>
+          <span class="n">1</span>
+          <div class="body">
+            <b>A ranked worklist</b>
+            Every subject gets a risk score, a tier, and the SHAP factors that produced them. Nothing
+            is hidden behind a number.
+          </div>
+        </li>
+        <li>
+          <span class="n">2</span>
+          <div class="body">
+            <b>A pathway that means something</b>
+            A measurement counts only once the pathway has <em>reached</em> its stage. Ordering the blood
+            panel therefore tells you something you did not already know — which is not true if the score
+            has been quietly reading the MRI all along.
+          </div>
+        </li>
+        <li>
+          <span class="n">3</span>
+          <div class="body">
+            <b>Automation with a signature</b>
+            <span class="mono">/workup/plan</span> proposes a batch with its reasoning and changes
+            nothing. <span class="mono">/workup/execute</span> acts only on what you approved,
+            re-checking every subject against its live state first.
+          </div>
+        </li>
+      </ul>
+
+      <h3>What it deliberately is not</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Not this</th><th>Because</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Not a diagnostic device</strong></td><td>It prioritizes and explains. It never names a disease.</td></tr>
+            <tr><td><strong>Not a black box</strong></td><td>Every tier, every order, every re-score carries its reasoning and its timestamp.</td></tr>
+            <tr><td><strong>Not fabricated</strong></td><td>Model-supported, not invented: the 12-month risk outlook comes from the served conversion model, and unmeasured clinical values stay missing.</td></tr>
+            <tr><td><strong>Not one step</strong></td><td>EHR import and results recording are separate. Importing a chart never fabricates test results.</td></tr>
+            <tr><td><strong>Not finished</strong></td><td><a href="#sec-limitations">§16</a> is a long, honest list.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============================================================ 2 -->
+    <section class="doc" id="sec-loop">
+      <div class="sec-head">
+        <span class="sec-num">02</span>
+        <div>
+          <h2>The loop, drawn</h2>
+          <p class="sec-lead">The whole system as one cycle. The README draws it as Mermaid; here it is
+          as the same graph, rendered plainly.</p>
+        </div>
+      </div>
+
+      <div class="flow">
+        <div class="node"><div class="t">Subject</div><div class="s">cognition only</div></div>
+        <span class="arrow">→</span>
+        <div class="node accent"><div class="t">score + tier</div></div>
+        <span class="arrow">→</span>
+        <div class="node decision"><div class="t">Next test indicated?</div></div>
+        <span class="arrow">→ <em>no</em></span>
+        <div class="node"><div class="t">Multi-disciplinary review</div></div>
+        <span class="arrow">→ <em>yes</em></span>
+        <div class="node"><div class="t">Order the test</div><div class="s">ServiceRequest out</div></div>
+        <span class="arrow">→</span>
+        <div class="node"><div class="t">Result returns</div><div class="s">Bundle or UI</div></div>
+        <span class="arrow">→</span>
+        <div class="node accent"><div class="t">Re-score with the served model</div></div>
+        <span class="arrow">↺ re-rank</span>
+      </div>
+
+      <div class="callout note">
+        <span class="ic" aria-hidden="true">◆</span>
+        <div>
+          <span class="label">The rule the loop enforces</span>
+          <p>Drop a result in and the queue reorders itself. <strong>Order a test and nothing moves
+          until a real value comes back</strong> — no stand-in results, ever.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ 3 -->
+    <section class="doc" id="sec-readiness">
+      <div class="sec-head">
+        <span class="sec-num">03</span>
+        <div>
+          <h2>Readiness</h2>
+          <p class="sec-lead">Every area of the system with its status and the specific evidence behind
+          it. Fourteen areas are run and verified; one is deliberately not built.</p>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Area</th><th>Status</th><th>Evidence</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>ADNI ingestion</td><td><span class="pill done">Run &amp; verified</span></td>
+              <td>13-table drop, nearest-visit join (±183 d) across MMSE, ADAS-Cog 13, plasma panel,
+              FreeSurfer MRI, amyloid/tau PET, APOE. Sentinel codes filtered, never read as values.</td>
+            </tr>
+            <tr>
+              <td>Served conversion model</td><td><span class="pill done">Run &amp; verified</span></td>
+              <td>Refined XGBoost · 14 features · model-supported 12-month risk outlook · CV AUC
+              <strong>0.819 ± 0.031</strong> · held-out AUC <strong>0.796</strong>.</td>
+            </tr>
+            <tr>
+              <td>Leakage &amp; outcome audit</td><td><span class="pill done">Run &amp; verified</span></td>
+              <td>FAQ excluded; <span class="mono">mmse_change</span> excluded because unavailable at
+              first visits · bounded follow-up labels; short follow-up is <em>unknown</em>, not stable.</td>
+            </tr>
+            <tr>
+              <td>MMSE forecaster</td><td><span class="pill done">Run &amp; verified</span></td>
+              <td>Real follow-up · held-out MAE <strong>1.549</strong> (baseline 1.859) · R² <strong>0.296</strong>.</td>
+            </tr>
+            <tr>
+              <td>Explainability</td><td><span class="pill done">Run &amp; verified</span></td>
+              <td>Global SHAP with per-stage rollup, plus a <em>measured-only</em> view so a rarely-ordered
+              test is not diluted to zero.</td>
+            </tr>
+            <tr>
+              <td>Escalation engine</td><td><span class="pill done">Run &amp; verified</span></td>
+              <td>Deterministic stage gates, no second ML layer · clinician-in-the-loop
+              <span class="mono">override</span> · ordering gaps carried forward, never overwritten.</td>
+            </tr>
+            <tr>
+              <td>Autonomous triage</td><td><span class="pill done">Run &amp; verified</span></td>
+              <td><span class="mono">/workup/next</span>, <span class="mono">/run</span>,
+              <span class="mono">/plan</span> (read-only), <span class="mono">/execute</span>
+              (approved subset, re-checked).</td>
+            </tr>
+            <tr>
+              <td>Cohort filtering</td><td><span class="pill done">Run &amp; verified</span></td>
+              <td>From the ADNI serving cohort, subjects with no blood/MRI/PET result anywhere are
+              dropped: <strong>2,581 served</strong>.</td>
+            </tr>
+            <tr>
+              <td>Backend API</td><td><span class="pill done">Run &amp; verified</span></td>
+              <td>FastAPI + Swagger at <span class="mono">/docs</span> ·
+              <span class="mono">/health</span> names the resolved data source · startup batch re-score.</td>
+            </tr>
+            <tr>
+              <td>PostgreSQL store</td><td><span class="pill done">Run &amp; verified (Railway)</span></td>
+              <td>Store of record in a deployment · created and seeded on boot · re-seeds when the cohort
+              <em>or</em> the served model changes.</td>
+            </tr>
+            <tr>
+              <td>Frontend</td><td><span class="pill done">Run &amp; verified</span></td>
+              <td>React + Vite + Tailwind · <strong>zero mock data</strong> · clean production build, no
+              console errors · a second, phone-only design system below 768px.</td>
+            </tr>
+            <tr>
+              <td>FHIR R4</td><td><span class="pill done">Run &amp; verified</span></td>
+              <td>Export · atomic inbound ingestion · bidirectional orders/results · SMART on FHIR launch ·
+              <strong>134 tests</strong> across the FHIR and SMART suites · the launch sequence additionally
+              ran end-to-end against the real public SMART Health IT sandbox.</td>
+            </tr>
+            <tr>
+              <td>ABDM (India)</td><td><span class="pill done">Run &amp; verified (mock)</span></td>
+              <td>Consent → grant → encrypted pull → re-score · Fidelius checked byte-for-byte against
+              published <span class="mono">fidelius-cli</span> vectors · 28 tests.</td>
+            </tr>
+            <tr>
+              <td>Docker &amp; deploy</td><td><span class="pill done">Run &amp; verified</span></td>
+              <td>One image: SPA build (node 20) served by FastAPI (<span class="mono">python:3.11-slim</span>,
+              <span class="mono">$PORT</span>) · <span class="mono">railway.json</span> ·
+              <span class="mono">docker-compose.yml</span>.</td>
+            </tr>
+            <tr>
+              <td>CI</td><td><span class="pill">Not built</span></td>
+              <td>Deliberately out of scope.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============================================================ 4 -->
+    <section class="doc" id="sec-quickstart">
+      <div class="sec-head">
+        <span class="sec-num">04</span>
+        <div>
+          <h2>Quick start</h2>
+          <p class="sec-lead">Three steps in order — ML pipeline, API, dashboard — or the whole thing in
+          one Docker command.</p>
+        </div>
+      </div>
+
+      <div class="grid two">
+        <div class="card">
+          <div class="card-head"><h4>1 · ML pipeline (once)</h4></div>
+          <p style="font-size:12.5px;color:var(--muted)">Generates the cohort and the artifacts. Needs the
+          ADNI tables in <span class="mono">ADNI DATA/</span> first (DUA-restricted —
+          see <span class="mono">data/raw/README.md</span>).</p>
+<pre><code>python -m venv .venv
+source .venv/bin/activate      # Windows: .venv\Scripts\activate
+pip install -r requirements-ml.txt
+python scripts/inspect_adni_coverage.py   # coverage, read-only
+python scripts/run_pipeline.py            # ingest + both models</code></pre>
+        </div>
+        <div class="card">
+          <div class="card-head"><h4>2 · API</h4></div>
+          <p style="font-size:12.5px;color:var(--muted)">FastAPI with Swagger on
+          <span class="mono">/docs</span>.</p>
+<pre><code>pip install -r backend/requirements.txt
+cd backend &amp;&amp; uvicorn app.main:app --reload
+# http://127.0.0.1:8000/docs</code></pre>
+        </div>
+        <div class="card">
+          <div class="card-head"><h4>3 · Dashboard</h4></div>
+          <p style="font-size:12.5px;color:var(--muted)">React + Vite + Tailwind.</p>
+<pre><code>npm install &amp;&amp; npm run dev
+# http://localhost:5173</code></pre>
+        </div>
+        <div class="card">
+          <div class="card-head"><h4>Or: everything in one command</h4></div>
+          <p style="font-size:12.5px;color:var(--muted)">Needs Docker; mounts
+          <span class="mono">data/processed</span> and <span class="mono">artifacts</span>.</p>
+<pre><code>docker compose up --build
+# web :8080 · API docs :8000</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ 5 -->
+    <section class="doc" id="sec-data">
+      <div class="sec-head">
+        <span class="sec-num">05</span>
+        <div>
+          <h2>Data policy</h2>
+          <p class="sec-lead">What is in the repository, what is never in it, and how a deployment gets a
+          cohort it cannot ship.</p>
+        </div>
+      </div>
+
+      <div class="callout note">
+        <span class="ic" aria-hidden="true">◆</span>
+        <div>
+          <span class="label">Note</span>
+          <p><strong>This repository contains no patient data.</strong> ADNI is access-controlled under a
+          Data Use Agreement and is not redistributable. What ships is the code that turns the tables into
+          trained artifacts. The app serves the refined conversion model and presents its model-supported
+          <strong>12-month risk outlook</strong>. The older same-visit classifier is not used for the app's
+          default scores.</p>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Path</th><th>What it is</th><th class="num">In git?</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">ADNI DATA/*.csv</td><td>The 13-table ADNI drop</td><td class="num"><span class="no">never</span></td></tr>
+            <tr><td class="mono">data/processed/risk_scores.json</td><td>De-identified precomputed fallback scores; not the default live scores when the refined model is available</td><td class="num"><span class="ok">yes</span></td></tr>
+            <tr><td class="mono">data/processed/adni_*.{json,csv}</td><td>Serving records, training matrix, visit table, follow-up pairs</td><td class="num"><span class="no">gitignored</span></td></tr>
+            <tr><td class="mono">artifacts/progression_conversion.joblib <span style="color:var(--dust)">+ meta + importance</span></td><td>The served refined conversion classifier, model card and attribution for the 12-month risk outlook</td><td class="num"><span class="ok">yes</span></td></tr>
+            <tr><td class="mono">artifacts/progression_delta.joblib <span style="color:var(--dust)">+ report</span></td><td>The served MMSE-change forecaster</td><td class="num"><span class="ok">yes</span></td></tr>
+            <tr><td class="mono">artifacts/pipeline.joblib <span style="color:var(--dust)">+ meta + eval/audit</span></td><td>Separate same-visit classifier artifact; not used for default served scores</td><td class="num"><span class="ok">yes</span></td></tr>
+            <tr><td class="mono">artifacts/rf_pipeline.joblib, progression_projection.joblib</td><td>RF fallback · local-only attribute-estimate models</td><td class="num"><span class="no">local only</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Where the cohort lives in a deployment</h3>
+      <p>An image built from this repository has <strong>no cohort file</strong> to copy — so the database
+      carries it, seeded once from a machine that legitimately holds the data:</p>
+
+<pre><code># once, and again after any retrain — the stored fingerprint folds in the served
+# model, so derived scores/tiers/attributions are recomputed
+DATABASE_URL='postgresql://user:pw@host:5432/railway' python scripts/seed_db.py</code></pre>
+
+      <p>Set <span class="mono">PATIENT_DATA=adni</span> on the service. A healthy boot logs:</p>
+<pre><code>[api] data source: adni+postgres (2581 patients loaded)   # cohort file + database
+[api] data source: postgres    (2581 patients loaded)     # cohort from the database</code></pre>
+
+      <h3>Three guards protect stored patients</h3>
+      <p style="color:var(--muted);font-size:13.5px">Each one written after a real deploy went wrong.</p>
+      <div class="grid three">
+        <div class="card flat">
+          <h4>An empty cohort never seeds</h4>
+          <p style="margin:0;font-size:13px">A container that cannot find the cohort file cannot wipe a
+          database that still holds the last good one.</p>
+        </div>
+        <div class="card flat">
+          <h4>Stubs never replace real patients</h4>
+          <p style="margin:0;font-size:13px">With neither file nor database, the API reports
+          <span class="mono">mock</span> instead of overwriting Postgres with demo stubs.</p>
+        </div>
+        <div class="card flat">
+          <h4>A zero cohort is repaired, not served</h4>
+          <p style="margin:0;font-size:13px">A stored cohort that filters to zero is rebuilt from the
+          file, never served as an empty dashboard.</p>
+        </div>
+      </div>
+      <p style="font-size:13px;color:var(--muted)">
+        <span class="mono">scripts/seed_db.py</span> refuses to run without
+        <span class="mono">DATABASE_URL</span> and refuses to seed stubs, so it cannot be aimed at the
+        wrong thing by accident.
+      </p>
+    </section>
+
+    <!-- ============================================================ 6 -->
+    <section class="doc" id="sec-architecture">
+      <div class="sec-head">
+        <span class="sec-num">06</span>
+        <div>
+          <h2>Architecture</h2>
+          <p class="sec-lead">Four layers, from the DUA-restricted tables to the screens — with the
+          layering rules that keep them apart.</p>
+        </div>
+      </div>
+
+      <div class="layers">
+        <div class="layer">
+          <div class="lh"><b>Data</b><span>ADNI DATA/*.csv</span></div>
+          <p style="margin:6px 0 0;font-size:13px;color:var(--muted)">13 tables · DUA-restricted ·
+          never committed.</p>
+        </div>
+        <div class="layer-arrow" aria-hidden="true">↓</div>
+        <div class="layer">
+          <div class="lh"><b>ETL &amp; training</b><span>scripts/ingest_adni.py · scripts/train_*.py</span></div>
+          <div class="tags">
+            <span class="tag">nearest-visit join ±183 d</span>
+            <span class="tag">sentinel filtering</span>
+            <span class="tag">features + follow-up labels</span>
+            <span class="tag">serving cohort</span>
+            <span class="tag">XGBoost + SHAP</span>
+            <span class="tag">MMSE delta + accepted forward estimates</span>
+          </div>
+        </div>
+        <div class="layer-arrow" aria-hidden="true">↓</div>
+        <div class="layer">
+          <div class="lh"><b>API</b><span>backend/app (FastAPI)</span></div>
+          <div class="tags">
+            <span class="tag">cohort store · startup batch re-score</span>
+            <span class="tag">SQLite / PostgreSQL</span>
+            <span class="tag">stage gating</span>
+            <span class="tag">evidence-gated tier</span>
+            <span class="tag">escalation · model serving</span>
+            <span class="tag">/fhir/* export · Bundle · push · SMART</span>
+            <span class="tag">/abdm/* consent + Fidelius</span>
+            <span class="tag">/workup/* plan · execute</span>
+          </div>
+        </div>
+        <div class="layer-arrow" aria-hidden="true">↓</div>
+        <div class="layer">
+          <div class="lh"><b>UI</b><span>src/ (React + Vite + Tailwind)</span></div>
+          <div class="tags">
+            <span class="tag">worklist</span>
+            <span class="tag">detail + attribution</span>
+            <span class="tag">progression</span>
+            <span class="tag">simulator</span>
+            <span class="tag">Autonomous Neuro</span>
+            <span class="tag">Interoperability</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout note">
+        <span class="ic" aria-hidden="true">◆</span>
+        <div>
+          <span class="label">Layering rules worth knowing</span>
+          <p><span class="mono">fhir.py</span> and <span class="mono">fhir_ingest.py</span> are
+          <strong>pure</strong> converters; <span class="mono">service.py</span> owns mutations;
+          <span class="mono">config.py</span> owns the two rules that every path shares — stage gating and
+          the evidence-gated tier.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ 7 -->
+    <section class="doc" id="sec-repo">
+      <div class="sec-head">
+        <span class="sec-num">07</span>
+        <div>
+          <h2>Repository map</h2>
+          <p class="sec-lead">Every directory that matters, and what each file is for.</p>
+        </div>
+      </div>
+
+      <details open>
+        <summary>The full tree</summary>
+        <div class="details-body">
+<pre class="tree"><code>.
+├── README.md · FHIR_INTEGRATION.md · ABDM_INTEGRATION.md · FHIR_REMAINING.md
+├── .env.example                 every supported env var, documented
+├── Dockerfile                   node 20 build → python:3.11-slim serving SPA + API on $PORT
+├── docker-compose.yml           postgres:16-alpine + api + web (nginx)
+├── railway.json                 Railway deploy config
+├── requirements-ml.txt          pandas · scikit-learn · xgboost · shap
+│
+├── ADNI DATA/                   raw tables (gitignored, DUA-restricted)
+├── data/raw/README.md           how to obtain the drop · what ingestion writes
+├── data/processed/              datasets gitignored · risk_scores.json committed
+├── artifacts/                   models · cards · SHAP · eval + audit reports
+├── brand_assets/                rendered logo, icon, brand sheet
+│
+├── scripts/
+│   ├── ingest_adni.py           drop → visits / features / labels / serving cohort
+│   ├── train_model.py           features → XGB/RF → eval → SHAP → artifacts
+│   ├── train_progression_model.py   conversion + MMSE delta + follow-up estimates
+│   ├── build_projection_targets.py  which attributes have enough support to show
+│   ├── run_pipeline.py          ingest + both models, one command
+│   ├── audit_model_fixes.py     leakage + robustness audit
+│   ├── inspect_adni_coverage.py per-modality coverage (read-only)
+│   ├── seed_db.py               seed the deployment database
+│   ├── refresh_railway.py       push artifacts / reseed a deployed instance
+│   ├── validate_fhir.py         server-side $validate gate for exported resources
+│   └── render_brand_assets.cjs  regenerate brand_assets from BrandLogo.jsx
+│
+├── backend/
+│   ├── tests/                   229 pytest cases
+│   └── app/
+│       ├── main.py · api.py     app factory (serves the built SPA) + routers
+│       ├── config.py            thresholds · stage gating · evidence rule · paths
+│       ├── schemas.py           Pydantic contracts (no diagnosis field)
+│       ├── storage.py · db.py   cohort loading + startup re-score · SQLAlchemy store
+│       ├── service.py           business logic: advance, results, workups
+│       ├── escalation.py        deterministic stage rule engine
+│       ├── model_service.py     served pipeline + batch SHAP
+│       ├── progression.py · visits.py    model-supported risk outlook · visit history
+│       ├── seed_data.py         placeholder stubs (last resort only)
+│       ├── fhir.py              R4 resources (Patient / Observation / RiskAssessment …)
+│       ├── fhir_ingest.py       inbound mapper (pure) — atomic, unit-checked
+│       ├── fhir_import.py       read a chart over a SMART session · browse a server
+│       ├── fhir_client.py       outbound push + reachability probe
+│       ├── net.py               shared outbound-HTTP facts (transport errors, URL hygiene)
+│       ├── smart.py             SMART on FHIR (OAuth2 + PKCE), tokens server-side
+│       ├── fidelius.py          ABDM Fidelius crypto (Curve25519 · HKDF-SHA256 · AES-GCM)
+│       └── abdm.py · abdm_mock.py   HIU consent client + mock CM/HIP at /mock-abdm
+│
+├── src/
+│   ├── api.js                   fetch client — the ONLY data source
+│   └── components/              Overview · AutoScrollShowcase · Header · AllPatients
+│                                PatientDetail · ProgressionView · TrajectoryChart
+│                                RiskSimulator · FeatureRadarChart · CohortComposition
+│                                CompareView · AutonomousTriage · Interoperability
+│                                AbdmPanel · MobileWelcome · Footer · TierTag · BrandLogo · widgets
+│
+└── frontend/                    docker-compose dashboard image (nginx → /api)</code></pre>
+        </div>
+      </details>
+    </section>
+
+    <!-- ============================================================ 8 -->
+    <section class="doc" id="sec-model">
+      <div class="sec-head">
+        <span class="sec-num">08</span>
+        <div>
+          <h2>Served model &amp; attribution</h2>
+          <p class="sec-lead">What is actually served, how it scores, and the two honest caveats: the
+          train/serve shift, and why the global ranking is not your patient's ranking.</p>
+        </div>
+      </div>
+
+      <p>The app serves a <strong>model-supported 12-month conversion-risk outlook</strong> from the
+      refined XGBoost classifier. It uses 14 features from cognition, blood, MRI and PET, with SHAP
+      attribution and a recommended clinical next step. Served cohort records are latest visits while
+      training baselines are first visits — a train/serve shift that needs monitoring.</p>
+
+      <div class="grid two">
+        <div class="card">
+          <div class="card-head"><h4>Model card</h4></div>
+          <div class="table-wrap" style="margin:0;box-shadow:none;border:0">
+            <table style="min-width:0">
+              <tbody>
+                <tr><td>Model</td><td>XGBoost conversion classifier <span class="mono">(progression_conversion.joblib)</span></td></tr>
+                <tr><td>Features</td><td>14, spanning cognition, blood, MRI and PET</td></tr>
+                <tr><td>5-fold CV AUC</td><td><strong>0.819 ± 0.031</strong></td></tr>
+                <tr><td>Held-out test AUC</td><td><strong>0.796</strong></td></tr>
+                <tr><td>Held-out PR AUC</td><td><strong>0.386</strong> (8.45% conversion prevalence)</td></tr>
+                <tr><td>Held-out Brier</td><td><strong>0.089</strong></td></tr>
+                <tr><td>Stage 1 only</td><td>AUC <strong>0.822</strong> (n=232)</td></tr>
+                <tr><td>Blood measured</td><td>AUC <strong>0.732</strong> (n=95)</td></tr>
+                <tr><td>PET measured</td><td>AUC <strong>0.793</strong> (n=205)</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h4>Confusion matrix · threshold 0.5</h4></div>
+          <p style="font-size:12.5px;color:var(--muted)">Rows are actual outcome; columns are model
+          prediction. The 327-subject held-out set — accuracy <strong>0.878</strong>.</p>
+          <div class="table-wrap" style="margin:0;box-shadow:none;border:0">
+            <table style="min-width:0">
+              <thead><tr><th>Actual \ Predicted</th><th class="num">0 · no conversion</th><th class="num">1 · conversion</th></tr></thead>
+              <tbody>
+                <tr><td><strong>0 · no conversion</strong></td><td class="num">273</td><td class="num">26</td></tr>
+                <tr><td><strong>1 · conversion</strong></td><td class="num">14</td><td class="num">14</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <h4 style="margin-bottom:6px">The 14 features</h4>
+          <p class="mono" style="font-size:11.5px;line-height:1.9;color:var(--muted);margin:0">
+            age · sex · education_years · mmse · adas_cog_13 · apoe_e4 · ptau217 · abeta4240 · nfl · gfap ·
+            hippocampal_volume · hippocampal_icv_ratio · centiloids · tau_meta_temporal
+          </p>
+        </div>
+      </div>
+
+      <h3 id="sec-attribution">8.1 · Relative feature attribution</h3>
+      <p><strong>Relative feature attribution</strong> in the Overview is the cohort-level, global mean
+      absolute SHAP ranking from the active refined model. Its checked-in local artifact ranks Amyloid PET
+      just above Tau PET. That is different from the patient-detail attribution: those SHAP factors are
+      calculated for one person, so <strong>Tau PET can be that patient's top factor</strong>. The
+      patient-specific leader need not match the global ranking. Neither ranking is a causal effect or a
+      diagnosis.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th class="num">#</th><th>Feature</th><th class="num">Mean |SHAP|</th><th class="num">Share</th><th>Stage</th></tr></thead>
+          <tbody>
+            <tr><td class="num">1</td><td>Amyloid PET (Centiloids)</td><td class="num">1.186</td><td class="num">16%</td><td>PET</td></tr>
+            <tr><td class="num">2</td><td>Tau PET (temporal SUVR)</td><td class="num">1.168</td><td class="num">16%</td><td>PET</td></tr>
+            <tr><td class="num">3</td><td>ADAS-Cog 13</td><td class="num">1.070</td><td class="num">15%</td><td>Cognition</td></tr>
+            <tr><td class="num">4</td><td>Hippocampal / ICV ratio</td><td class="num">0.973</td><td class="num">13%</td><td>MRI</td></tr>
+            <tr><td class="num">5</td><td>Hippocampal volume</td><td class="num">0.549</td><td class="num">8%</td><td>MRI</td></tr>
+            <tr><td class="num">6</td><td>Aβ42/40 ratio (plasma)</td><td class="num">0.380</td><td class="num">5%</td><td>Blood</td></tr>
+            <tr><td class="num">7</td><td>NfL (plasma)</td><td class="num">0.380</td><td class="num">5%</td><td>Blood</td></tr>
+            <tr><td class="num">8</td><td>Age</td><td class="num">0.311</td><td class="num">4%</td><td>Clinical</td></tr>
+            <tr><td class="num">9</td><td>APOE ε4 carrier</td><td class="num">0.292</td><td class="num">4%</td><td>Clinical</td></tr>
+            <tr><td class="num">10</td><td>p-tau217 (plasma)</td><td class="num">0.248</td><td class="num">3%</td><td>Blood</td></tr>
+            <tr><td class="num">11</td><td>Biological sex</td><td class="num">0.232</td><td class="num">3%</td><td>Clinical</td></tr>
+            <tr><td class="num">12</td><td>MMSE</td><td class="num">0.178</td><td class="num">2%</td><td>Cognition</td></tr>
+            <tr><td class="num">13</td><td>Education (years)</td><td class="num">0.167</td><td class="num">2%</td><td>Clinical</td></tr>
+            <tr><td class="num">14</td><td>GFAP (plasma)</td><td class="num">0.102</td><td class="num">1%</td><td>Blood</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="sec-exclusions">8.2 · Outcome and feature exclusions</h3>
+      <p>The target is conversion from a first labelled CN/MCI visit to a strictly worse ADNI diagnostic
+      category within the bounded follow-up window. Subjects without adequate follow-up are excluded as
+      <strong>unknown outcome</strong>, not treated as stable. The served feature set excludes
+      <span class="mono">faq_total</span> (label leakage) and <span class="mono">mmse_change</span>
+      (available at only 2.5% of first visits, so recent decline speed is not part of the baseline model).
+      Model card and evaluation details live in <span class="mono">artifacts/progression_meta.json</span>
+      and <span class="mono">artifacts/progression_report.txt</span>.</p>
+
+      <h3 id="sec-tiers">8.3 · Tiers require corroborating evidence</h3>
+      <p>The served model provides a <strong>12-month conversion-risk outlook</strong>, not a same-visit
+      classification of whether someone currently has MCI or dementia. The tier answers
+      <em>“do we have enough evidence to act on this score?”</em> Cognition is the assessment the referral
+      was already based on, so it cannot corroborate itself.</p>
+
+      <div class="grid three">
+        <div class="card flat">
+          <div class="card-head"><h4><span class="pill high">High</span></h4></div>
+          <p style="margin:0;font-size:13px">score &gt; 0.70 <strong>and</strong> ≥ 1 biomarker inside the
+          ordered pathway.</p>
+        </div>
+        <div class="card flat">
+          <div class="card-head"><h4><span class="pill medium">Medium</span></h4></div>
+          <p style="margin:0;font-size:13px">score ≥ 0.40 — includes cognition-only patients, flagged
+          <em>awaiting confirmation</em>.</p>
+        </div>
+        <div class="card flat">
+          <div class="card-head"><h4><span class="pill low">Low</span></h4></div>
+          <p style="margin:0;font-size:13px">score &lt; 0.40.</p>
+        </div>
+      </div>
+
+      <p>On the current served cohort (2,581): <strong>111 High · 438 Medium · 2,032 Low</strong>. Of the
+      <strong>1,459 subjects at Stage 1</strong>, <strong>138 score above 0.70 and are held at Medium</strong>
+      (mean MMSE 19.5) — their biomarker is on file but sits <em>beyond</em> the pathway, so the score
+      cannot see it either (§8.4). They are promoted automatically the moment the intervening test is
+      reached.</p>
+
+      <div class="callout note">
+        <span class="ic" aria-hidden="true">◆</span>
+        <div>
+          <span class="label">Same behaviour, different label</span>
+          <p>At Stage 1 both Medium and High order the blood panel, so the automation behaves identically —
+          a cognition-only patient is still first to be tested.</p>
+        </div>
+      </div>
+
+      <h3 id="sec-gaps">8.4 · Ordering gaps, and why the stage stops at the first missing test</h3>
+      <p>Real ADNI is not a tidy funnel — modalities were added across study phases, so all eight
+      combinations of blood / MRI / PET exist. In the served cohort, <strong>1,574 records hold a result
+      measured outside the ordered prefix</strong> (blood 1,122 · MRI 2,120 · PET 1,168 are on file; stage
+      counts a <em>prefix</em>, not a maximum).</p>
+
+      <p>A “highest completed stage” rule would label those subjects Stage 3/4 and claim a blood panel that
+      was never drawn — the stepper would then contradict the record. NeuroPilot defines instead:</p>
+
+      <div class="card" style="border-left:3px solid var(--accent)">
+        <p class="mono" style="margin:0;font-size:13.5px"><strong>stage = the length of the complete prefix
+        of the ordered pathway.</strong></p>
+      </div>
+
+      <p>So a subject with an MRI and no plasma panel is <strong>Stage 1</strong>, the rule engine
+      recommends the missing blood draw, and two things stay true at once:</p>
+      <ul>
+        <li><strong>Nothing measured is discarded.</strong> Real MRI/PET values still feed the model once
+        the pathway reaches them, and <span class="mono">/patients/{id}</span> reports
+        <span class="mono">slots_on_file</span> plus <span class="mono">beyond_stage</span> so the UI can
+        say <em>already on file</em> instead of looking self-contradictory.</li>
+        <li><strong>A real measurement is never overwritten.</strong> Walking past an already-measured slot
+        carries the real values forward — logged as
+        <span class="mono">result already on file (normal) — carried forward without re-measurement</span>.
+        Locked by <span class="mono">test_ordering_gap_never_overwrites_a_real_measurement</span>, which
+        asserts the carried record is byte-identical before and after.</li>
+      </ul>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Stage</th><th class="num">1 · Cognitive</th><th class="num">2 · Blood</th><th class="num">3 · MRI</th><th class="num">4 · PET</th></tr></thead>
+          <tbody>
+            <tr><td>Served cohort</td><td class="num">1,459</td><td class="num">332</td><td class="num">231</td><td class="num">559</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============================================================ 9 -->
+    <section class="doc" id="sec-outlook">
+      <div class="sec-head">
+        <span class="sec-num">09</span>
+        <div>
+          <h2>Model-supported outlook</h2>
+          <p class="sec-lead">Alongside the 12-month conversion-risk outlook, the served model estimates
+          MMSE change and a small set of attributes — but only the ones that actually beat
+          <em>assume no change</em>.</p>
+        </div>
+      </div>
+
+      <p>The served model provides a 12-month conversion-risk outlook alongside MMSE-change estimates and
+      supported attribute estimates, based on real ADNI follow-up data.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Model</th><th>Metric</th><th class="num">Result</th></tr></thead>
+          <tbody>
+            <tr><td rowspan="2">MMSE-delta regressor</td><td>test MAE</td><td class="num"><strong>1.549 pts</strong> (mean-baseline 1.859)</td></tr>
+            <tr><td>RMSE / R²</td><td class="num">2.217 / 0.296 (n = 1,387)</td></tr>
+            <tr><td rowspan="7">Conversion classifier</td><td>5-fold CV AUC</td><td class="num"><strong>0.819 ± 0.031</strong></td></tr>
+            <tr><td>held-out ROC AUC</td><td class="num"><strong>0.796</strong></td></tr>
+            <tr><td>PR AUC</td><td class="num">0.386 — ≈4.6× lift over 8.45% prevalence</td></tr>
+            <tr><td>Brier</td><td class="num">0.089</td></tr>
+            <tr><td>accuracy @0.5</td><td class="num">0.878 (majority baseline 0.914)</td></tr>
+            <tr><td>by baseline · CN</td><td class="num"><strong>0.657</strong> (n = 775, 2.97% convert)</td></tr>
+            <tr><td>by baseline · MCI</td><td class="num"><strong>0.761</strong> (n = 859, 13.39%)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout warn">
+        <span class="ic" aria-hidden="true">!</span>
+        <div>
+          <span class="label">Read this before quoting accuracy</span>
+          <p><strong>Accuracy below the majority baseline is intentional.</strong> At 8.45% prevalence,
+          answering “will not convert” for everyone scores 0.914 while carrying no information. AUC, PR AUC
+          and Brier are the honest measures here. Held-out confusion matrix at 0.5: 273 · 26 / 14 · 14.</p>
+        </div>
+      </div>
+
+      <h3>Which attribute estimates are supported — and which are withheld</h3>
+      <p>An attribute estimate is shown only when its model beats <em>assume no change</em> by at least 10%
+      on CV MAE. On the current run exactly one target clears the bar:</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Target</th><th class="num">Gain vs no-change</th><th>Shown?</th></tr></thead>
+          <tbody>
+            <tr><td>Hippocampal volume</td><td class="num"><strong>+28.7%</strong></td><td><span class="ok">✅ model-supported estimate</span></td></tr>
+            <tr><td>ADAS-Cog 13</td><td class="num">+5.1%</td><td><span class="no">❌ carried at today's value</span></td></tr>
+            <tr><td>Centiloids</td><td class="num">+6.6%</td><td><span class="no">❌ carried at today's value</span></td></tr>
+            <tr><td>Hippocampal / ICV ratio</td><td class="num">+0.0%</td><td><span class="no">❌ carried at today's value</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The reason an estimate is withheld is surfaced on the page. The attribute-estimate models are
+      local-only (gitignored), so a deployment reports the same reasons instead of guessing.</p>
+
+      <div class="card flat">
+        <h4>Guardrails</h4>
+        <ul style="margin:0">
+          <li>Subject-level holdout.</li>
+          <li>Conversion defined over a bounded evaluation window, with subjects whose follow-up is too
+          short <strong>excluded rather than assumed stable</strong>.</li>
+          <li>A shorter window was rejected for carrying too few positives to calibrate.</li>
+          <li>Baseline features are <em>first</em> visits while served records are <em>latest</em> visits.</li>
+          <li><span class="mono">mmse_change</span> excluded (present in only 2.5% of first visits) ·
+          <span class="mono">faq_total</span> excluded (leakage).</li>
+          <li>The future tier is calculated by re-scoring the <strong>served conversion model</strong> on
+          the model-supported future vector.</li>
+        </ul>
+      </div>
+
+      <div class="callout note">
+        <span class="ic" aria-hidden="true">◆</span>
+        <div>
+          <span class="label">A flat forecast is a real answer</span>
+          <p><strong>ADNI-0500</strong> (stage 1, MMSE 28, score 0.017) projects a conversion probability
+          near zero and a Low tier.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ 10 -->
+    <section class="doc" id="sec-escalation">
+      <div class="sec-head">
+        <span class="sec-num">10</span>
+        <div>
+          <h2>Escalation rules</h2>
+          <p class="sec-lead">Deterministic stage gates in
+          <span class="mono">backend/app/escalation.py</span>. No second ML layer.</p>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Stage</th><th>Low</th><th>Medium</th><th>High</th></tr></thead>
+          <tbody>
+            <tr><td><strong>1 · Cognitive</strong></td><td>Re-screen in 12 mo</td><td><strong>Blood panel</strong></td><td><strong>Blood panel</strong></td></tr>
+            <tr><td><strong>2 · Blood</strong></td><td>Re-screen in 12 mo</td><td><strong>MRI volumetrics</strong></td><td><strong>MRI volumetrics</strong></td></tr>
+            <tr><td><strong>3 · MRI</strong></td><td>Return to screening</td><td>Follow-up MRI in 12 mo</td><td><strong>Amyloid / tau PET</strong></td></tr>
+            <tr><td><strong>4 · PET</strong></td><td colspan="3">— pathway complete → multi-disciplinary review —</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <ul>
+        <li>Test-ordering escalations are <strong>confirmable</strong>.</li>
+        <li>“Schedule / return” recommendations are <strong>not</strong> auto-escalated:
+        <span class="mono">POST /advance-stage</span> returns <span class="mono">409</span> unless the
+        clinician passes <span class="mono">{"override": true}</span>.</li>
+        <li>Every transition, order, result and re-score is timestamped into the subject's audit trail, and
+        mirrored to Postgres when configured.</li>
+      </ul>
+    </section>
+
+    <!-- ============================================================ 11 -->
+    <section class="doc" id="sec-api">
+      <div class="sec-head">
+        <span class="sec-num">11</span>
+        <div>
+          <h2>API</h2>
+          <p class="sec-lead">Pydantic-validated with Swagger at <span class="mono">/docs</span>.
+          <strong>No response model contains a diagnosis field.</strong> CORS allows the Vite dev server
+          plus <span class="mono">CORS_ORIGINS</span>.</p>
+        </div>
+      </div>
+
+      <details open>
+        <summary>Cohort &amp; decisions</summary>
+        <div class="details-body">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Endpoint</th><th>Behaviour</th></tr></thead>
+              <tbody>
+                <tr><td class="mono">GET /health · GET /debug/env</td><td>Resolved data source + count · deploy diagnostics (database shape, outbound FHIR destination, whether the configured URL needed trimming — never secrets).</td></tr>
+                <tr><td class="mono">GET /patients?tier=&amp;q=&amp;sort=&amp;page=&amp;limit=</td><td>Ranked worklist. <span class="mono">sort</span>: <span class="mono">risk-desc</span>, <span class="mono">risk-asc</span>, <span class="mono">stage</span>.</td></tr>
+                <tr><td class="mono">GET /patients/{id}</td><td>Full profile: slots, all SHAP <span class="mono">factors</span>, <span class="mono">history</span>, <span class="mono">slots_on_file</span>, <span class="mono">beyond_stage</span>.</td></tr>
+                <tr><td class="mono">GET /patients/{id}/explain</td><td>Score, tier, patient-specific SHAP factors and global importance.</td></tr>
+                <tr><td class="mono">GET /model/info</td><td>Active served model card, metrics, feature list and global SHAP importance (<span class="mono">legacy</span> is reference metadata, not the scored model).</td></tr>
+                <tr><td class="mono">GET /patients/{id}/pipeline</td><td>Stage, stage names, history, <span class="mono">recommended_next</span>.</td></tr>
+                <tr><td class="mono">GET /patients/{id}/refined</td><td>Refined outlook: observed + model-estimated MMSE with a band, top drivers and supported risk score/tier.</td></tr>
+                <tr><td class="mono">GET /patients/{id}/progression</td><td>12-month risk outlook with trajectory, conversion probability + drivers, risk tier and per-stage score checkpoints.</td></tr>
+                <tr><td class="mono">POST /patients/compare</td><td>Side-by-side comparison of subjects.</td></tr>
+                <tr><td class="mono">POST /patients/score</td><td>Score an arbitrary feature vector with the served pipeline + SHAP (powers the simulator).</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+
+      <details>
+        <summary>Acting on a record</summary>
+        <div class="details-body">
+          <p style="font-size:13px;color:var(--muted)">Patients arriving through SMART or an inbound FHIR
+          Bundle are filed in the NeuroPilot store, then scored by the configured served model. From patient
+          detail, a clinician can also record a result manually. <strong>A blank/unavailable test remains
+          missing; no result is fabricated.</strong> The model-supported risk outlook is separate from these
+          import and result-entry workflows.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Endpoint</th><th>Behaviour</th></tr></thead>
+              <tbody>
+                <tr><td class="mono">POST /patients/{id}/advance-stage</td><td><span class="mono">{"override": false, "note": null}</span> → order, carry forward, re-score. <span class="mono">404</span> unknown · <span class="mono">409</span> not indicated.</td></tr>
+                <tr><td class="mono">POST /patients/{id}/results</td><td><span class="mono">{"slot", "outcome", "values", "note"}</span> → re-scores. <span class="mono">422</span> bad slot <strong>or a value that is not a number in a measurement field</strong> (nothing is written) · <span class="mono">409</span> nothing pending.</td></tr>
+                <tr><td class="mono">POST /patients/{id}/auto-workup</td><td>Per-subject cascade blood → MRI → PET, re-scoring at each step.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+
+      <details>
+        <summary>Automation</summary>
+        <div class="details-body">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Endpoint</th><th>Behaviour</th></tr></thead>
+              <tbody>
+                <tr><td class="mono">POST /workup/next · /workup/run</td><td>One autonomous step, or up to N: rank → order → re-score → re-rank, returning tier, queue movement, projected-vs-actual and the reason.</td></tr>
+                <tr><td class="mono">POST /workup/plan</td><td><strong>Read-only</strong> proposal batch: four labelled reasons per action, <span class="mono">impact</span> verdict, projected score and rank. Computed on copies — mutates nothing.</td></tr>
+                <tr><td class="mono">POST /workup/execute</td><td>Executes <strong>only the approved subset</strong>, re-checking each subject first. Returns an executed ledger plus every skipped subject with its reason.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+
+      <details>
+        <summary>FHIR R4</summary>
+        <div class="details-body">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Endpoint</th><th>Behaviour</th></tr></thead>
+              <tbody>
+                <tr><td class="mono">GET /fhir/metadata</td><td><span class="mono">CapabilityStatement</span> with a SMART security block.</td></tr>
+                <tr><td class="mono">GET /fhir/Patient · /{id} · /{id}/$everything</td><td>Searchset · single read · the complete record as one <span class="mono">collection</span> Bundle.</td></tr>
+                <tr><td class="mono">GET /fhir/Observation?patient= · /fhir/RiskAssessment?patient=</td><td>LOINC-coded measurements (MMSE 72106-8 …) · score, tier and SHAP basis.</td></tr>
+                <tr><td class="mono">GET /fhir/ServiceRequest?patient=&amp;status=</td><td>Placed orders — <span class="mono">active</span> = result owed, <span class="mono">completed</span> = real value on file.</td></tr>
+                <tr><td class="mono">GET /fhir/DiagnosticReport?patient=</td><td>Completed panels; the conclusion describes <em>the test</em>, never the model.</td></tr>
+                <tr><td class="mono">POST /fhir/Bundle</td><td><strong>Inbound.</strong> <span class="mono">transaction</span> / <span class="mono">collection</span> / <span class="mono">document</span> (NRCES). Prefers the <strong>ABHA address</strong> as subject id, keeps a crosswalk, <strong>idempotent</strong> on patient + measurement fingerprint/date. Atomic: any unmappable resource or wrong UCUM unit rejects the whole bundle with a 422 <span class="mono">OperationOutcome</span> naming every offender; accepted observations update/create the record and recalculate its score/tier.</td></tr>
+                <tr><td class="mono">POST /ingest/fhir</td><td>Direct ingestion for a HIP pushing without a consent exchange.</td></tr>
+                <tr><td class="mono">POST /fhir/push/{id}</td><td>Push orders + results + RiskAssessment + AuditEvent as one atomic FHIR transaction.</td></tr>
+                <tr><td class="mono">GET /fhir/status</td><td>Four phases, outbound reachability, SMART session, exchange-surface counts — subjects, <span class="mono">from_fhir</span>, RiskAssessments, observations, open and completed orders.</td></tr>
+                <tr><td class="mono">GET /fhir/smart/launch</td><td>302 to the authorize URL (PKCE S256, single-use <span class="mono">state</span>); accepts a per-launch patient and an opaque <span class="mono">launch</span> context.</td></tr>
+                <tr><td class="mono">GET /fhir/smart/charts</td><td>Browse/filter the connected FHIR server's own <span class="mono">Patient</span> records, identify records already imported, and select a real server-local id for launch.</td></tr>
+                <tr><td class="mono">GET /fhir/smart/callback</td><td>Exchanges the code, holds the token server-side, returns the browser with <span class="mono">?smart=connected&amp;patient=…</span>; failures return <span class="mono">?smart=error&amp;reason=…</span> instead of a raw document.</td></tr>
+                <tr><td class="mono">GET /fhir/smart/status · /context · POST /refresh · POST /logout</td><td>Registration facts, bound patient context, renewal, disconnect — never token material.</td></tr>
+                <tr><td class="mono">POST /fhir/smart/import-patient</td><td>Explicitly imports the patient bound to the active SMART session: reads <span class="mono">Patient</span>, <span class="mono">Observation</span> and <span class="mono">DiagnosticReport</span>, maps supported measurements, records EHR provenance, then creates or updates and re-scores. Re-importing identical data is idempotent; unmappable data returns an <span class="mono">OperationOutcome</span> without a partial write.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+
+      <details>
+        <summary>ABDM (India)</summary>
+        <div class="details-body">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Endpoint</th><th>Behaviour</th></tr></thead>
+              <tbody>
+                <tr><td class="mono">POST /abdm/consent · GET /abdm/consent/{id}</td><td>Open a consent request for an ABHA address (the <strong>only</strong> identifier that leaves) · poll it; consent arrives as a callback, so nothing blocks.</td></tr>
+                <tr><td class="mono">POST /abdm/consent/{id}/records</td><td>The HIU's ephemeral DH <strong>public</strong> key and nonce travel here — never the private half.</td></tr>
+                <tr><td class="mono">POST /abdm/consents/notify · /abdm/health-information/on-request</td><td>Consent-Manager callbacks. An unknown id is acknowledged, not errored — a retrying CM must not wedge.</td></tr>
+                <tr><td class="mono">POST /abdm/health-information/transfer</td><td>The HIP's encrypted push: bearer, transaction and MD5 checked before decrypting, GCM tag verified, replay refused, then ingested through the same scoring path as a result typed in the UI.</td></tr>
+                <tr><td class="mono">GET /abdm/status · GET /abdm/sessions · POST /abdm/reset</td><td>Config, CM reachability, crypto parameters · live sessions · demo reset.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+
+      <details>
+        <summary>Example payloads</summary>
+        <div class="details-body">
+<pre><code>{
+  "id": "ADNI-0500", "age": 71, "sex": "M", "education_years": 16,
+  "cognitive": {"scale": "MMSE", "latest": 28, "prior": 29, "months": 6},
+  "score": 0.017, "risk_tier": "low", "stage": 1, "stage_name": "Cognitive",
+  "recommended_next": "Blood biomarker panel for p-tau217 / Aβ42-40 / NfL / GFAP.",
+  "updated_at": "2026-09-25 20:14"
+}</code></pre>
+<pre><code>{"feature": "abeta4240", "text": "Aβ42/40 ratio", "value": 0.081, "contribution": 0.367}</code></pre>
+        </div>
+      </details>
+    </section>
+
+    <!-- ============================================================ 12 -->
+    <section class="doc" id="sec-dashboard">
+      <div class="sec-head">
+        <span class="sec-num">12</span>
+        <div>
+          <h2>Dashboard</h2>
+          <p class="sec-lead">React + Vite + Tailwind. <strong>Zero mock data</strong> —
+          <span class="mono">src/api.js</span> is the only source; if the API is down you get an error and
+          a Retry, never fake rows.</p>
+        </div>
+      </div>
+
+      <div class="grid two">
+        <div class="card">
+          <div class="card-head"><h4>Overview</h4></div>
+          <p style="margin:0;font-size:13px">A self-advancing capability preview, the cohort ribbon
+          (subjects · High/Medium/Low · mean risk · <strong>From FHIR</strong>), the served model's
+          attribution radar, and the top-8 shortlist.</p>
+        </div>
+        <div class="card">
+          <div class="card-head"><h4>Patients <span class="pill">P</span></h4></div>
+          <p style="margin:0;font-size:13px">Cohort shape charts, stage-gate pills directly above the table
+          they filter, then the ranked worklist: tier/stage filters, search, sort, pagination, page state
+          preserved when you open a subject and come back.</p>
+        </div>
+        <div class="card">
+          <div class="card-head"><h4>Detail</h4></div>
+          <p style="margin:0;font-size:13px">Score gauge with 0.4/0.7 thresholds · patient-specific
+          <strong>Clinical Risk Attribution</strong> grouped by stage with signed SHAP bars, measured values
+          and <span class="mono">model default</span> badges for un-ordered tests · the
+          Cognitive → Blood → MRI → PET stepper · recommended next step with Confirm (409 messages surface
+          inline) and an explicit <em>Override — escalate anyway</em> path · interactive result entry · the
+          audit trail · printable consultation report.</p>
+        </div>
+        <div class="card">
+          <div class="card-head"><h4>Progression</h4></div>
+          <p style="margin:0;font-size:13px">A full page, not a popup: observed → predicted MMSE with an
+          uncertainty band, the risk score at each completed stage test plotted as outcome-coloured markers,
+          the model-supported 12-month risk outlook, metric cards, conversion probability and top drivers.</p>
+        </div>
+        <div class="card">
+          <div class="card-head"><h4>Autonomous Neuro <span class="pill">A</span></h4></div>
+          <p style="margin:0;font-size:13px">The approval console. A proposed batch with per-action
+          reasoning and a blunt impact verdict, independent approve/reject, a sticky
+          <span class="mono">N of M approved</span> bar, then an execution <strong>ledger</strong> — stage,
+          both scores, tier, queue movement, and every skipped subject with its reason. Below it, the
+          supervised run mode with a fixed-height, auto-following log that keeps its rows after Stop.</p>
+        </div>
+        <div class="card">
+          <div class="card-head"><h4>Interoperability <span class="pill">F</span></h4></div>
+          <p style="margin:0;font-size:13px">The four FHIR phases with live state, outbound reachability,
+          SMART launch/renew/disconnect, and a name-filterable chart picker backed by the hospital server's
+          own <span class="mono">Patient</span> records. Select a server-local chart, launch it in context,
+          then explicitly import its <span class="mono">Patient</span>, <span class="mono">Observation</span>
+          and <span class="mono">DiagnosticReport</span> data. Also: preview/export-and-push, a manual
+          inbound Bundle tester, and the <strong>ABDM consent flow</strong> (request → grant → encrypted
+          pull → post-ingest stage, tier and scores), plus exchange-surface counts.</p>
+        </div>
+        <div class="card">
+          <div class="card-head"><h4>Simulator <span class="pill">S</span></h4></div>
+          <p style="margin:0;font-size:13px">What-if scoring on the served conversion model's 14 features,
+          with per-stage <em>Measured / Not ordered</em> switches that send <span class="mono">null</span>
+          and route the model through its learned missing-value path, plus a live SHAP waterfall.</p>
+        </div>
+        <div class="card">
+          <div class="card-head"><h4>Keyboard</h4></div>
+          <p style="margin:0;font-size:13px" class="mono"><span class="pill">D</span> overview ·
+          <span class="pill">P</span> patients · <span class="pill">S</span> simulator ·
+          <span class="pill">F</span> interoperability · <span class="pill">A</span> autonomous ·
+          <span class="pill">T</span> theme · <span class="pill">Esc</span> back ·
+          <span class="pill">←</span> <span class="pill">→</span> step between patients</p>
+        </div>
+      </div>
+
+      <h3>Design, and both ends of the range</h3>
+      <div class="grid three">
+        <div class="card flat">
+          <h4>Base</h4>
+          <p style="margin:0;font-size:13px">Inter type, ambient background, glass sticky header with a
+          live data-source pill, hairline cards, skeletons, light and dark themes, tier colours reserved
+          for risk semantics, and <span class="mono">prefers-reduced-motion</span> respected throughout.</p>
+        </div>
+        <div class="card flat">
+          <h4>On a phone (&lt; 768px)</h4>
+          <p style="margin:0;font-size:13px">A second design system, not a scaled-down desktop. Cards,
+          badges, glows and explanatory prose are dropped rather than shrunk. Every grid that names a column
+          count at <span class="mono">sm</span> or above collapses to <strong>two</strong> columns, a lone
+          card in an odd row spans the full width, a ribbon stops being one divided panel and becomes
+          uniformly-sized cards, and the sliding showcase is replaced by a single full-bleed welcome panel
+          whose height is measured from the device viewport.</p>
+        </div>
+        <div class="card flat">
+          <h4>On a large screen (≥ 1536px)</h4>
+          <p style="margin:0;font-size:13px">The 1152px rail widens in steps — 1312px at 1536, 1536px at
+          1920, 1792px at 2560 — and the small label type steps up with it, because almost all of it is set
+          in px and would otherwise stay fixed while the page grew around it. Prose keeps its own narrow
+          measure, so only the rails widen. Nothing below 1536px is affected.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ 13 -->
+    <section class="doc" id="sec-config">
+      <div class="sec-head">
+        <span class="sec-num">13</span>
+        <div>
+          <h2>Configuration</h2>
+          <p class="sec-lead">Every variable is documented in <span class="mono">.env.example</span>.</p>
+        </div>
+      </div>
+
+      <details>
+        <summary>Show all environment variables</summary>
+        <div class="details-body">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Variable</th><th>Default</th><th>Purpose</th></tr></thead>
+              <tbody>
+                <tr><td class="mono">HIGH_RISK_THRESHOLD / MEDIUM_RISK_THRESHOLD</td><td class="mono">0.7 / 0.4</td><td>Tier bucketing</td></tr>
+                <tr><td class="mono">PATIENT_DATA</td><td class="mono">auto</td><td><span class="mono">adni</span> requires the real cohort (deployments) · <span class="mono">mock</span> forces stubs</td></tr>
+                <tr><td class="mono">DATABASE_URL</td><td class="mono">unset</td><td>SQLAlchemy store · <strong>store of record</strong> in a deployment</td></tr>
+                <tr><td class="mono">PROJECT_ROOT</td><td class="mono">auto</td><td>Artifact/data root (Docker: <span class="mono">/app</span>)</td></tr>
+                <tr><td class="mono">RISK_SCORES_PATH, MODEL_PATH, MODEL_META_PATH, GLOBAL_IMPORTANCE_PATH</td><td class="mono">data/processed/…, artifacts/…</td><td>Artifact locations</td></tr>
+                <tr><td class="mono">VITE_API_URL</td><td class="mono">http://127.0.0.1:8000</td><td>API base as seen by the browser</td></tr>
+                <tr><td class="mono">CORS_ORIGINS</td><td class="mono">unset</td><td>Extra allowed origins</td></tr>
+                <tr><td class="mono">FHIR_BASE_URL</td><td class="mono">unset</td><td>Outbound hospital server. Unset = not configured, and every outbound call says so. Whitespace is trimmed — a value pasted with a newline used to be an invalid URL</td></tr>
+                <tr><td class="mono">FHIR_PUSH_ORDERS</td><td class="mono">false</td><td>Push each new order as a <span class="mono">ServiceRequest</span>, best-effort</td></tr>
+                <tr><td class="mono">FHIR_AUTH_TOKEN / FHIR_TIMEOUT_SECONDS</td><td class="mono">unset / 8</td><td>Static bearer for a non-SMART server · outbound timeout</td></tr>
+                <tr><td class="mono">SMART_CLIENT_ID / SMART_CLIENT_SECRET</td><td class="mono">neuropilot-demo / unset</td><td>SMART app registration — public clients use PKCE, no secret</td></tr>
+                <tr><td class="mono">SMART_REDIRECT_URI</td><td class="mono">…/fhir/smart/callback</td><td>Must match the registered URI byte-for-byte</td></tr>
+                <tr><td class="mono">SMART_SCOPES</td><td>minimum-necessary set</td><td><span class="mono">launch/patient openid fhirUser</span> + read Patient/Observation/DiagnosticReport/RiskAssessment + write RiskAssessment</td></tr>
+                <tr><td class="mono">SMART_LAUNCH_PATIENT_ID</td><td class="mono">unset</td><td>Fallback chart for a standalone launch that names none — a demo default, not the only way to choose</td></tr>
+                <tr><td class="mono">FRONTEND_BASE_URL</td><td class="mono">http://localhost:5173</td><td>Where the SMART callback hands the browser back to</td></tr>
+                <tr><td class="mono">ABDM_CM_BASE_URL</td><td class="mono">unset</td><td>Real Consent Manager. Unset = the in-process mock</td></tr>
+                <tr><td class="mono">ABDM_HIU_ID / ABDM_CM_ID / ABDM_CM_TOKEN</td><td>demo values</td><td>HIU identity and the bearer presented to the CM (a real HIU signs each request)</td></tr>
+                <tr><td class="mono">ABDM_CALLBACK_BASE_URL</td><td class="mono">http://127.0.0.1:8000</td><td>Where the CM calls back and the HIP pushes — <strong>must be publicly reachable</strong> for a real sandbox</td></tr>
+                <tr><td class="mono">ABDM_TIMEOUT_SECONDS / ABDM_USE_MOCK_GATEWAY</td><td class="mono">10 / true</td><td>Outbound timeout · mount the mock CM + HIP at <span class="mono">/mock-abdm</span></td></tr>
+                <tr><td class="mono">ABDM_REQUESTER_NAME / ABDM_REQUESTER_REGNO</td><td>demo values</td><td>Requester identity in the consent request</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+
+      <div class="callout note">
+        <span class="ic" aria-hidden="true">◆</span>
+        <div>
+          <span class="label">Deeper detail</span>
+          <p>See <a href="FHIR_INTEGRATION.md">FHIR_INTEGRATION.md</a> (FHIR R4 + SMART procedures and demo
+          commands) and <a href="ABDM_INTEGRATION.md">ABDM_INTEGRATION.md</a> (consent flow + Fidelius, and
+          what is verified versus what needs a sandbox account).
+          <a href="FHIR_REMAINING.md">FHIR_REMAINING.md</a> splits what is left by what blocks it.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ 14 -->
+    <section class="doc" id="sec-tests">
+      <div class="sec-head">
+        <span class="sec-num">14</span>
+        <div>
+          <h2>Tests</h2>
+          <p class="sec-lead"><strong>229 cases, all green.</strong> Nothing here touches a real database,
+          and nothing depends on a network it does not control.</p>
+        </div>
+      </div>
+
+      <p><span class="mono">conftest.py</span> forces the in-memory store
+      (<span class="mono">DATABASE_URL=""</span>), so no test can ever mutate a persistent database. Every
+      suite runs against a <strong>mock</strong> that speaks the real contract shapes — an in-process mock
+      EHR for the SMART and chart-import suites, a mock Consent Manager plus mock HIP for ABDM, all over
+      real HTTP.</p>
+
+      <div class="callout note">
+        <span class="ic" aria-hidden="true">◆</span>
+        <div>
+          <span class="label">Two different claims, kept apart on purpose</span>
+          <p>The one <strong>live</strong> interoperability exercise is separate and manual — a real SMART
+          launch against the public SMART Health IT sandbox — and is recorded in
+          <a href="#sec-limitations">§16</a> as a one-time verification, <em>not</em> as test coverage.</p>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Suite</th><th class="num">Cases</th><th>Covers</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">test_api.py</td><td class="num">45</td><td>Worklist, detail, attribution, ordering gaps, results, thresholds, tier gating</td></tr>
+            <tr><td class="mono">test_fhir_import.py</td><td class="num">34</td><td>Chart browsing, SMART-session import, token scoping per server, credential-leak guards — against a mock EHR speaking the real contract shapes</td></tr>
+            <tr><td class="mono">test_smart.py</td><td class="num">30</td><td>Discovery, PKCE/state, callback, refresh, expiry, no-token-material guarantees</td></tr>
+            <tr><td class="mono">test_fhir_phase3.py</td><td class="num">27</td><td>Orders, reports, push, status, launch targeting, value validation, export robustness</td></tr>
+            <tr><td class="mono">test_fhir.py</td><td class="num">17</td><td>Export resources · <strong>never-emit-Condition</strong> invariant · values match the record</td></tr>
+            <tr><td class="mono">test_abdm.py</td><td class="num">15</td><td>Consent → grant → encrypted pull → re-score, over real HTTP</td></tr>
+            <tr><td class="mono">test_cohort_source_guard.py</td><td class="num">14</td><td>A stored cohort is never replaced by stubs; source reporting stays honest</td></tr>
+            <tr><td class="mono">test_fidelius.py</td><td class="num">13</td><td>Curve25519 ECDH + HKDF-SHA256 + AES-GCM, byte-for-byte against reference vectors</td></tr>
+            <tr><td class="mono">test_fhir_nrces.py</td><td class="num">13</td><td>NRCES document bundles, ABHA identity + crosswalk, idempotency</td></tr>
+            <tr><td class="mono">test_fhir_ingest.py</td><td class="num">13</td><td>Inbound mapping, UCUM enforcement, atomic rejection naming offenders</td></tr>
+            <tr><td class="mono">test_pg_driver.py · test_db_seed.py · test_declared_dependencies.py</td><td class="num">8</td><td>Driver pinning · seeding guard · every imported package is declared</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+<pre><code>cd backend &amp;&amp; pip install -r requirements-dev.txt &amp;&amp; pytest -q</code></pre>
+    </section>
+
+    <!-- ============================================================ 15 -->
+    <section class="doc" id="sec-verification">
+      <div class="sec-head">
+        <span class="sec-num">15</span>
+        <div>
+          <h2>Verification</h2>
+          <p class="sec-lead">The whole system, in the order it has to be started — ending with the one
+          manual exercise that is not a test.</p>
+        </div>
+      </div>
+
+<pre><code># 0 · Data (needs the ADNI drop in "ADNI DATA/")
+python scripts/inspect_adni_coverage.py          # per-modality coverage, read-only
+
+# 1 · Ingest + both models
+python scripts/run_pipeline.py                   # writes data/processed + artifacts
+
+# 2 · API
+cd backend &amp;&amp; uvicorn app.main:app --reload
+curl http://127.0.0.1:8000/health                            # data_source: adni (+postgres)
+curl "http://127.0.0.1:8000/patients?limit=3"                # top-3 ranked subjects
+curl http://127.0.0.1:8000/patients/ADNI-0500/explain        # full attribution
+curl http://127.0.0.1:8000/patients/ADNI-0500/progression    # model-supported 12-month risk outlook
+curl -X POST http://127.0.0.1:8000/workup/next               # one autonomous step
+curl -X POST http://127.0.0.1:8000/workup/plan \
+     -H "Content-Type: application/json" -d '{"limit": 5}'   # read-only proposal
+
+# 3 · Backend tests (in-memory store — no database is touched)
+cd backend &amp;&amp; pytest -q                                      # 229 passed
+
+# 4 · ABDM consent flow (no ABDM account: mock CM + HIP run in-process)
+BASE=http://127.0.0.1:8000
+S=$(curl -s -X POST $BASE/abdm/consent -H 'Content-Type: application/json' \
+    -d '{"abha_address":"ADNI-0006@sbx"}' \
+    | python -c "import sys,json;print(json.load(sys.stdin)['session_id'])")
+curl -s $BASE/abdm/consent/$S              # GRANTED arrives as a callback
+curl -s -X POST $BASE/abdm/consent/$S/records
+curl -s $BASE/abdm/consent/$S              # RECEIVED + post-ingest scores
+
+# 5 · Dashboard
+npm install &amp;&amp; npm run build &amp;&amp; npm run dev</code></pre>
+
+      <details>
+        <summary>6 · SMART on FHIR against a real public sandbox (one-time, manual)</summary>
+        <div class="details-body">
+          <p style="font-size:13px;color:var(--muted)">Register the client id at
+          <span class="mono">launch.smarthealthit.org</span>, set <span class="mono">SMART_CLIENT_ID</span>,
+          <span class="mono">SMART_REDIRECT_URI</span> and <span class="mono">FRONTEND_BASE_URL</span> to the
+          host the EHR must return to.</p>
+<pre><code>curl -s "http://127.0.0.1:8000/fhir/smart/launch?iss=https://launch.smarthealthit.org/v/r4/fhir&amp;format=json" \
+  | python -m json.tool          # the authorize URL: PKCE S256 + single-use state
+curl -s http://127.0.0.1:8000/fhir/smart/status | python -m json.tool
+#      -> "connected": true, "iss": "https://launch.smarthealthit.org/v/r4/fhir"</code></pre>
+        </div>
+      </details>
+    </section>
+
+    <!-- ============================================================ 16 -->
+    <section class="doc" id="sec-limitations">
+      <div class="sec-head">
+        <span class="sec-num">16</span>
+        <div>
+          <h2>Limitations</h2>
+          <p class="sec-lead">The section that keeps every other number honest. Several of these are the
+          reason a claim above is phrased the way it is.</p>
+        </div>
+      </div>
+
+      <div class="callout important">
+        <span class="ic" aria-hidden="true">⚠</span>
+        <div>
+          <span class="label">Warning</span>
+          <p><strong>Read this before quoting any number above.</strong></p>
+        </div>
+      </div>
+
+      <h3>Data &amp; model</h3>
+      <ul>
+        <li><strong>ADNI is a research cohort, not a population sample</strong> — highly educated, largely
+        Western, volunteer-recruited. Its follow-up and conversion rates do not represent community
+        prevalence. Real deployment needs local validation data.</li>
+        <li><strong>ADNI is DUA-restricted.</strong> The CSVs stay gitignored; this repository ships the code
+        that turns them into a model, never the cohort.</li>
+        <li><strong>Training and serving visits differ.</strong> The refined conversion model trains from
+        first labelled CN/MCI visits, while served cohort records represent latest visits; this train/serve
+        shift needs monitoring.</li>
+        <li><strong>PET coverage varies by dataset and model artifact.</strong> For the refined model's
+        checked evaluation cohort, amyloid coverage is about 59% and tau PET coverage about 25%. Individual
+        patient-specific SHAP factors can rank differently from the global importance list on Overview.</li>
+        <li><strong>The retained same-visit classifier is not the default served model.</strong> Its
+        evaluation and attribution files describe a different task; they are not evidence for the live
+        conversion scores.</li>
+        <li><strong>Only hippocampal volume has a supported attribute estimate.</strong> ADAS-Cog 13,
+        Centiloids and hippocampal/ICV ratio fail the <em>beat assume-no-change by 10%</em> bar and are
+        carried at today's value, with the reason shown on the page.</li>
+        <li><strong>This is decision support, not a diagnosis.</strong> A real intervention or new clinical
+        information can change the patient's outlook; the model output is one input to clinician review.</li>
+      </ul>
+
+      <h3>Interoperability</h3>
+      <ul>
+        <li><strong>SMART on FHIR is verified against a real public EHR sandbox, not a mock.</strong> The full
+        OAuth2/PKCE launch was run live: client registration with SMART Health IT's
+        <span class="mono">launch.smarthealthit.org</span>, real token exchange, and a real Synthea patient
+        and encounter context returned to the session — <span class="mono">/fhir/smart/status</span>
+        reported <span class="mono">connected: true</span> against
+        <span class="mono">iss: https://launch.smarthealthit.org/v/r4/fhir</span>. What remains is
+        registration with a <strong>production</strong> EHR — Epic, Oracle Health, or a hospital's own FHIR
+        server — which needs institutional access this project does not have.</li>
+        <li><strong>No real hospital network has been exercised.</strong> Export, ingestion, orders, results
+        and chart browsing are implemented and tested, but the automated suites run against a
+        <strong>mock</strong> server speaking the real contract shapes, and an outbound push needs
+        <span class="mono">FHIR_BASE_URL</span> pointed at a real server. The live sandbox run above is a
+        <strong>one-time manual verification, not test coverage</strong>.</li>
+        <li><strong>SMART sessions are per-process memory</strong> — unencrypted, lost on restart, not shared
+        across replicas. Right for a sandbox demo; explicitly not production authentication.</li>
+        <li><strong>The outbound push has no outbox.</strong> <span class="mono">POST /fhir/push/{id}</span>
+        is synchronous and <span class="mono">FHIR_PUSH_ORDERS</span> is best-effort: a hospital that is
+        down when an order is placed receives nothing, and nothing retries. The failure is recorded in the
+        audit trail rather than lost, and every write is a <span class="mono">PUT</span> to a deterministic
+        id, so a retry would be safe once a durable outbox exists.</li>
+        <li><strong>ABDM has never touched the real sandbox.</strong> The consent flow and Fidelius are
+        verified against published reference vectors and an in-process mock HIE-CM + HIP over real HTTP —
+        not against a live Consent Manager, which needs sandbox approval. Requests carry a static bearer
+        instead of an ABDM signature and sessions are in memory.</li>
+      </ul>
+
+      <h3>Behaviour worth knowing</h3>
+      <ul>
+        <li><strong>Ordering a test with no result on file places the order and leaves the score
+        unchanged.</strong> No simulated result is ever fabricated.</li>
+        <li><strong>A <span class="mono">DiagnosticReport</span> never completes a slot</strong> — it is
+        applied as a conclusion to a slot that already holds real values, so a document cannot unlock the
+        biomarker-gated High tier.</li>
+        <li><strong>A value in a measurement field must be a number.</strong> Numeric strings are coerced,
+        blanks dropped, anything else refused with a 422 naming the field. Records written before that check
+        existed still hold text; the export skips it rather than failing, and re-entering the number restores
+        it.</li>
+        <li><strong>Integration-panel order counts are capped at the first 200 ranked patients</strong>, so
+        those totals are a sample, not a cohort-wide figure. Known and unfixed.</li>
+        <li><strong>Not a diagnostic device.</strong> Prioritization support only; every decision rests with
+        the clinician.</li>
+      </ul>
+    </section>
+
+    <!-- ============================================================ 17 -->
+    <section class="doc" id="sec-outofscope">
+      <div class="sec-head">
+        <span class="sec-num">17</span>
+        <div>
+          <h2>Out of scope</h2>
+          <p class="sec-lead">Deliberately skipped, and why — so “missing” and “decided against” are not
+          confused.</p>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Skipped</th><th>Why</th></tr></thead>
+          <tbody>
+            <tr><td>CI / GitHub Actions</td><td>Requested out of scope</td></tr>
+            <tr><td>Apache Airflow</td><td>A cron-friendly <span class="mono">run_pipeline.py</span> covers it</td></tr>
+            <tr><td>Cohorts other than ADNI</td><td>Each needs its own registration and ingestion path</td></tr>
+            <tr><td>Authentication / multi-clinician accounts</td><td>Demo prototype</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============================================================ 18 -->
+    <section class="doc" id="sec-stack">
+      <div class="sec-head">
+        <span class="sec-num">18</span>
+        <div>
+          <h2>Stack</h2>
+          <p class="sec-lead">Four layers, and the tools each one is built from.</p>
+        </div>
+      </div>
+
+      <div class="grid two">
+        <div class="card">
+          <div class="card-head"><h4>ML</h4></div>
+          <div class="tags"><span class="tag">Python 3.11</span><span class="tag">pandas</span><span class="tag">NumPy</span><span class="tag">scikit-learn</span><span class="tag">XGBoost</span><span class="tag">SHAP</span></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h4>API</h4></div>
+          <div class="tags"><span class="tag">FastAPI</span><span class="tag">Uvicorn</span><span class="tag">Pydantic</span><span class="tag">SQLAlchemy</span><span class="tag">PostgreSQL 16 / SQLite</span></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h4>UI</h4></div>
+          <div class="tags"><span class="tag">React 18</span><span class="tag">Vite 5</span><span class="tag">Tailwind CSS 3</span><span class="tag">Recharts</span><span class="tag">lucide-react</span></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h4>Ops</h4></div>
+          <div class="tags"><span class="tag">Docker</span><span class="tag">docker-compose</span><span class="tag">nginx</span><span class="tag">pytest</span></div>
+        </div>
+      </div>
+
+      <div class="callout note" style="margin-top:22px">
+        <span class="ic" aria-hidden="true">◆</span>
+        <div>
+          <span class="label">The one-sentence version</span>
+          <p>A real cohort, a model that explains itself, a deterministic pathway with a clinician's
+          signature on every step, and two national interoperability standards at the border — with an
+          honest list of what is still missing.</p>
+        </div>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <div class="foot-grid">
+        <div>
+          <h4>This page</h4>
+          <p style="margin:0;font-size:12.5px">A navigable explainer for the repository README. Every
+          figure and claim here is quoted from it — the README remains the source of truth.</p>
+        </div>
+        <div>
+          <h4>Jump</h4>
+          <a href="#sec-hero">Summary</a>
+          <a href="#sec-readiness">Readiness</a>
+          <a href="#sec-limitations">Limitations</a>
+        </div>
+        <div>
+          <h4>Documents</h4>
+          <a href="README.md">README.md</a>
+          <a href="FHIR_INTEGRATION.md">FHIR_INTEGRATION.md</a>
+          <a href="ABDM_INTEGRATION.md">ABDM_INTEGRATION.md</a>
+          <a href="FHIR_REMAINING.md">FHIR_REMAINING.md</a>
+        </div>
+      </div>
+      <p style="margin:20px 0 0;font-size:12px;color:var(--dust)">
+        NeuroPilot — decision support prototype. It prioritizes and explains; it never outputs a diagnosis.
+      </p>
+    </footer>
+
+  </main>
+</div>
+
+<button class="btn btn-icon totop" id="totop" aria-label="Back to the top">↑</button>
+
+<script>
+(function () {
+  /* ---- theme ------------------------------------------------------------ */
+  var root = document.documentElement;
+  var themeBtn = document.getElementById('themeBtn');
+  themeBtn.addEventListener('click', function () {
+    var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('np-doc-theme', next); } catch (e) {}
+  });
+
+  /* ---- mobile navigation ------------------------------------------------ */
+  var menuBtn = document.getElementById('menuBtn');
+  var scrim = document.getElementById('scrim');
+  function setNav(open) {
+    document.body.classList.toggle('nav-open', open);
+    scrim.hidden = !open;
+    menuBtn.setAttribute('aria-expanded', String(open));
+    menuBtn.textContent = open ? '✕' : '☰';
+  }
+  menuBtn.addEventListener('click', function () {
+    setNav(!document.body.classList.contains('nav-open'));
+  });
+  scrim.addEventListener('click', function () { setNav(false); });
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') setNav(false);
+  });
+
+  /* ---- copy buttons on code blocks ------------------------------------- */
+  document.querySelectorAll('pre').forEach(function (pre) {
+    var wrap = document.createElement('div');
+    wrap.className = 'code-wrap';
+    pre.parentNode.insertBefore(wrap, pre);
+    wrap.appendChild(pre);
+    var btn = document.createElement('button');
+    btn.className = 'copy';
+    btn.type = 'button';
+    btn.textContent = 'Copy';
+    btn.addEventListener('click', function () {
+      var text = pre.innerText;
+      var done = function () {
+        btn.textContent = 'Copied';
+        btn.classList.add('done');
+        setTimeout(function () {
+          btn.textContent = 'Copy';
+          btn.classList.remove('done');
+        }, 1600);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function () {});
+      } else {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); done(); } catch (e) {}
+        document.body.removeChild(ta);
+      }
+    });
+    wrap.appendChild(btn);
+  });
+
+  /* ---- scroll progress + back to top ----------------------------------- */
+  var progress = document.getElementById('progress');
+  var totop = document.getElementById('totop');
+  var ticking = false;
+  function onScroll() {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(function () {
+      var h = document.documentElement.scrollHeight - window.innerHeight;
+      var pct = h > 0 ? (window.scrollY / h) * 100 : 0;
+      progress.style.width = pct.toFixed(2) + '%';
+      totop.classList.toggle('show', window.scrollY > 700);
+      ticking = false;
+    });
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+  totop.addEventListener('click', function () {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
+  /* ---- scrollspy -------------------------------------------------------- */
+  var links = Array.prototype.slice.call(document.querySelectorAll('#nav a'));
+  var byId = {};
+  links.forEach(function (a) { byId[a.getAttribute('href').slice(1)] = a; });
+
+  var targets = links
+    .map(function (a) { return document.getElementById(a.getAttribute('href').slice(1)); })
+    .filter(Boolean);
+
+  var visible = new Map();
+  var observer = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      visible.set(entry.target.id, entry.isIntersecting ? entry.intersectionRatio : 0);
+    });
+    var best = null;
+    var bestRatio = 0;
+    visible.forEach(function (ratio, id) {
+      if (ratio > bestRatio) { bestRatio = ratio; best = id; }
+    });
+    /* Nothing intersecting (deep in whitespace or at the very top): fall back to
+       the last heading that has already passed the fold, so the highlight never
+       disappears while the reader is inside a section. */
+    if (!best) {
+      var passed = targets.filter(function (el) { return el.getBoundingClientRect().top < 120; });
+      best = passed.length ? passed[passed.length - 1].id : null;
+    }
+    links.forEach(function (a) { a.classList.remove('active'); });
+    if (best && byId[best]) byId[best].classList.add('active');
+  }, { rootMargin: '-90px 0px -60% 0px', threshold: [0, 0.05, 0.25, 0.5, 1] });
+
+  targets.forEach(function (el) { observer.observe(el); });
+
+  /* ---- close the drawer after tapping a link on a phone ---------------- */
+  links.forEach(function (a) {
+    a.addEventListener('click', function () {
+      if (window.matchMedia('(max-width: 1024px)').matches) setNav(false);
+    });
+  });
+})();
+</script>
+</body>
+</html>
