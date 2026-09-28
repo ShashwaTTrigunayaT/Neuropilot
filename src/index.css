@@ -417,6 +417,32 @@ body {
     --np-atmosphere: 0.9;
   }
 
+  /*
+   * The dark side of the phone palette.
+   *
+   * The block above states the LIGHT phone values and, because it is written as
+   * `:root, html.dark`, it stated them in dark mode too — only the `--dark-*`
+   * scale changed when the toggle moved. A phone in the black theme therefore
+   * kept its light neutral tokens, and everything coloured from a TOKEN rather
+   * than from a `dark:` utility stayed light: the ribbon cells (painted
+   * `rgb(var(--surface-rgb))` by the `.np-ribbon` rule below, so they were white
+   * cards on a black page), tinted rows, hairlines, and `text-ink` labels.
+   *
+   * Re-pointing the same tokens at the dark scale here — one block, no component
+   * touched — is what makes a phone in the black theme dark everywhere, the way
+   * desktop already is. Scoped to `html.dark`, so the light phone theme is
+   * unchanged. The values mirror the `--dark-*` scale above.
+   */
+  html.dark {
+    --paper-rgb: 28 27 33;
+    --ink-rgb: 245 244 248;
+    --muted-rgb: 150 148 158;
+    --dust-rgb: 118 116 128;
+    --line-rgb: 58 56 66;
+    --surface-rgb: 40 39 46;
+    --tint-rgb: 48 47 54;
+  }
+
   /* headings, as the landing page sets them */
   h1,
   h2,

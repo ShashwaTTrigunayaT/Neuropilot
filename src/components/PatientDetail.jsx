@@ -1475,7 +1475,6 @@ export default function PatientDetail({
        * it and disappear. Below `xl` this is an ordinary toolbar in the flow.
        */}
       <div className="no-print z-20 -mx-4 mt-5 border-b border-line/70 bg-paper/95 px-4 py-2 backdrop-blur-xl sm:-mx-6 sm:px-6 xl:sticky xl:top-[75px] dark:border-darkBorder/70 dark:bg-darkBg/95">
-        <div className="mx-auto w-full max-w-6xl">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5">
           {/* Pathway progress, compressed to four segments: the toolbar doubles
               as the status line, so the stage is readable from anywhere. */}
@@ -1579,7 +1578,6 @@ export default function PatientDetail({
               <span className="hidden lg:inline">Export record</span>
             </button>
           </div>
-        </div>
         </div>
       </div>
 
