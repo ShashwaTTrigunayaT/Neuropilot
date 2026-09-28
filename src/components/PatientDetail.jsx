@@ -1109,13 +1109,14 @@ function AuditSection({ patient }) {
                 />
               </span>
               <p
+                data-np-audit-text=""
                 className={`text-xs leading-relaxed ${
                   i === 0 ? 'font-semibold text-ink dark:text-darkText' : 'text-ink/85 dark:text-darkText/85'
                 }`}
               >
                 {h.text}
               </p>
-              <p style={MONO} className="mt-1 flex items-center gap-2 text-[10px] text-muted dark:text-darkMuted">
+              <p data-np-audit-text="" style={MONO} className="mt-1 flex items-center gap-2 text-[10px] text-muted dark:text-darkMuted">
                 {h.at}
                 {i === 0 && (
                   <span className="rounded-md bg-accent/10 px-1.5 py-px text-[9px] font-bold uppercase tracking-[0.12em] text-accent">

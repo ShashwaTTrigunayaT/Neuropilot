@@ -134,6 +134,7 @@ export default function Interoperability({
   const [charts, setCharts] = useState(null);
   const [chartError, setChartError] = useState('');
   const [chartName, setChartName] = useState('');
+  const [patientSearch, setPatientSearch] = useState('');
 
   const [patientId, setPatientId] = useState(initialPatientId || patients[0]?.id || '');
   const [exported, setExported] = useState(null);
@@ -190,14 +191,34 @@ export default function Interoperability({
 
   const patientOptions = useMemo(() => {
     const options = patients.slice(0, 400);
-    // Keep an explicitly selected/current patient in the native select even if
-    // it falls outside the capped cohort slice (or arrived from an EHR import).
+    // Keep an explicitly selected/current patient in the selector even if it
+    // falls outside the capped cohort slice or arrived from an EHR import.
     if (patientId && !options.some((patient) => patient.id === patientId)) {
       const selectedPatient = patients.find((patient) => patient.id === patientId);
       options.unshift(selectedPatient || { id: patientId });
     }
     return options;
   }, [patients, patientId]);
+  const mobilePatientOptions = useMemo(() => {
+    const options = [...patients];
+    if (patientId && !options.some((patient) => patient.id === patientId)) {
+      options.unshift({ id: patientId });
+    }
+    return options;
+  }, [patients, patientId]);
+  const filteredPatientOptions = useMemo(() => {
+    const query = patientSearch.trim().toLowerCase();
+    const matches = query
+      ? mobilePatientOptions.filter((patient) =>
+          `${patient.id} ${patient.name || ''}`.toLowerCase().includes(query)
+        ).slice(0, 100)
+      : mobilePatientOptions.slice(0, 100);
+    const selectedPatient = mobilePatientOptions.find((patient) => patient.id === patientId);
+    if (selectedPatient && !matches.some((patient) => patient.id === patientId)) {
+      matches.unshift(selectedPatient);
+    }
+    return matches;
+  }, [mobilePatientOptions, patientId, patientSearch]);
 
   /** The standalone launch URL, carrying the chosen chart and server.
    *
@@ -920,7 +941,65 @@ export default function Interoperability({
           {/* A labelled field, then the two actions on their own line: the old
               single row wrapped unpredictably and read as three equal things. */}
           <div className="mt-3.5">
-            <label htmlFor="interop-export-patient" className="block">
+            <div className="block md:hidden">
+              <label htmlFor="interop-export-patient-search" className="block">
+                <span className="text-[9.5px] font-bold uppercase tracking-[0.12em] text-dust dark:text-darkMuted">
+                  Patient to export
+                </span>
+                <input
+                  id="interop-export-patient-search"
+                  type="search"
+                  value={patientSearch}
+                  onChange={(event) => setPatientSearch(event.target.value)}
+                  placeholder="Search patient ID or name…"
+                  autoComplete="off"
+                  className="mt-1.5 w-full min-w-0 rounded-xl border border-line bg-white px-3 py-2 text-[12px] text-ink outline-none transition placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/20 dark:border-darkBorder dark:bg-darkCard dark:text-darkText"
+                />
+              </label>
+              {!patientSearch.trim() && mobilePatientOptions.length > 100 && (
+                <p className="mt-1.5 text-[10px] text-muted dark:text-darkMuted">
+                  Showing the first 100 patients; search to find another.
+                </p>
+              )}
+              <div
+                role="listbox"
+                aria-label="Patients to export"
+                className="mt-2 max-h-56 overflow-y-auto rounded-xl border border-line/70 bg-white dark:border-darkBorder/70 dark:bg-darkCard"
+              >
+                {filteredPatientOptions.length === 0 ? (
+                  <p className="px-3 py-3 text-[11px] text-muted dark:text-darkMuted">
+                    {patientOptions.length ? 'No patients match that search.' : 'No patients available.'}
+                  </p>
+                ) : filteredPatientOptions.map((patient) => {
+                  const selected = patient.id === patientId;
+                  return (
+                    <button
+                      key={patient.id}
+                      type="button"
+                      role="option"
+                      aria-selected={selected}
+                      onClick={() => setPatientId(patient.id)}
+                      className={`flex min-h-11 w-full items-center justify-between gap-3 border-b border-line/60 px-3 py-2 text-left last:border-b-0 dark:border-darkBorder/60 ${
+                        selected ? 'bg-accent/[0.08]' : 'bg-transparent'
+                      }`}
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate text-[11.5px] font-semibold text-ink dark:text-darkText">
+                          {patient.name || patient.id}
+                        </span>
+                        {patient.name && (
+                          <span style={MONO} className="block truncate text-[10px] text-muted dark:text-darkMuted">
+                            {patient.id}
+                          </span>
+                        )}
+                      </span>
+                      {selected && <CheckCircle2 className="h-4 w-4 shrink-0 text-accent" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <label htmlFor="interop-export-patient" className="hidden md:block">
               <span className="text-[9.5px] font-bold uppercase tracking-[0.12em] text-dust dark:text-darkMuted">
                 Patient to export
               </span>
@@ -934,9 +1013,9 @@ export default function Interoperability({
                 className="mt-1.5 w-full min-w-0 cursor-pointer rounded-xl border border-line bg-white px-3 py-2 text-[11px] font-semibold text-ink outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-darkBorder dark:bg-darkCard dark:text-darkText"
               >
                 {patientOptions.length === 0 && <option value="">No patients available</option>}
-                {patientOptions.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.id}{p.name ? ` · ${p.name}` : ''}
+                {patientOptions.map((patient) => (
+                  <option key={patient.id} value={patient.id}>
+                    {patient.id}{patient.name ? ` · ${patient.name}` : ''}
                   </option>
                 ))}
               </select>

@@ -253,31 +253,20 @@ export default function AutoScrollShowcase({ panels = [], onLaunch }) {
         </div>
 
         {/* --------------------------------------------------- points */}
-        {/*
-         * No inner scroller by design: the copy is written to fit the panel, and
-         * the row rule above guarantees a paragraph can never be squeezed into
-         * the one beneath it. If a slide ever stops fitting, the fix is shorter
-         * copy — not a scrollbar on a panel that advances on its own.
-         */}
+        {/* The right-hand detail pane can scroll independently on desktop if
+            the explanatory content exceeds the available preview height. */}
         {/*
          * The explanation column. Desktop only: on a laptop it is the right
          * half beside the summary, but on a phone it stacked BELOW the summary
          * and the panel became a scroll of prose. Below `lg` the summary stands
          * alone; the detail lives one tap away on the view it links to.
          */}
-        <div className="hidden w-full flex-1 shrink-0 flex-col p-6 lg:flex lg:min-h-0 lg:shrink lg:px-10 lg:py-7 lg:pl-12">
+        <div className="hidden w-full flex-1 shrink-0 flex-col p-6 lg:flex lg:min-h-0 lg:shrink lg:overflow-y-auto lg:px-10 lg:py-7 lg:pl-12">
           {p.points.map((pt, k) => (
             <div
               key={pt.label || k}
-              /*
-               * `lg:flex-1` keeps the rows equal height so their separator lines
-               * sit on the same y in every panel. There is deliberately NO
-               * `lg:min-h-0`: that let a long row shrink below its own text, so
-               * the paragraphs collided instead of the column scrolling. With
-               * min-height left at auto a row can never be squeezed smaller than
-               * its copy — the column scrolls instead, which is the honest
-               * failure mode for a panel whose text cannot fit.
-               */
+              /* `lg:flex-1` keeps rows evenly distributed when content fits;
+                 the containing detail pane scrolls when it does not. */
               className="flex shrink-0 flex-col gap-2 border-b border-line/60 py-5 first:pt-0 last:border-b-0 last:pb-0 dark:border-darkBorder/60 lg:flex-1 lg:justify-center lg:py-4"
             >
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">

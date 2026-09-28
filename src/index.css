@@ -609,6 +609,15 @@ body {
     display: none;
   }
 
+  /* Audit event text and timestamps are essential record data, not commentary. */
+  [data-np-audit-text] {
+    display: block !important;
+    color: rgb(var(--ink-rgb)) !important;
+  }
+  [data-np-audit-text][style*="font-family"] {
+    color: rgb(var(--muted-rgb)) !important;
+  }
+
   /*
    * Buttons come down a size on a phone.
    *
