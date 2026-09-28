@@ -583,8 +583,8 @@ body {
    * while hiding its neighbours was arbitrary. Values, log lines and row texts
    * are set in `span`s, so a muted `p` is a caption, never data.
    */
-  p.leading-relaxed:not([data-np-preview] *):not([data-np-keep]):not([data-np-keep] *),
-  p.text-muted:not([class*="uppercase"]):not([data-np-preview] *):not([data-np-keep]):not([data-np-keep] *) {
+  p.leading-relaxed:not([data-np-preview] *):not([data-np-keep]):not([data-np-keep] *):not([data-np-audit-text]),
+  p.text-muted:not([class*="uppercase"]):not([data-np-preview] *):not([data-np-keep]):not([data-np-keep] *):not([data-np-audit-text]) {
     display: none;
   }
 
