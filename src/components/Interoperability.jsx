@@ -920,7 +920,7 @@ export default function Interoperability({
           {/* A labelled field, then the two actions on their own line: the old
               single row wrapped unpredictably and read as three equal things. */}
           <div className="mt-3.5">
-            <label className="block">
+            <label htmlFor="interop-export-patient" className="block">
               <span className="text-[9.5px] font-bold uppercase tracking-[0.12em] text-dust dark:text-darkMuted">
                 Patient to export
               </span>
@@ -931,7 +931,7 @@ export default function Interoperability({
                 onChange={(e) => setPatientId(e.target.value)}
                 disabled={patientOptions.length === 0}
                 style={MONO}
-                className="mt-1.5 w-full min-w-0 cursor-pointer appearance-none rounded-xl border border-line bg-white px-3 py-2 text-[11px] font-semibold text-ink outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-darkBorder dark:bg-darkCard dark:text-darkText"
+                className="mt-1.5 w-full min-w-0 cursor-pointer rounded-xl border border-line bg-white px-3 py-2 text-[11px] font-semibold text-ink outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-darkBorder dark:bg-darkCard dark:text-darkText"
               >
                 {patientOptions.length === 0 && <option value="">No patients available</option>}
                 {patientOptions.map((p) => (

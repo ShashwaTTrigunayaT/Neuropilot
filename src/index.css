@@ -594,8 +594,8 @@ body {
    * row texts are set in `span`s, and those are data, not commentary.
    *
    * Two exemptions: the preview, where the prose IS the content, and anything
-   * marked `data-np-keep` — currently the sentence that labels the closing
-   * hand-off buttons and the API error message.
+   * marked `data-np-keep` — the closing hand-off sentence, API errors and the
+   * patient audit trail, whose event text is essential content rather than prose.
    */
   /*
    * Muted paragraphs are commentary whether or not they carry `leading-relaxed`
