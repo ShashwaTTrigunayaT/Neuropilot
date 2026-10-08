@@ -32,7 +32,7 @@ The app presents a **12-month risk outlook**, supported by the active refined co
 
 ## Contents
 
-| | | |
+| | | |  
 |---|---|---|
 | [1. The product in one minute](#1-the-product-in-one-minute) | [7. Repository map](#7-repository-map) | [13. Configuration](#13-configuration) |
 | [2. The loop, drawn](#2-the-loop-drawn) | [8. Served model card](#8-served-model-card) | [14. Tests](#14-tests) |
