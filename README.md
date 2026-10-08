@@ -10,7 +10,7 @@ down a fixed pathway: **Cognitive → Blood → MRI → PET**. It can walk that
 pathway unattended — rank the cohort, choose the next patient, order the test,
 re-score, re-rank — and it speaks **HL7 FHIR R4** and the **ABDM (India) consent
 flow**, so it can live *inside* a hospital network instead of beside it.
-
+    
 > [!IMPORTANT]
 > **NeuroPilot never outputs a diagnosis.** Every screen and every API contract
 > carries one of three things: a **risk tier**, the **reasoning** behind it, and
