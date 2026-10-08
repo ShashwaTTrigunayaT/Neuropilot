@@ -2,7 +2,7 @@
 
 ### AI-driven prioritization for early Alzheimer's diagnostic pathways
 
-*Precision Care Challenge 2026 — a clinical decision-support prototype.*
+*Precision Care Challenge 2026 — a clinical decision-support prototype
 
 NeuroPilot scores a dementia cohort from **cognition, blood biomarkers, MRI
 volumetrics and PET**, explains every score with SHAP, and moves each patient
