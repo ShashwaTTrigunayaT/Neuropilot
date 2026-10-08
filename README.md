@@ -884,7 +884,7 @@ curl -s http://127.0.0.1:8000/fhir/smart/status | python -m json.tool
 
 | Layer | Tools |
 |---|---|
-| ML | Python 3.11 · pandas · NumPy · scikit-learn · XGBoost · SHAP |
+| ML | Python 3.11 · pandas · NumPy · scikit- learn · XGBoost · SHAP |
 | API | FastAPI · Uvicorn · Pydantic · SQLAlchemy (PostgreSQL 16 / SQLite) |
 | UI | React 18 · Vite 5 · Tailwind CSS 3 · Recharts · lucide-react |
 | Ops | Docker · docker-compose · nginx · pytest |
