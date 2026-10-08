@@ -325,7 +325,7 @@ monitoring.
 Rows are actual outcome; columns are model prediction. `0` = did not convert,
 `1` = converted.
 
-| Actual \\ Predicted | 0 · No conversion | 1 · Conversion |
+| Actual \\ Predicted | 0 · No conversion | 1 · Conversion 
 |---|---:|---:|
 | **0 · No conversion** | 273 | 26 |
 | **1 · Conversion** | 14 | 14 |
